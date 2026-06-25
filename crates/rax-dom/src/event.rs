@@ -139,6 +139,16 @@ pub enum Event {
         /// Lifecycle phase of the gesture.
         phase: GesturePhase,
     },
+    /// Pull-to-refresh was triggered on `target`.
+    Refresh {
+        /// The scroll view that triggered the refresh.
+        target: WidgetId,
+    },
+    /// Return/Done key pressed in `target` text field.
+    Submit {
+        /// The text field where submit was triggered.
+        target: WidgetId,
+    },
     /// Android system back / iOS interactive-pop intent. App-global.
     BackPressed,
     /// The soft keyboard is about to appear, occupying `frame`. App-global.
@@ -150,6 +160,13 @@ pub enum Event {
     KeyboardWillHide,
     /// An application lifecycle transition. App-global.
     AppLifecycle(Lifecycle),
+    /// A QR code was detected in the camera feed.
+    QrDetected {
+        /// The camera widget that detected the code.
+        target: WidgetId,
+        /// The decoded string value of the QR code.
+        value: String,
+    },
 }
 
 /// The lifecycle phase of a continuous gesture such as a pan.
@@ -189,6 +206,10 @@ pub enum EventKind {
     ValueChanged,
     /// [`Event::PanChanged`].
     Pan,
+    /// [`Event::Refresh`].
+    Refresh,
+    /// [`Event::Submit`].
+    Submit,
     /// [`Event::BackPressed`].
     BackPressed,
     /// [`Event::KeyboardWillShow`].
@@ -197,6 +218,8 @@ pub enum EventKind {
     KeyboardWillHide,
     /// [`Event::AppLifecycle`].
     AppLifecycle,
+    /// [`Event::QrDetected`].
+    QrDetected,
 }
 
 impl Event {
@@ -214,10 +237,13 @@ impl Event {
             Event::FocusChanged { .. } => EventKind::FocusChanged,
             Event::ValueChanged { .. } => EventKind::ValueChanged,
             Event::PanChanged { .. } => EventKind::Pan,
+            Event::Refresh { .. } => EventKind::Refresh,
+            Event::Submit { .. } => EventKind::Submit,
             Event::BackPressed => EventKind::BackPressed,
             Event::KeyboardWillShow { .. } => EventKind::KeyboardWillShow,
             Event::KeyboardWillHide => EventKind::KeyboardWillHide,
             Event::AppLifecycle(_) => EventKind::AppLifecycle,
+            Event::QrDetected { .. } => EventKind::QrDetected,
         }
     }
 
@@ -235,7 +261,10 @@ impl Event {
             | Event::TextChanged { target, .. }
             | Event::FocusChanged { target, .. }
             | Event::ValueChanged { target, .. }
-            | Event::PanChanged { target, .. } => Some(target),
+            | Event::PanChanged { target, .. }
+            | Event::Refresh { target }
+            | Event::Submit { target } => Some(target),
+            Event::QrDetected { target, .. } => Some(target),
             Event::BackPressed
             | Event::KeyboardWillShow { .. }
             | Event::KeyboardWillHide

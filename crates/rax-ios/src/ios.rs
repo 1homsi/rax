@@ -23,8 +23,9 @@ use objc2_ui_kit::{
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
     UIPanGestureRecognizer, UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider,
-    UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField, UITextView,
-    UITraitEnvironment, UIUserInterfaceStyle, UIView, UIViewController, UIWindow,
+    UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField,
+    UITextInputTraits, UITextView, UITraitEnvironment, UIUserInterfaceStyle, UIView,
+    UIViewController, UIWindow,
 };
 
 use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
@@ -58,6 +59,10 @@ thread_local! {
     // (which can fire *synchronously while the app is mid-tick*), applied by the
     // next frame tick — never borrows the app, avoiding re-entrant borrows.
     static PENDING_KEYBOARD: Cell<Option<f32>> = const { Cell::new(None) };
+    // QR detections queued from the AVCaptureMetadataOutput delegate callback.
+    // The delegate fires on the main queue; we drain these in handle_tick so we
+    // never borrow the app reentrantly from inside a capture callback.
+    static PENDING_QR: RefCell<Vec<(u64, String)>> = const { RefCell::new(Vec::new()) };
 }
 
 fn handle_tap(tag_bits: u64) {
@@ -74,6 +79,13 @@ fn handle_tap(tag_bits: u64) {
 }
 
 fn handle_tick() {
+    // Drain any QR detections collected since the last tick. We pull them out
+    // *before* borrowing the app so we never hold two borrows simultaneously.
+    let qr_events: Vec<(u64, String)> = PENDING_QR.with(|q| {
+        let mut v = q.borrow_mut();
+        std::mem::take(&mut *v)
+    });
+
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
             // Feed the platform safe-area insets to the runtime each frame; it
@@ -98,6 +110,13 @@ fn handle_tick() {
             });
             if let Some(height) = PENDING_KEYBOARD.with(|k| k.take()) {
                 app.set_keyboard_inset(height);
+            }
+            // Dispatch queued QR detections into the event system.
+            for (tag, value) in qr_events {
+                state.event_sink.dispatch(Event::QrDetected {
+                    target: WidgetId::from_u64(tag),
+                    value,
+                });
             }
             app.tick();
         }
@@ -258,6 +277,20 @@ define_class!(
             }
         }
 
+        #[unsafe(method(handleRefresh:))]
+        fn handle_refresh(&self, sender: &UIControl) {
+            let tag = unsafe { sender.tag() } as u64;
+            dispatch_target_event(|target| Event::Refresh { target }, tag);
+        }
+
+        #[unsafe(method(textFieldShouldReturn:))]
+        fn text_field_should_return(&self, sender: &UITextField) -> bool {
+            let tag = unsafe { sender.tag() } as u64;
+            dispatch_target_event(|target| Event::Submit { target }, tag);
+            unsafe { sender.resignFirstResponder() };
+            true
+        }
+
         #[unsafe(method(panRecognized:))]
         fn pan_recognized(&self, recognizer: &UIPanGestureRecognizer) {
             let Some(tag) = recognizer_tag(recognizer) else {
@@ -318,6 +351,237 @@ define_class!(
         }
     }
 );
+
+// ---------------------------------------------------------------------------
+// QR scanner: active sessions, keyed by widget_tag.
+// ---------------------------------------------------------------------------
+
+// Keep sessions (and their associated delegates) alive.  We use raw pointers
+// because AnyObject is not Send; everything here runs on the main thread.
+struct QrEntry {
+    /// The `AVCaptureSession *` (retained via raw objc retain).
+    session: *mut AnyObject,
+    /// The `RaxQrDelegate *` (retained via raw objc retain).
+    delegate: *mut AnyObject,
+}
+
+thread_local! {
+    static QR_SESSIONS: RefCell<HashMap<u64, QrEntry>> = RefCell::new(HashMap::new());
+}
+
+define_class!(
+    /// Delegate that receives `AVCaptureMetadataOutput` callbacks and queues QR
+    /// detections into `PENDING_QR` for drain on the next frame tick.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "RaxQrDelegate"]
+    struct QrDelegate;
+
+    unsafe impl NSObjectProtocol for QrDelegate {}
+
+    impl QrDelegate {
+        /// `captureOutput:didOutputMetadataObjects:fromConnection:` — fired on the
+        /// main queue by `AVCaptureMetadataOutput` for every metadata batch.
+        #[unsafe(method(captureOutput:didOutputMetadataObjects:fromConnection:))]
+        fn did_output_metadata(
+            &self,
+            _output: &AnyObject,
+            objects: &NSMutableArray<AnyObject>,
+            _connection: &AnyObject,
+        ) {
+            // Look up which widget this delegate belongs to by matching the
+            // self pointer in our QR_SESSIONS map.
+            let self_ptr = self as *const _ as *mut AnyObject;
+            let widget_tag = QR_SESSIONS.with(|map| {
+                map.borrow().iter().find_map(|(tag, entry)| {
+                    if entry.delegate == self_ptr {
+                        Some(*tag)
+                    } else {
+                        None
+                    }
+                })
+            });
+            let Some(tag) = widget_tag else { return };
+
+            // Walk every metadata object in the batch.
+            let count: usize = unsafe { msg_send![objects, count] };
+            for i in 0..count {
+                let obj: *mut AnyObject = unsafe { msg_send![objects, objectAtIndex: i] };
+                if obj.is_null() {
+                    continue;
+                }
+                // Check that this is a QR metadata object.
+                let type_str: *mut AnyObject = unsafe { msg_send![obj, type] };
+                if type_str.is_null() {
+                    continue;
+                }
+                // AVMetadataObjectTypeQRCode = "org.iso.QRCode"
+                let expected = NSString::from_str("org.iso.QRCode");
+                let is_qr: bool =
+                    unsafe { msg_send![type_str, isEqualToString: &*expected] };
+                if !is_qr {
+                    continue;
+                }
+                // `stringValue` holds the decoded payload.
+                let string_value: *mut AnyObject = unsafe { msg_send![obj, stringValue] };
+                if string_value.is_null() {
+                    continue;
+                }
+                let ns_str: *const NSString = string_value.cast();
+                let value = unsafe { (*ns_str).to_string() };
+
+                PENDING_QR.with(|q| q.borrow_mut().push((tag, value)));
+            }
+        }
+    }
+);
+
+/// Returns the ObjC class for `name`, looked up at runtime. Panics in debug if
+/// not found (the class must be linked into the binary, i.e. AVFoundation must
+/// be in the linker inputs).
+fn av_class(name: &str) -> &'static objc2::runtime::AnyClass {
+    use std::ffi::CString;
+    let c = CString::new(name).unwrap();
+    objc2::runtime::AnyClass::get(c.as_c_str())
+        .unwrap_or_else(|| panic!("ObjC class not found: {name}"))
+}
+
+/// Retain a raw ObjC object pointer.
+unsafe fn objc_retain(obj: *mut AnyObject) {
+    if !obj.is_null() {
+        let _: *mut AnyObject = msg_send![obj, retain];
+    }
+}
+
+/// Release a raw ObjC object pointer.
+unsafe fn objc_release(obj: *mut AnyObject) {
+    if !obj.is_null() {
+        let _: () = msg_send![obj, release];
+    }
+}
+
+/// Starts an AVCaptureSession on `view`, routing QR detections to `widget_tag`.
+///
+/// The session and delegate are owned by `QR_SESSIONS` (thread-local) and are
+/// released when [`stop_qr_scanner`] is called for the same tag.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+fn setup_qr_scanner(view: *const UIView, widget_tag: u64) {
+    unsafe {
+        // ── Session ────────────────────────────────────────────────────────
+        let session: *mut AnyObject = msg_send![av_class("AVCaptureSession"), new];
+        if session.is_null() {
+            return;
+        }
+
+        // ── Video input device ─────────────────────────────────────────────
+        let media_type = NSString::from_str("vide"); // AVMediaTypeVideo
+        let device: *mut AnyObject = msg_send![
+            av_class("AVCaptureDevice"),
+            defaultDeviceWithMediaType: &*media_type
+        ];
+        if device.is_null() {
+            objc_release(session);
+            return;
+        }
+
+        let mut error: *mut AnyObject = std::ptr::null_mut();
+        let input: *mut AnyObject = msg_send![
+            av_class("AVCaptureDeviceInput"),
+            deviceInputWithDevice: device
+            error: &mut error
+        ];
+        if input.is_null() || !error.is_null() {
+            objc_release(session);
+            return;
+        }
+
+        let can_add_input: bool = msg_send![session, canAddInput: input];
+        if can_add_input {
+            let _: () = msg_send![session, addInput: input];
+        }
+
+        // ── Metadata output ────────────────────────────────────────────────
+        let output: *mut AnyObject = msg_send![av_class("AVCaptureMetadataOutput"), new];
+        if output.is_null() {
+            objc_release(session);
+            return;
+        }
+
+        let can_add_output: bool = msg_send![session, canAddOutput: output];
+        if can_add_output {
+            let _: () = msg_send![session, addOutput: output];
+        }
+
+        // ── Delegate (set *after* adding the output to the session) ────────
+        let delegate: *mut AnyObject = msg_send![QrDelegate::class(), new];
+
+        // Use the main queue for callbacks — same thread as handle_tick so
+        // PENDING_QR doesn't need a Mutex.
+        let main_queue: *mut AnyObject = {
+            extern "C" {
+                fn dispatch_get_main_queue() -> *mut AnyObject;
+            }
+            dispatch_get_main_queue()
+        };
+        let _: () = msg_send![output, setDelegate: delegate callbackQueue: main_queue];
+
+        // Restrict to QR codes only.
+        let qr_type = NSString::from_str("org.iso.QRCode");
+        let types = NSMutableArray::<AnyObject>::new();
+        let qr_obj: &AnyObject = &*(qr_type.as_ref() as *const _ as *const AnyObject);
+        types.addObject(qr_obj);
+        let _: () = msg_send![output, setMetadataObjectTypes: &*types];
+
+        // ── Preview layer ──────────────────────────────────────────────────
+        let preview: *mut AnyObject =
+            msg_send![av_class("AVCaptureVideoPreviewLayer"), layerWithSession: session];
+        if !preview.is_null() {
+            // Fill the view completely.
+            let gravity = NSString::from_str("AVLayerVideoGravityResizeAspectFill");
+            let _: () = msg_send![preview, setVideoGravity: &*gravity];
+
+            let view_layer: *mut AnyObject = msg_send![&*view, layer];
+            let _: () = msg_send![view_layer, addSublayer: preview];
+
+            let bounds: CGRect = msg_send![&*view, bounds];
+            let _: () = msg_send![preview, setFrame: bounds];
+        }
+
+        // ── Own the session + delegate in our thread-local map ─────────────
+        // `new` already retains; retain once more so the entry holds a
+        // reference independent of any autorelease pool.
+        objc_retain(session);
+        objc_retain(delegate);
+
+        QR_SESSIONS.with(|map| {
+            map.borrow_mut().insert(widget_tag, QrEntry { session, delegate });
+        });
+
+        // Release the initial +new reference — the map entry holds the only
+        // surviving retain count now.
+        objc_release(session);
+        objc_release(delegate);
+
+        // ── Start ──────────────────────────────────────────────────────────
+        QR_SESSIONS.with(|map| {
+            if let Some(entry) = map.borrow().get(&widget_tag) {
+                let _: () = msg_send![entry.session, startRunning];
+            }
+        });
+    }
+}
+
+/// Stops and discards the `AVCaptureSession` for `widget_tag`, if any.
+fn stop_qr_scanner(widget_tag: u64) {
+    let entry = QR_SESSIONS.with(|map| map.borrow_mut().remove(&widget_tag));
+    if let Some(e) = entry {
+        unsafe {
+            let _: () = msg_send![e.session, stopRunning];
+            objc_release(e.session);
+            objc_release(e.delegate);
+        }
+    }
+}
 
 fn new_instance<T: ClassType>() -> Retained<T> {
     unsafe { msg_send![T::class(), new] }
@@ -475,7 +739,9 @@ impl Backend for UiKitBackend {
                     },
                 };
                 let view: Retained<UIView> = match kind {
-                    WidgetKind::View => unsafe { UIView::initWithFrame(self.mtm.alloc(), zero) },
+                    WidgetKind::View | WidgetKind::Stack => unsafe {
+                        UIView::initWithFrame(self.mtm.alloc(), zero)
+                    },
                     WidgetKind::Text => {
                         let label: Retained<UILabel> =
                             unsafe { UILabel::initWithFrame(self.mtm.alloc(), zero) };
@@ -579,6 +845,8 @@ impl Backend for UiKitBackend {
                                 UIControlEvents::EditingChanged,
                             );
                             field.setTag(id.to_u64() as isize);
+                            // Set delegate for textFieldShouldReturn: (submit key)
+                            let _: () = msg_send![&*field, setDelegate: &*self.action_target];
                         }
                         field.into_super().into_super()
                     }
@@ -592,6 +860,13 @@ impl Backend for UiKitBackend {
                         }
                         // UITextView -> UIScrollView -> UIView
                         tv.into_super().into_super()
+                    }
+                    WidgetKind::Camera => {
+                        // Plain UIView as the preview container; AVCaptureSession is
+                        // attached when QrScanning(true) is set on it.
+                        let v = unsafe { UIView::initWithFrame(self.mtm.alloc(), zero) };
+                        unsafe { v.setTag(id.to_u64() as isize) };
+                        v
                     }
                 };
                 self.views.insert(id.to_u64(), view);
@@ -852,11 +1127,106 @@ impl Backend for UiKitBackend {
                             }
                         }
                     }
+                    Attribute::Horizontal(horiz) => {
+                        if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                            unsafe {
+                                sv.setAlwaysBounceHorizontal(horiz);
+                                sv.setAlwaysBounceVertical(!horiz);
+                                if horiz {
+                                    sv.setShowsVerticalScrollIndicator(false);
+                                    sv.setShowsHorizontalScrollIndicator(true);
+                                } else {
+                                    sv.setShowsVerticalScrollIndicator(true);
+                                    sv.setShowsHorizontalScrollIndicator(false);
+                                }
+                            }
+                        }
+                    }
+                    Attribute::Refreshing(refreshing) => {
+                        if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                            unsafe {
+                                let rc: *mut AnyObject = msg_send![&*sv, refreshControl];
+                                if rc.is_null() {
+                                    let new_rc: *mut AnyObject =
+                                        msg_send![av_class("UIRefreshControl"), new];
+                                    let _: () = msg_send![new_rc, addTarget: &*self.action_target
+                                                                  action: sel!(handleRefresh:)
+                                                       forControlEvents: UIControlEvents::ValueChanged.bits()];
+                                    let _: () =
+                                        msg_send![new_rc, setTag: id.to_u64() as isize];
+                                    let _: () = msg_send![&*sv, setRefreshControl: new_rc];
+                                }
+                                let rc: *mut AnyObject = msg_send![&*sv, refreshControl];
+                                if !rc.is_null() {
+                                    if refreshing {
+                                        let _: () = msg_send![rc, beginRefreshing];
+                                    } else {
+                                        let _: () = msg_send![rc, endRefreshing];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Attribute::ReturnKey(ret) => {
+                        if let Ok(field) = view.clone().downcast::<UITextField>() {
+                            let v: isize = match ret {
+                                rax_dom::ReturnKeyType::Default => 0,
+                                rax_dom::ReturnKeyType::Go => 1,
+                                rax_dom::ReturnKeyType::Next => 4,
+                                rax_dom::ReturnKeyType::Search => 8,
+                                rax_dom::ReturnKeyType::Send => 9,
+                                rax_dom::ReturnKeyType::Done => 9,
+                            };
+                            unsafe {
+                                let _: () = msg_send![&*field, setReturnKeyType: v];
+                            }
+                        }
+                    }
+                    Attribute::Secure(secure) => {
+                        if let Ok(field) = view.clone().downcast::<UITextField>() {
+                            unsafe { field.setSecureTextEntry(secure) };
+                        }
+                    }
+                    Attribute::QrScanning(enabled) => {
+                        if enabled {
+                            let view_ptr = &*view as *const UIView;
+                            let tag = id.to_u64();
+                            setup_qr_scanner(view_ptr, tag);
+                        } else {
+                            stop_qr_scanner(id.to_u64());
+                        }
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {
                 if let Some(view) = self.view(id) {
                     unsafe { view.setFrame(to_cg_rect(rect)) };
+                    // If this is a Camera view, resize the AVCaptureVideoPreviewLayer
+                    // to match the new bounds so the feed fills the container.
+                    let has_session = QR_SESSIONS
+                        .with(|map| map.borrow().contains_key(&id.to_u64()));
+                    if has_session {
+                        unsafe {
+                            // The preview layer is always the last sublayer added.
+                            let view_layer: *mut AnyObject = msg_send![&**view, layer];
+                            let sublayers: *mut AnyObject = msg_send![view_layer, sublayers];
+                            if !sublayers.is_null() {
+                                let count: usize = msg_send![sublayers, count];
+                                if count > 0 {
+                                    let last: *mut AnyObject =
+                                        msg_send![sublayers, objectAtIndex: count - 1];
+                                    let new_bounds = CGRect {
+                                        origin: CGPoint { x: 0.0, y: 0.0 },
+                                        size: CGSize {
+                                            width: rect.size.width as f64,
+                                            height: rect.size.height as f64,
+                                        },
+                                    };
+                                    let _: () = msg_send![last, setFrame: new_bounds];
+                                }
+                            }
+                        }
+                    }
                 }
                 // Keep any gradient sublayer filling the view's new bounds.
                 if let Some(layer) = self.gradient_layers.get(&id.to_u64()) {
@@ -882,6 +1252,9 @@ impl Backend for UiKitBackend {
                 }
             }
             Mutation::Destroy { id } => {
+                // Stop any QR scanner session tied to this widget before
+                // releasing the view so AVFoundation can clean up cleanly.
+                stop_qr_scanner(id.to_u64());
                 self.gradient_layers.remove(&id.to_u64());
                 if let Some(view) = self.views.remove(&id.to_u64()) {
                     view.removeFromSuperview();

@@ -1,7 +1,7 @@
 //! The `text_input` view: a controlled single-line text field.
 
 use rax_core::Color;
-use rax_dom::{Attribute, Event, EventKind, Tree, WidgetId};
+use rax_dom::{Attribute, Event, EventKind, ReturnKeyType, Tree, WidgetId};
 
 use crate::view::View;
 
@@ -11,6 +11,9 @@ pub struct TextInput<F> {
     placeholder: Option<String>,
     color: Option<Color>,
     on_change: F,
+    return_key: Option<ReturnKeyType>,
+    secure: bool,
+    on_submit: Option<Box<dyn FnMut()>>,
 }
 
 /// Creates a text field with initial `value` that calls `on_change` with the
@@ -24,6 +27,9 @@ pub fn text_input<F: FnMut(String) + 'static>(
         placeholder: None,
         color: None,
         on_change,
+        return_key: None,
+        secure: false,
+        on_submit: None,
     }
 }
 
@@ -41,6 +47,27 @@ impl<F: FnMut(String) + 'static> TextInput<F> {
         self.color = Some(color);
         self
     }
+
+    /// Sets the return key label shown on the keyboard.
+    #[must_use]
+    pub fn return_key(mut self, key: ReturnKeyType) -> Self {
+        self.return_key = Some(key);
+        self
+    }
+
+    /// Makes this a secure (password) input field.
+    #[must_use]
+    pub fn secure(mut self) -> Self {
+        self.secure = true;
+        self
+    }
+
+    /// Called when the user presses the return/submit key.
+    #[must_use]
+    pub fn on_submit(mut self, f: impl FnMut() + 'static) -> Self {
+        self.on_submit = Some(Box::new(f));
+        self
+    }
 }
 
 impl<F: FnMut(String) + 'static> View for TextInput<F> {
@@ -53,12 +80,25 @@ impl<F: FnMut(String) + 'static> View for TextInput<F> {
         if let Some(color) = self.color {
             tree.set(id, Attribute::TextColor(color));
         }
+        if let Some(key) = self.return_key {
+            tree.set(id, Attribute::ReturnKey(key));
+        }
+        if self.secure {
+            tree.set(id, Attribute::Secure(true));
+        }
         let mut on_change = self.on_change;
         tree.on(id, EventKind::TextChanged, move |event| {
             if let Event::TextChanged { value, .. } = event {
                 on_change(value.clone());
             }
         });
+        if let Some(mut on_submit) = self.on_submit {
+            tree.on(id, EventKind::Submit, move |event| {
+                if matches!(event, Event::Submit { .. }) {
+                    on_submit();
+                }
+            });
+        }
         id
     }
 }

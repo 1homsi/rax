@@ -160,6 +160,16 @@ impl Tree {
         self.create(WidgetKind::TextArea)
     }
 
+    /// Creates an absolute-position overlay container (ZStack).
+    pub fn create_stack(&mut self) -> WidgetId {
+        self.create(WidgetKind::Stack)
+    }
+
+    /// Creates a camera preview widget (backed by `AVCaptureSession` on iOS).
+    pub fn create_camera(&mut self) -> WidgetId {
+        self.create(WidgetKind::Camera)
+    }
+
     /// Emits a content-size update for a scroll container.
     pub fn set_content_size(&mut self, id: WidgetId, size: rax_core::Size) {
         if self.nodes.get(id.0).is_some() {

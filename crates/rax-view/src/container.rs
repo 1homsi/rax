@@ -1,5 +1,6 @@
 //! Flex containers: `column` (vertical) and `row` (horizontal), with layout and
-//! paint modifiers. Children are a [`ViewSequence`] (a tuple).
+//! paint modifiers, plus `stack` (absolute-overlay / ZStack).
+//! Children are a [`ViewSequence`] (a tuple).
 
 use rax_core::{
     AlignItems, Color, EdgeInsets, FlexDirection, FlexWrap, JustifyContent, LayoutStyle,
@@ -131,6 +132,97 @@ impl<C: ViewSequence> View for Container<C> {
                 wrap: self.wrap,
                 padding: self.padding,
                 gap: self.gap,
+                flex_grow: self.flex_grow,
+                ..LayoutStyle::default()
+            },
+        );
+        if let Some(background) = self.background {
+            tree.set(id, Attribute::BackgroundColor(background));
+        }
+        if let Some(radius) = self.corner_radius {
+            tree.set(id, Attribute::CornerRadius(radius));
+        }
+        self.children.build_into(tree, id);
+        id
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Stack — absolute-overlay container (ZStack)
+// ---------------------------------------------------------------------------
+
+/// An absolute-position container where children layer on top of each other.
+/// Build via [`stack`].
+pub struct Stack<C: ViewSequence> {
+    children: C,
+    padding: EdgeInsets,
+    flex_grow: f32,
+    background: Option<Color>,
+    corner_radius: Option<f32>,
+}
+
+/// Creates a ZStack: children are overlaid in z-order (first child = bottom).
+pub fn stack<C: ViewSequence>(children: C) -> Stack<C> {
+    Stack {
+        children,
+        padding: EdgeInsets::ZERO,
+        flex_grow: 0.0,
+        background: None,
+        corner_radius: None,
+    }
+}
+
+impl<C: ViewSequence> Stack<C> {
+    /// Uniform padding on all edges.
+    #[must_use]
+    pub fn padding(mut self, value: f32) -> Self {
+        self.padding = EdgeInsets::all(value);
+        self
+    }
+
+    /// Explicit per-edge padding.
+    #[must_use]
+    pub fn padding_insets(mut self, insets: EdgeInsets) -> Self {
+        self.padding = insets;
+        self
+    }
+
+    /// Makes this container expand to fill available space (flex-grow `1.0`).
+    #[must_use]
+    pub fn grow(mut self) -> Self {
+        self.flex_grow = 1.0;
+        self
+    }
+
+    /// Sets an explicit flex-grow factor.
+    #[must_use]
+    pub fn grow_by(mut self, factor: f32) -> Self {
+        self.flex_grow = factor;
+        self
+    }
+
+    /// Background fill color.
+    #[must_use]
+    pub fn background(mut self, color: Color) -> Self {
+        self.background = Some(color);
+        self
+    }
+
+    /// Rounds the container's corners by `radius` points.
+    #[must_use]
+    pub fn corner_radius(mut self, radius: f32) -> Self {
+        self.corner_radius = Some(radius);
+        self
+    }
+}
+
+impl<C: ViewSequence> View for Stack<C> {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        let id = tree.create_stack();
+        tree.set_style(
+            id,
+            LayoutStyle {
+                padding: self.padding,
                 flex_grow: self.flex_grow,
                 ..LayoutStyle::default()
             },

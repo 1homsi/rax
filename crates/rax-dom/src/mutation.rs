@@ -67,6 +67,28 @@ pub enum WidgetKind {
     Stepper,
     /// A multi-line editable text area (maps to `UITextView`).
     TextArea,
+    /// An absolute-position container — children layer on top of each other (ZStack).
+    Stack,
+    /// A camera preview view that optionally decodes QR codes (maps to an
+    /// `AVCaptureSession`-backed `UIView`).
+    Camera,
+}
+
+/// The label on the keyboard's return key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReturnKeyType {
+    /// Default label.
+    Default,
+    /// "Done" label.
+    Done,
+    /// "Go" label.
+    Go,
+    /// "Search" label.
+    Search,
+    /// "Send" label.
+    Send,
+    /// "Next" label.
+    Next,
 }
 
 /// Horizontal text alignment.
@@ -180,6 +202,16 @@ pub enum Attribute {
     NumberOfLines(u32),
     /// Raw image bytes (PNG/JPEG) to display in an image view.
     ImageData(std::sync::Arc<Vec<u8>>),
+    /// Whether the scroll view scrolls horizontally instead of vertically.
+    Horizontal(bool),
+    /// Enables pull-to-refresh on a scroll view; the value is whether it's currently refreshing.
+    Refreshing(bool),
+    /// Label on the keyboard's return key.
+    ReturnKey(ReturnKeyType),
+    /// Whether the text field is secure (password).
+    Secure(bool),
+    /// Enables QR code scanning on a Camera widget.
+    QrScanning(bool),
 }
 
 /// A linear color gradient used as a background fill. `start` and `end` are in
