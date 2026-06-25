@@ -18,7 +18,7 @@
 //! }
 //!
 //! let count = create_signal(0);
-//! let mut ui = TestHarness::mount(counter(count));
+//! let mut ui = TestHarness::mount(move || counter(count));
 //! assert!(ui.find_text("Count: 0").is_some());
 //! let btn = ui.find_button("inc").unwrap();
 //! ui.tap(btn);
@@ -42,16 +42,18 @@ pub struct TestHarness {
 }
 
 impl TestHarness {
-    /// Mounts `view` in a default 390×844 viewport (iPhone-ish).
-    pub fn mount(view: impl View) -> TestHarness {
-        TestHarness::mount_sized(view, Size::new(390.0, 844.0))
+    /// Mounts the view produced by `make_view` in a default 390×844 viewport.
+    /// `make_view` runs inside the app's root scope (so `provide_context`,
+    /// theming, and navigators work just like in a real app).
+    pub fn mount<V: View>(make_view: impl FnOnce() -> V) -> TestHarness {
+        TestHarness::mount_sized(make_view, Size::new(390.0, 844.0))
     }
 
-    /// Mounts `view` at an explicit viewport size.
-    pub fn mount_sized(view: impl View, viewport: Size) -> TestHarness {
+    /// Mounts at an explicit viewport size.
+    pub fn mount_sized<V: View>(make_view: impl FnOnce() -> V, viewport: Size) -> TestHarness {
         let backend = RecordingBackend::new();
         let log = backend.log();
-        let app = App::new(Host::new(backend), viewport, view);
+        let app = App::new(Host::new(backend), viewport, make_view);
         TestHarness { app, log }
     }
 
@@ -67,6 +69,9 @@ impl TestHarness {
 
     /// The current (most recently set) text of a widget, if it has any.
     pub fn text_of(&self, id: WidgetId) -> Option<String> {
+        if self.is_destroyed(id) {
+            return None;
+        }
         self.log.borrow().iter().rev().find_map(|m| match m {
             Mutation::SetAttribute {
                 id: i,
@@ -74,6 +79,13 @@ impl TestHarness {
             } if *i == id => Some(s.clone()),
             _ => None,
         })
+    }
+
+    fn is_destroyed(&self, id: WidgetId) -> bool {
+        self.log
+            .borrow()
+            .iter()
+            .any(|m| matches!(m, Mutation::Destroy { id: i } if *i == id))
     }
 
     /// Finds the first widget whose current text exactly equals `text`.
@@ -91,16 +103,20 @@ impl TestHarness {
         let log = self.log.borrow();
         let mut latest: Vec<(WidgetId, String)> = Vec::new();
         for m in log.iter() {
-            if let Mutation::SetAttribute {
-                id,
-                attr: Attribute::Text(s),
-            } = m
-            {
-                if let Some(slot) = latest.iter_mut().find(|(i, _)| i == id) {
-                    slot.1 = s.clone();
-                } else {
-                    latest.push((*id, s.clone()));
+            match m {
+                Mutation::SetAttribute {
+                    id,
+                    attr: Attribute::Text(s),
+                } => {
+                    if let Some(slot) = latest.iter_mut().find(|(i, _)| i == id) {
+                        slot.1 = s.clone();
+                    } else {
+                        latest.push((*id, s.clone()));
+                    }
                 }
+                // A destroyed widget is no longer findable.
+                Mutation::Destroy { id } => latest.retain(|(i, _)| i != id),
+                _ => {}
             }
         }
         latest.into_iter().find(|(_, s)| pred(s)).map(|(id, _)| id)
@@ -116,16 +132,17 @@ impl TestHarness {
         }
     }
 
-    /// All widget ids created with the given kind, in creation order.
+    /// All *live* widget ids created with the given kind, in creation order.
     pub fn widgets_of_kind(&self, kind: WidgetKind) -> Vec<WidgetId> {
-        self.log
-            .borrow()
-            .iter()
-            .filter_map(|m| match m {
-                Mutation::Create { id, kind: k } if *k == kind => Some(*id),
-                _ => None,
-            })
-            .collect()
+        let mut live: Vec<WidgetId> = Vec::new();
+        for m in self.log.borrow().iter() {
+            match m {
+                Mutation::Create { id, kind: k } if *k == kind => live.push(*id),
+                Mutation::Destroy { id } => live.retain(|i| i != id),
+                _ => {}
+            }
+        }
+        live
     }
 
     /// The kind a widget was created as.

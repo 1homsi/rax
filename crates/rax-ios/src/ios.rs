@@ -220,7 +220,7 @@ where
 {
     FACTORY.with(|f| {
         *f.borrow_mut() = Some(Box::new(move |host, viewport| {
-            App::new(host, viewport, make_view())
+            App::new(host, viewport, make_view)
         }));
     });
 

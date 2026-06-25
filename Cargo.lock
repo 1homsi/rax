@@ -391,6 +391,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax-nav"
+version = "0.0.1"
+dependencies = [
+ "rax-dom",
+ "rax-reactive",
+ "rax-runtime",
+ "rax-test",
+ "rax-view",
+]
+
+[[package]]
 name = "rax-reactive"
 version = "0.0.1"
 dependencies = [

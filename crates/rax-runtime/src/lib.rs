@@ -27,11 +27,15 @@ pub struct App {
 }
 
 impl App {
-    /// Mounts `view` against `host`, performs the initial layout for `viewport`,
-    /// and returns the running app.
-    pub fn new(host: Host, viewport: Size, view: impl View) -> App {
+    /// Mounts the view produced by `make_view` against `host`, performs the
+    /// initial layout for `viewport`, and returns the running app.
+    ///
+    /// `make_view` runs **inside** the app's reactive root scope, so any
+    /// `provide_context` / theming / navigator setup it performs is visible to
+    /// the whole tree.
+    pub fn new<V: View>(host: Host, viewport: Size, make_view: impl FnOnce() -> V) -> App {
         let mut tree = Tree::new(host);
-        let (root, scope) = create_root(|| mount(&mut tree, view));
+        let (root, scope) = create_root(|| mount(&mut tree, make_view()));
         let mut app = App {
             tree,
             root,

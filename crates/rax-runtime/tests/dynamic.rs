@@ -26,7 +26,9 @@ fn dynamic_content_swaps_when_its_signal_changes() {
     let log = backend.log();
     let tab = create_signal(0u32);
 
-    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), switcher(tab));
+    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), move || {
+        switcher(tab)
+    });
 
     // Initial dynamic build shows screen zero.
     assert!(
@@ -65,7 +67,7 @@ fn dynamic_list_grows_when_items_are_added() {
         })
     };
 
-    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), view);
+    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), move || view);
     assert!(has_text(&log.borrow(), "a"));
 
     log.borrow_mut().clear();

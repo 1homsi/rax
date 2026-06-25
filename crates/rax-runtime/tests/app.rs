@@ -34,7 +34,9 @@ fn app_builds_lays_out_and_reacts_to_taps() {
     let log = backend.log();
     let count = create_signal(0);
 
-    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), counter(count));
+    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), move || {
+        counter(count)
+    });
 
     // Initial build emitted Create + paint, and the initial layout emitted frames.
     {
@@ -76,7 +78,9 @@ fn relayout_emits_no_redundant_frames_when_nothing_changes() {
     let backend = RecordingBackend::new();
     let log = backend.log();
     let count = create_signal(0);
-    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), counter(count));
+    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), move || {
+        counter(count)
+    });
 
     log.borrow_mut().clear();
     app.tick(); // no events, no size change
