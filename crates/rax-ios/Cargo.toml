@@ -44,3 +44,4 @@ objc2-ui-kit = { version = "0.3", features = [
 ] }
 objc2-quartz-core = { version = "0.3", features = ["CADisplayLink", "CALayer"] }
 objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
+objc2-core-graphics = { version = "0.3", features = ["CGColor"] }

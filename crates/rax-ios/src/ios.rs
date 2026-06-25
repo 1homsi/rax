@@ -315,6 +315,30 @@ impl Backend for UiKitBackend {
                             layer.setMasksToBounds(true);
                         }
                     }
+                    Attribute::Opacity(o) => unsafe { view.setAlpha(o as f64) },
+                    Attribute::BorderWidth(w) => {
+                        let layer = view.layer();
+                        unsafe { layer.setBorderWidth(w as f64) };
+                    }
+                    Attribute::BorderColor(color) => {
+                        let layer = view.layer();
+                        let cg = unsafe { to_ui_color(color).CGColor() };
+                        unsafe { layer.setBorderColor(Some(&cg)) };
+                    }
+                    Attribute::Shadow(shadow) => {
+                        let layer = view.layer();
+                        let cg = unsafe { to_ui_color(shadow.color).CGColor() };
+                        unsafe {
+                            layer.setShadowColor(Some(&cg));
+                            layer.setShadowRadius(shadow.radius as f64);
+                            layer.setShadowOffset(CGSize {
+                                width: shadow.dx as f64,
+                                height: shadow.dy as f64,
+                            });
+                            layer.setShadowOpacity(shadow.color.a as f32 / 255.0);
+                            layer.setMasksToBounds(false);
+                        }
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {

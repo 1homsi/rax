@@ -64,6 +64,27 @@ pub enum Attribute {
     BackgroundColor(Color),
     /// Corner radius in logical points (rounds the view's layer).
     CornerRadius(f32),
+    /// Opacity, `0.0` transparent .. `1.0` opaque.
+    Opacity(f32),
+    /// Border width in logical points.
+    BorderWidth(f32),
+    /// Border color.
+    BorderColor(Color),
+    /// Drop shadow.
+    Shadow(Shadow),
+}
+
+/// A drop shadow specification.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Shadow {
+    /// Shadow color (alpha is used as shadow opacity).
+    pub color: Color,
+    /// Blur radius in points.
+    pub radius: f32,
+    /// Horizontal offset in points.
+    pub dx: f32,
+    /// Vertical offset in points.
+    pub dy: f32,
 }
 
 /// One atomic change to the native view tree.

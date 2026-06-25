@@ -3,8 +3,8 @@
 //! specific [`LayoutStyle`] fields after the inner view builds. This is a core
 //! customizability mechanism: layout control on *every* view, not just containers.
 
-use rax_core::{AlignItems, Dimension, EdgeInsets, LayoutStyle, Position};
-use rax_dom::{Tree, WidgetId};
+use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Position};
+use rax_dom::{Attribute, Shadow, Tree, WidgetId};
 
 use crate::view::View;
 
@@ -20,6 +20,21 @@ impl<V: View, F: FnOnce(&mut LayoutStyle)> View for Styled<V, F> {
         let mut style = tree.style_of(id).unwrap_or_default();
         (self.apply)(&mut style);
         tree.set_style(id, style);
+        id
+    }
+}
+
+/// A view that runs `decorate` (typically emitting paint attributes) after it
+/// builds. Powers per-view paint modifiers like `.background`/`.border`.
+pub struct Decorated<V, F> {
+    inner: V,
+    decorate: F,
+}
+
+impl<V: View, F: FnOnce(&mut Tree, WidgetId)> View for Decorated<V, F> {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        let id = self.inner.build(tree);
+        (self.decorate)(tree, id);
         id
     }
 }
@@ -107,6 +122,58 @@ pub trait ViewExt: View + Sized {
     /// Constrain to a width/height aspect ratio.
     fn aspect_ratio(self, r: f32) -> Styled<Self, impl FnOnce(&mut LayoutStyle)> {
         self.style_with(move |s| s.aspect_ratio = Some(r))
+    }
+
+    // --- paint modifiers (emit attributes after build) ---
+
+    /// Run an arbitrary decoration after the view builds.
+    fn decorate(
+        self,
+        f: impl FnOnce(&mut Tree, WidgetId),
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        Decorated {
+            inner: self,
+            decorate: f,
+        }
+    }
+    /// Background fill color.
+    fn background(self, color: Color) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::BackgroundColor(color)))
+    }
+    /// Rounded corners.
+    fn corner_radius(self, radius: f32) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::CornerRadius(radius)))
+    }
+    /// Opacity, `0.0`..`1.0`.
+    fn opacity(self, o: f32) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::Opacity(o)))
+    }
+    /// A uniform border of `width` and `color`.
+    fn border(self, width: f32, color: Color) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.set(id, Attribute::BorderWidth(width));
+            t.set(id, Attribute::BorderColor(color));
+        })
+    }
+    /// A drop shadow.
+    fn shadow(
+        self,
+        color: Color,
+        radius: f32,
+        dx: f32,
+        dy: f32,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.set(
+                id,
+                Attribute::Shadow(Shadow {
+                    color,
+                    radius,
+                    dx,
+                    dy,
+                }),
+            )
+        })
     }
 }
 

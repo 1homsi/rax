@@ -44,7 +44,7 @@ mod view;
 pub use button::{button, Button};
 pub use container::{column, row, Container};
 pub use dynamic::{dynamic, Dynamic};
-pub use modifier::{Styled, ViewExt};
+pub use modifier::{Decorated, Styled, ViewExt};
 pub use spacer::{spacer, Spacer};
 pub use text::{text, DynamicText, IntoText, StaticText, Text};
 pub use view::{boxed, BoxedView, View, ViewSequence};
