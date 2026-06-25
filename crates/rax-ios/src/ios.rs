@@ -678,6 +678,12 @@ impl Backend for UiKitBackend {
                 };
                 // Labels/images need interaction enabled to receive gestures.
                 unsafe { view.setUserInteractionEnabled(true) };
+                // Stamp the widget id onto the view's tag so `recognizer_tag`
+                // can recover it on fire. Plain containers (WidgetKind::View)
+                // never set a tag at creation, so without this every tap on a
+                // container would route to WidgetId 0 — e.g. a tab bar built
+                // from tappable `column`s would silently do nothing.
+                unsafe { view.setTag(id.to_u64() as isize) };
                 let recognizer: Retained<UIGestureRecognizer> = match gesture {
                     GestureKind::Tap => {
                         let r = unsafe {
