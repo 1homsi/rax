@@ -18,7 +18,7 @@ use rax_reactive::{create_root, create_signal, provide_context, use_context, Sco
 use rax_view::{mount, View};
 
 // Re-export so callers can name the type without reaching into rax-dom.
-pub use rax_dom::HapticStyle;
+pub use rax_dom::{HapticStyle, KeyboardType, LocalNotification};
 
 thread_local! {
     /// Haptic pulses queued by [`haptic`] during event handlers. Drained by
@@ -29,6 +29,18 @@ thread_local! {
     /// Deep-link handler registered by [`on_deep_link`].
     static DEEP_LINK_HANDLER: RefCell<Option<Box<dyn Fn(String)>>> =
         const { RefCell::new(None) };
+
+    /// Notifications queued by [`schedule_notification`]. Drained by [`App::tick`].
+    static PENDING_NOTIFICATIONS: RefCell<Vec<LocalNotification>> =
+        const { RefCell::new(Vec::new()) };
+
+    /// Cancellation ids queued by [`cancel_notification`]. Drained by [`App::tick`].
+    static PENDING_CANCELLATIONS: RefCell<Vec<String>> =
+        const { RefCell::new(Vec::new()) };
+
+    /// Biometric authentication reasons queued by [`authenticate_biometric`]. Drained by [`App::tick`].
+    static PENDING_BIOMETRICS: RefCell<Vec<String>> =
+        const { RefCell::new(Vec::new()) };
 }
 
 /// Triggers a haptic feedback pulse. Call from event handlers (tap callbacks,
@@ -53,6 +65,46 @@ pub fn haptic(style: HapticStyle) {
 /// ```
 pub fn on_deep_link(handler: impl Fn(String) + 'static) {
     DEEP_LINK_HANDLER.with(|h| *h.borrow_mut() = Some(Box::new(handler)));
+}
+
+/// Schedules a local notification. The notification is delivered on the next
+/// frame tick.
+///
+/// ```no_run
+/// use rax_runtime::{schedule_notification, LocalNotification};
+///
+/// schedule_notification(LocalNotification {
+///     id: "reminder".to_string(),
+///     title: "Hello".to_string(),
+///     body: "World".to_string(),
+///     delay_seconds: 5,
+/// });
+/// ```
+pub fn schedule_notification(notif: LocalNotification) {
+    PENDING_NOTIFICATIONS.with(|q| q.borrow_mut().push(notif));
+}
+
+/// Cancels a pending local notification by its identifier.
+///
+/// ```no_run
+/// use rax_runtime::cancel_notification;
+///
+/// cancel_notification("reminder");
+/// ```
+pub fn cancel_notification(id: impl Into<String>) {
+    PENDING_CANCELLATIONS.with(|q| q.borrow_mut().push(id.into()));
+}
+
+/// Triggers a biometric authentication prompt (Face ID / Touch ID). The result
+/// is delivered as a global `Event::BiometricResult`.
+///
+/// ```no_run
+/// use rax_runtime::authenticate_biometric;
+///
+/// authenticate_biometric("Confirm your identity");
+/// ```
+pub fn authenticate_biometric(reason: impl Into<String>) {
+    PENDING_BIOMETRICS.with(|q| q.borrow_mut().push(reason.into()));
 }
 
 /// The fill shown behind the root — i.e. the safe-area region (notch, status
@@ -299,6 +351,33 @@ impl App {
         });
         for style in haptics {
             self.tree.haptic(style);
+        }
+
+        // Drain any local notifications queued by app code.
+        let notifs: Vec<LocalNotification> = PENDING_NOTIFICATIONS.with(|q| {
+            let mut v = q.borrow_mut();
+            std::mem::take(&mut *v)
+        });
+        for notif in notifs {
+            self.tree.schedule_notification(notif);
+        }
+
+        // Drain any notification cancellations queued by app code.
+        let cancels: Vec<String> = PENDING_CANCELLATIONS.with(|q| {
+            let mut v = q.borrow_mut();
+            std::mem::take(&mut *v)
+        });
+        for id in cancels {
+            self.tree.cancel_notification(id);
+        }
+
+        // Drain any biometric authentication requests queued by app code.
+        let biometrics: Vec<String> = PENDING_BIOMETRICS.with(|q| {
+            let mut v = q.borrow_mut();
+            std::mem::take(&mut *v)
+        });
+        for reason in biometrics {
+            self.tree.authenticate_biometric(reason);
         }
 
         self.tree.run_dynamic(); // events/async/anim may have dirtied dynamic subtrees

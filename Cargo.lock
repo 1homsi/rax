@@ -631,6 +631,7 @@ dependencies = [
 name = "rax-ios"
 version = "0.0.1"
 dependencies = [
+ "block2",
  "futures",
  "objc2",
  "objc2-core-foundation",

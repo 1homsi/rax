@@ -28,10 +28,12 @@ use objc2_ui_kit::{
     UIViewController, UIWindow,
 };
 
+use block2::RcBlock;
+
 use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use rax_dom::{
-    Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host, Mutation,
-    TextSelection, WidgetId, WidgetKind,
+    Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host,
+    KeyboardType, Mutation, TextSelection, WidgetId, WidgetKind,
 };
 use rax_runtime::App;
 use rax_view::View;
@@ -65,6 +67,9 @@ thread_local! {
     static PENDING_QR: RefCell<Vec<(u64, String)>> = const { RefCell::new(Vec::new()) };
     // Deep link URLs queued by application:openURL:options:. Drained in handle_tick.
     static PENDING_DEEP_LINKS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    // Biometric authentication results queued from the reply block (arbitrary thread).
+    // Drained in handle_tick and dispatched as Event::BiometricResult.
+    static PENDING_BIOMETRIC: RefCell<Vec<(bool, Option<String>)>> = const { RefCell::new(Vec::new()) };
 }
 
 fn handle_tap(tag_bits: u64) {
@@ -90,6 +95,12 @@ fn handle_tick() {
 
     // Drain any deep link URLs queued by application:openURL:options:.
     let deep_links: Vec<String> = PENDING_DEEP_LINKS.with(|q| {
+        let mut v = q.borrow_mut();
+        std::mem::take(&mut *v)
+    });
+
+    // Drain any biometric results queued by the LAContext reply block.
+    let biometric_results: Vec<(bool, Option<String>)> = PENDING_BIOMETRIC.with(|q| {
         let mut v = q.borrow_mut();
         std::mem::take(&mut *v)
     });
@@ -129,6 +140,10 @@ fn handle_tick() {
             // Dispatch queued deep link URLs into the event system.
             for url in deep_links {
                 state.event_sink.dispatch(Event::DeepLink { url });
+            }
+            // Dispatch queued biometric results into the event system.
+            for (success, error) in biometric_results {
+                state.event_sink.dispatch(Event::BiometricResult { success, error });
             }
             app.tick();
         }
@@ -1261,6 +1276,25 @@ impl Backend for UiKitBackend {
                             stop_qr_scanner(id.to_u64());
                         }
                     }
+                    Attribute::KeyboardType(kt) => {
+                        // UIKeyboardType raw values (UITextInputTraits.h).
+                        let ktype: isize = match kt {
+                            KeyboardType::Default => 0,
+                            KeyboardType::Ascii => 1,
+                            KeyboardType::NumbersAndPunctuation => 2,
+                            KeyboardType::Url => 3,
+                            KeyboardType::NumberPad => 4,
+                            KeyboardType::PhonePad => 5,
+                            KeyboardType::NamePhonePad => 7,
+                            KeyboardType::Email => 7, // UIKeyboardTypeEmailAddress = 7
+                            KeyboardType::DecimalPad => 8,
+                        };
+                        if let Ok(field) = view.clone().downcast::<UITextField>() {
+                            unsafe { let _: () = msg_send![&*field, setKeyboardType: ktype]; }
+                        } else if let Ok(tv) = view.clone().downcast::<UITextView>() {
+                            unsafe { let _: () = msg_send![&*tv, setKeyboardType: ktype]; }
+                        }
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {
@@ -1445,6 +1479,119 @@ impl Backend for UiKitBackend {
                             let _: () = msg_send![gen, impactOccurred];
                         }
                     }
+                }
+            }
+            Mutation::ScheduleNotification(notif) => {
+                unsafe {
+                    // Get the shared notification center.
+                    let center: *mut AnyObject =
+                        msg_send![class!(UNUserNotificationCenter), currentNotificationCenter];
+
+                    // Request authorization (sound | badge | alert = 0b111). Fire and forget.
+                    // Pass null completion handler — we don't need the result.
+                    let null_auth: *const block2::Block<dyn Fn(objc2::runtime::Bool, *mut NSObject)> =
+                        std::ptr::null();
+                    let _: () = msg_send![
+                        center,
+                        requestAuthorizationWithOptions: 0b111usize
+                        completionHandler: null_auth
+                    ];
+
+                    // Build mutable notification content.
+                    let content: *mut AnyObject =
+                        msg_send![class!(UNMutableNotificationContent), new];
+                    let _: () = msg_send![content, setTitle: &*NSString::from_str(&notif.title)];
+                    let _: () = msg_send![content, setBody: &*NSString::from_str(&notif.body)];
+                    let default_sound: *mut AnyObject =
+                        msg_send![class!(UNNotificationSound), defaultSound];
+                    let _: () = msg_send![content, setSound: default_sound];
+
+                    // Time interval trigger (minimum 1 second).
+                    let delay = notif.delay_seconds.max(1) as f64;
+                    let trigger: *mut AnyObject = msg_send![
+                        class!(UNTimeIntervalNotificationTrigger),
+                        triggerWithTimeInterval: delay
+                        repeats: false
+                    ];
+
+                    // Build and add the request.
+                    let id_ns = NSString::from_str(&notif.id);
+                    let request: *mut AnyObject = msg_send![
+                        class!(UNNotificationRequest),
+                        requestWithIdentifier: &*id_ns
+                        content: content
+                        trigger: trigger
+                    ];
+                    // Pass null completion handler — we don't need the result.
+                    let null_comp: *const block2::Block<dyn Fn(*mut NSObject)> =
+                        std::ptr::null();
+                    let _: () = msg_send![
+                        center,
+                        addNotificationRequest: request
+                        withCompletionHandler: null_comp
+                    ];
+                }
+            }
+            Mutation::CancelNotification { id } => {
+                unsafe {
+                    let center: *mut AnyObject =
+                        msg_send![class!(UNUserNotificationCenter), currentNotificationCenter];
+                    let ids = NSMutableArray::<NSString>::new();
+                    ids.addObject(&NSString::from_str(&id));
+                    let _: () = msg_send![
+                        center,
+                        removePendingNotificationRequestsWithIdentifiers: &*ids
+                    ];
+                }
+            }
+            Mutation::AuthenticateBiometric { reason } => {
+                unsafe {
+                    let ctx: *mut AnyObject = msg_send![class!(LAContext), new];
+                    // LAPolicyDeviceOwnerAuthenticationWithBiometrics = 1
+                    let policy: isize = 1;
+                    let mut err: *mut AnyObject = std::ptr::null_mut();
+                    let can: bool =
+                        msg_send![ctx, canEvaluatePolicy: policy error: &mut err];
+                    if !can {
+                        PENDING_BIOMETRIC.with(|q| {
+                            q.borrow_mut()
+                                .push((false, Some("Biometrics not available".to_string())));
+                        });
+                        return;
+                    }
+                    let reason_ns = NSString::from_str(&reason);
+                    // The reply block fires on an arbitrary thread; push result to
+                    // PENDING_BIOMETRIC so it is dispatched safely on the next tick.
+                    // LAContext reply signature: (BOOL success, NSError * _Nullable error)
+                    // objc2 represents ObjC BOOL as objc2::runtime::Bool.
+                    let reply = RcBlock::new(
+                        |success: objc2::runtime::Bool, error: *mut NSObject| {
+                            let ok = success.as_bool();
+                            let err_msg = if ok {
+                                None
+                            } else if error.is_null() {
+                                Some("Authentication failed".to_string())
+                            } else {
+                                // Pull localizedDescription from NSError.
+                                let desc: *mut AnyObject =
+                                    msg_send![error, localizedDescription];
+                                if desc.is_null() {
+                                    Some("Authentication failed".to_string())
+                                } else {
+                                    let ns: *const NSString = desc.cast();
+                                    Some((*ns).to_string())
+                                }
+                            };
+                            PENDING_BIOMETRIC
+                                .with(|q| q.borrow_mut().push((ok, err_msg)));
+                        },
+                    );
+                    let _: () = msg_send![
+                        ctx,
+                        evaluatePolicy: policy
+                        localizedReason: &*reason_ns
+                        reply: &*reply
+                    ];
                 }
             }
         }

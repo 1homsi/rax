@@ -1,7 +1,7 @@
 //! The `text_input` view: a controlled single-line text field.
 
 use rax_core::Color;
-use rax_dom::{Attribute, Event, EventKind, ReturnKeyType, Tree, WidgetId};
+use rax_dom::{Attribute, Event, EventKind, KeyboardType, ReturnKeyType, Tree, WidgetId};
 
 use crate::view::View;
 
@@ -12,6 +12,7 @@ pub struct TextInput<F> {
     color: Option<Color>,
     on_change: F,
     return_key: Option<ReturnKeyType>,
+    keyboard_type: Option<KeyboardType>,
     secure: bool,
     on_submit: Option<Box<dyn FnMut()>>,
 }
@@ -28,6 +29,7 @@ pub fn text_input<F: FnMut(String) + 'static>(
         color: None,
         on_change,
         return_key: None,
+        keyboard_type: None,
         secure: false,
         on_submit: None,
     }
@@ -52,6 +54,13 @@ impl<F: FnMut(String) + 'static> TextInput<F> {
     #[must_use]
     pub fn return_key(mut self, key: ReturnKeyType) -> Self {
         self.return_key = Some(key);
+        self
+    }
+
+    /// Sets the keyboard type (e.g. email, number pad, phone).
+    #[must_use]
+    pub fn keyboard_type(mut self, kt: KeyboardType) -> Self {
+        self.keyboard_type = Some(kt);
         self
     }
 
@@ -82,6 +91,9 @@ impl<F: FnMut(String) + 'static> View for TextInput<F> {
         }
         if let Some(key) = self.return_key {
             tree.set(id, Attribute::ReturnKey(key));
+        }
+        if let Some(kt) = self.keyboard_type {
+            tree.set(id, Attribute::KeyboardType(kt));
         }
         if self.secure {
             tree.set(id, Attribute::Secure(true));

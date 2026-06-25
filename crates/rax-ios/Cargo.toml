@@ -71,5 +71,6 @@ objc2-quartz-core = { version = "0.3", features = [
 ] }
 objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 objc2-core-graphics = { version = "0.3", features = ["CGColor"] }
+block2 = "0.6"
 futures = { version = "0.3", default-features = false, features = ["executor", "std"] }
 ureq = { version = "2", features = [] }

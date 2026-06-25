@@ -32,13 +32,13 @@ the union of RN community modules + Flutter plugins + Expo SDK. ⬜ planned.
 - ⬜ printing, PDF generation
 
 ## Notifications & background
-- ⬜ local notifications (schedule, categories, actions)
+- ✅ local notifications (`schedule_notification` / `cancel_notification` — UNUserNotificationCenter, time-interval trigger)
 - ⬜ push notifications (APNs/FCM), rich/silent push
 - ⬜ background tasks / background fetch / headless tasks
 - ⬜ app badge, live activities / dynamic island, widgets (home-screen)
 
 ## Identity & security
-- ⬜ biometrics (Face/Touch ID, fingerprint), passkeys/WebAuthn
+- ✅ biometrics (`authenticate_biometric(reason)` — LAContext, Face/Touch ID → `Event::BiometricResult`)
 - ⬜ secure storage / keychain / keystore
 - ⬜ auth helpers (OAuth, sign-in-with-Apple/Google), deep-link auth
 - ⬜ app attest / integrity, encryption primitives

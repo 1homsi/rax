@@ -109,9 +109,9 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 |---|---|---|---|
 | Camera / media picker | ✓ | ✓ | ✅ camera + QR scanner (AVFoundation); ⬜ media picker |
 | Location / maps | ✓ | ✓ | ⬜ |
-| Push + local notifications | ✓ | ✓ | ⬜ |
+| Push + local notifications | ✓ | ✓ | 🟡 local ✅ (`schedule_notification`); push ⬜ |
 | BLE / NFC | community | plugins | ⬜ |
-| Biometrics / secure auth | ✓ | ✓ | ⬜ |
+| Biometrics / secure auth | ✓ | ✓ | 🟡 biometrics ✅ (`authenticate_biometric`); OAuth/passkeys ⬜ |
 | In-app purchases | ✓ | ✓ | ⬜ |
 | Sensors / haptics / background tasks | ✓ | ✓ | 🟡 haptics ✅ (`haptic(HapticStyle)`); sensors/background ⬜ |
 | Plugin system / native modules | ✓ | ✓ | ⬜ |

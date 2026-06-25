@@ -9,7 +9,7 @@ Flutter `TextField`/`Form` completely. ⬜ planned unless noted.
 - ✅ single-line + multi-line (`TextArea` via UITextView)
 - ⬜ placeholder, prefix/suffix, clear button
 - ⬜ selection + caret control (programmatic get/set)
-- ⬜ keyboard types (default/email/number/phone/url/decimal/search)
+- ✅ keyboard types (`.keyboard_type(KeyboardType::Email/NumberPad/PhonePad/Url/DecimalPad/…)`)
 - ✅ return key types (`return_key()`) + onSubmit (`on_submit()`)
 - ⬜ autocapitalize, autocorrect, spellcheck, autocomplete/contentType
 - ✅ secure entry (`secure()`, password)

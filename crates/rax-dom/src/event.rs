@@ -183,6 +183,14 @@ pub enum Event {
         /// The full URL string.
         url: String,
     },
+    /// Result of a biometric authentication attempt triggered by
+    /// [`Mutation::AuthenticateBiometric`](crate::Mutation::AuthenticateBiometric).
+    BiometricResult {
+        /// Whether authentication succeeded.
+        success: bool,
+        /// An error message if authentication failed, or `None` on success.
+        error: Option<String>,
+    },
 }
 
 /// The lifecycle phase of a continuous gesture such as a pan.
@@ -240,6 +248,8 @@ pub enum EventKind {
     Pinch,
     /// [`Event::DeepLink`].
     DeepLink,
+    /// [`Event::BiometricResult`].
+    BiometricResult,
 }
 
 impl Event {
@@ -266,6 +276,7 @@ impl Event {
             Event::QrDetected { .. } => EventKind::QrDetected,
             Event::PinchChanged { .. } => EventKind::Pinch,
             Event::DeepLink { .. } => EventKind::DeepLink,
+            Event::BiometricResult { .. } => EventKind::BiometricResult,
         }
     }
 
@@ -292,7 +303,8 @@ impl Event {
             | Event::KeyboardWillShow { .. }
             | Event::KeyboardWillHide
             | Event::AppLifecycle(_)
-            | Event::DeepLink { .. } => None,
+            | Event::DeepLink { .. }
+            | Event::BiometricResult { .. } => None,
         }
     }
 }

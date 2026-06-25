@@ -187,6 +187,22 @@ impl Tree {
         self.host.emit(Mutation::Haptic { style });
     }
 
+    /// Schedules a local notification via the UserNotifications framework.
+    pub fn schedule_notification(&mut self, notif: crate::mutation::LocalNotification) {
+        self.host.emit(Mutation::ScheduleNotification(notif));
+    }
+
+    /// Cancels a pending local notification by its identifier.
+    pub fn cancel_notification(&mut self, id: String) {
+        self.host.emit(Mutation::CancelNotification { id });
+    }
+
+    /// Triggers a biometric authentication prompt (Face ID / Touch ID).
+    /// The result is delivered as a global [`Event::BiometricResult`].
+    pub fn authenticate_biometric(&mut self, reason: String) {
+        self.host.emit(Mutation::AuthenticateBiometric { reason });
+    }
+
     fn create(&mut self, kind: WidgetKind) -> WidgetId {
         let index = self.nodes.insert(ElementNode {
             kind,

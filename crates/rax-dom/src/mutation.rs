@@ -74,6 +74,42 @@ pub enum WidgetKind {
     Camera,
 }
 
+/// A local notification to schedule via the UserNotifications framework.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalNotification {
+    /// Unique identifier for this notification (used to cancel it later).
+    pub id: String,
+    /// The notification title.
+    pub title: String,
+    /// The notification body text.
+    pub body: String,
+    /// Delay in seconds from now before the notification fires. 0 = 1 second (minimum).
+    pub delay_seconds: u32,
+}
+
+/// iOS `UIKeyboardType` — the style of keyboard shown for a text input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyboardType {
+    /// The default keyboard for the current input method.
+    Default,
+    /// A keyboard that displays standard ASCII characters.
+    Ascii,
+    /// A keyboard that displays numbers and punctuation.
+    NumbersAndPunctuation,
+    /// A keyboard optimized for URL entry.
+    Url,
+    /// A numeric keypad (0–9 only).
+    NumberPad,
+    /// A keypad for entering phone numbers.
+    PhonePad,
+    /// A keypad for name or phone number entry.
+    NamePhonePad,
+    /// A keyboard optimized for email address entry.
+    Email,
+    /// A numeric keypad that can also display a decimal point.
+    DecimalPad,
+}
+
 /// The label on the keyboard's return key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReturnKeyType {
@@ -236,6 +272,8 @@ pub enum Attribute {
     /// Custom font family by PostScript name (e.g. `"Georgia-Bold"`). Falls
     /// back to the system font if the name is not found on device.
     FontFamily(String),
+    /// Keyboard type for text inputs (maps to `UIKeyboardType` on iOS).
+    KeyboardType(KeyboardType),
 }
 
 /// A linear color gradient used as a background fill. `start` and `end` are in
@@ -426,5 +464,18 @@ pub enum Mutation {
     Haptic {
         /// The intensity and generator style.
         style: HapticStyle,
+    },
+    /// Schedule a local notification via the UserNotifications framework.
+    ScheduleNotification(LocalNotification),
+    /// Cancel a pending local notification by its id.
+    CancelNotification {
+        /// The notification identifier to cancel.
+        id: String,
+    },
+    /// Trigger a biometric authentication prompt (Face ID / Touch ID).
+    /// The result is delivered as a global [`Event::BiometricResult`].
+    AuthenticateBiometric {
+        /// The localized reason string shown to the user.
+        reason: String,
     },
 }
