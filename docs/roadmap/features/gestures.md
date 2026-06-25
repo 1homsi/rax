@@ -13,7 +13,7 @@ competing recognizers. ✅ · 🟡 · ⬜.
 - ✅ tap, double-tap, multi-tap
 - ✅ long-press (with duration, movement tolerance)
 - ✅ pan / drag (translation + velocity + phase); ⬜ thresholds/axis-lock
-- ⬜ pinch / zoom
+- ✅ pinch / zoom (`on_pinch()` — scale + velocity + phase via `UIPinchGestureRecognizer`)
 - ⬜ rotation
 - ⬜ fling / swipe (directional)
 - ⬜ force/3D-touch / pressure
@@ -35,5 +35,5 @@ competing recognizers. ✅ · 🟡 · ⬜.
 
 ## Accessibility & feedback
 - ⬜ accessible activation (works with screen readers / switch control)
-- ⬜ haptic feedback on gesture milestones
+- ✅ haptic feedback (`haptic(HapticStyle)` — Light/Medium/Heavy/Selection/Success/Warning/Error)
 - ⬜ focus + keyboard equivalents for every gesture action

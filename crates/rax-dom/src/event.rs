@@ -167,6 +167,17 @@ pub enum Event {
         /// The decoded string value of the QR code.
         value: String,
     },
+    /// A pinch gesture updated on `target`. Fires repeatedly through the gesture.
+    PinchChanged {
+        /// The pinched widget.
+        target: WidgetId,
+        /// Cumulative scale factor since gesture began (1.0 = no change).
+        scale: f32,
+        /// Scale velocity (scale units per second).
+        velocity: f32,
+        /// Lifecycle phase of the gesture.
+        phase: GesturePhase,
+    },
 }
 
 /// The lifecycle phase of a continuous gesture such as a pan.
@@ -220,6 +231,8 @@ pub enum EventKind {
     AppLifecycle,
     /// [`Event::QrDetected`].
     QrDetected,
+    /// [`Event::PinchChanged`].
+    Pinch,
 }
 
 impl Event {
@@ -244,6 +257,7 @@ impl Event {
             Event::KeyboardWillHide => EventKind::KeyboardWillHide,
             Event::AppLifecycle(_) => EventKind::AppLifecycle,
             Event::QrDetected { .. } => EventKind::QrDetected,
+            Event::PinchChanged { .. } => EventKind::Pinch,
         }
     }
 
@@ -265,6 +279,7 @@ impl Event {
             | Event::Refresh { target }
             | Event::Submit { target } => Some(target),
             Event::QrDetected { target, .. } => Some(target),
+            Event::PinchChanged { target, .. } => Some(target),
             Event::BackPressed
             | Event::KeyboardWillShow { .. }
             | Event::KeyboardWillHide

@@ -36,7 +36,7 @@ pub use event::{
     Event, EventKind, EventSink, GesturePhase, Lifecycle, PointerId, TextSelection,
 };
 pub use mutation::{
-    Attribute, GestureKind, LinearGradient, Mutation, ReturnKeyType, Role, Shadow, TextAlign,
-    Transform, WidgetId, WidgetKind,
+    Attribute, GestureKind, HapticStyle, LinearGradient, Mutation, ReturnKeyType, Role, Shadow,
+    TextAlign, Transform, WidgetId, WidgetKind,
 };
 pub use tree::{BuildThunk, Tree};

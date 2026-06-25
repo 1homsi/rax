@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
-use objc2::{define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
+use objc2::{class, define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSData, NSMutableArray, NSNotification, NSNotificationCenter, NSString};
 use objc2_quartz_core::{CADisplayLink, CAGradientLayer};
@@ -22,16 +22,16 @@ use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
-    UIPanGestureRecognizer, UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider,
-    UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField,
-    UITextInputTraits, UITextView, UITraitEnvironment, UIUserInterfaceStyle, UIView,
+    UIPanGestureRecognizer, UIPinchGestureRecognizer, UIProgressView, UIScreen, UIScrollView,
+    UISegmentedControl, UISlider, UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle,
+    UITextField, UITextInputTraits, UITextView, UITraitEnvironment, UIUserInterfaceStyle, UIView,
     UIViewController, UIWindow,
 };
 
 use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use rax_dom::{
-    Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, Host, Mutation, TextSelection,
-    WidgetId, WidgetKind,
+    Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host, Mutation,
+    TextSelection, WidgetId, WidgetKind,
 };
 use rax_runtime::App;
 use rax_view::View;
@@ -289,6 +289,29 @@ define_class!(
             dispatch_target_event(|target| Event::Submit { target }, tag);
             unsafe { sender.resignFirstResponder() };
             true
+        }
+
+        #[unsafe(method(pinchRecognized:))]
+        fn pinch_recognized(&self, recognizer: &UIPinchGestureRecognizer) {
+            let Some(tag) = recognizer_tag(recognizer) else {
+                return;
+            };
+            let scale = unsafe { recognizer.scale() as f32 };
+            let velocity = unsafe { recognizer.velocity() as f32 };
+            let phase = match unsafe { recognizer.state() } {
+                UIGestureRecognizerState::Began => GesturePhase::Began,
+                UIGestureRecognizerState::Changed => GesturePhase::Changed,
+                _ => GesturePhase::Ended,
+            };
+            dispatch_target_event(
+                move |target| rax_dom::Event::PinchChanged {
+                    target,
+                    scale,
+                    velocity,
+                    phase,
+                },
+                tag,
+            );
         }
 
         #[unsafe(method(panRecognized:))]
@@ -1334,6 +1357,16 @@ impl Backend for UiKitBackend {
                         };
                         r.into_super()
                     }
+                    GestureKind::Pinch => {
+                        let r = unsafe {
+                            UIPinchGestureRecognizer::initWithTarget_action(
+                                self.mtm.alloc(),
+                                Some(&self.action_target),
+                                Some(sel!(pinchRecognized:)),
+                            )
+                        };
+                        r.into_super()
+                    }
                 };
                 unsafe { view.addGestureRecognizer(&recognizer) };
             }
@@ -1354,6 +1387,38 @@ impl Backend for UiKitBackend {
                 // coloring it fills the notch/home-indicator region behind the
                 // inset app content.
                 unsafe { self.container.setBackgroundColor(Some(&to_ui_color(color))) };
+            }
+            Mutation::Haptic { style } => {
+                unsafe {
+                    match style {
+                        HapticStyle::Selection => {
+                            let gen: *mut AnyObject =
+                                msg_send![class!(UISelectionFeedbackGenerator), new];
+                            let _: () = msg_send![gen, selectionChanged];
+                        }
+                        HapticStyle::Success | HapticStyle::Warning | HapticStyle::Error => {
+                            let v: isize = match style {
+                                HapticStyle::Success => 0,
+                                HapticStyle::Warning => 1,
+                                _ => 2, // Error
+                            };
+                            let gen: *mut AnyObject =
+                                msg_send![class!(UINotificationFeedbackGenerator), new];
+                            let _: () = msg_send![gen, notificationOccurred: v];
+                        }
+                        _ => {
+                            let v: isize = match style {
+                                HapticStyle::Light => 0,
+                                HapticStyle::Medium => 1,
+                                _ => 2, // Heavy
+                            };
+                            let gen: *mut AnyObject =
+                                msg_send![class!(UIImpactFeedbackGenerator), alloc];
+                            let gen: *mut AnyObject = msg_send![gen, initWithStyle: v];
+                            let _: () = msg_send![gen, impactOccurred];
+                        }
+                    }
+                }
             }
         }
     }

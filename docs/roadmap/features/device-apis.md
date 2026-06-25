@@ -8,7 +8,7 @@ the union of RN community modules + Flutter plugins + Expo SDK. ⬜ planned.
 - ⬜ accelerometer, gyroscope, magnetometer, barometer
 - ⬜ device motion / orientation, pedometer
 - ⬜ proximity, ambient light
-- ⬜ haptics / vibration
+- ✅ haptics (`haptic(HapticStyle)` — UIImpactFeedbackGenerator / UINotificationFeedbackGenerator / UISelectionFeedbackGenerator)
 - ⬜ battery status, thermal state
 - ⬜ flashlight / torch
 

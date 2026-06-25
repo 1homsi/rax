@@ -24,7 +24,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | View / Text / Button | ✓ | ✓ | ✅ |
 | Flexbox layout | ✓ (Yoga) | ✓ | ✅ |
 | Grid layout | community | ✓ | ⬜ |
-| Image (cache/resize/placeholder) | ✓ | ✓ | 🟡 (source+tint+ImageData; network/cache later) |
+| Image (cache/resize/placeholder) | ✓ | ✓ | ✅ (source+tint+ImageData+`network_image`; cache/resize modes later) |
 | Icon (vector / SF Symbols) | community | ✓ | ✅ |
 | ScrollView | ✓ | ✓ | ✅ |
 | Virtualized list + recycling | ✓ | ✓ | ⬜ |
@@ -75,7 +75,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Timing + easing animations | ✓ | ✓ | ✅ |
 | Spring / decay | ✓ | ✓ | ✅ |
 | Tap / long-press / double-tap | ✓ | ✓ | ✅ |
-| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch/rotate ⬜; arena ⬜) |
+| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch ✅; rotate ⬜; arena ⬜) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ⬜ |
 | Layout / shared-element animation | community | ✓ | ⬜ |
 | Off-main-thread animation | ✓ | ✓ | ⬜ |
@@ -113,7 +113,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | BLE / NFC | community | plugins | ⬜ |
 | Biometrics / secure auth | ✓ | ✓ | ⬜ |
 | In-app purchases | ✓ | ✓ | ⬜ |
-| Sensors / haptics / background tasks | ✓ | ✓ | ⬜ |
+| Sensors / haptics / background tasks | ✓ | ✓ | 🟡 haptics ✅ (`haptic(HapticStyle)`); sensors/background ⬜ |
 | Plugin system / native modules | ✓ | ✓ | ⬜ |
 
 ## Platforms

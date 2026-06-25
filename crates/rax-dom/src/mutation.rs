@@ -123,6 +123,25 @@ pub enum Role {
     Search,
 }
 
+/// The style of haptic feedback to generate, mapping to iOS feedback generators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HapticStyle {
+    /// Light impact (`UIImpactFeedbackGenerator` style light).
+    Light,
+    /// Medium impact (`UIImpactFeedbackGenerator` style medium).
+    Medium,
+    /// Heavy impact (`UIImpactFeedbackGenerator` style heavy).
+    Heavy,
+    /// Selection changed feedback (`UISelectionFeedbackGenerator`).
+    Selection,
+    /// Success notification (`UINotificationFeedbackGenerator`).
+    Success,
+    /// Warning notification (`UINotificationFeedbackGenerator`).
+    Warning,
+    /// Error notification (`UINotificationFeedbackGenerator`).
+    Error,
+}
+
 /// A gesture a widget should recognize (the backend attaches a recognizer).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GestureKind {
@@ -134,6 +153,8 @@ pub enum GestureKind {
     LongPress,
     /// Pan / drag (continuous; reports translation + velocity).
     Pan,
+    /// Pinch / scale (continuous; reports scale factor + velocity).
+    Pinch,
 }
 
 /// A single settable **paint** property on a widget.
@@ -399,5 +420,11 @@ pub enum Mutation {
     SetBackdrop {
         /// The backdrop color.
         color: Color,
+    },
+    /// Trigger a one-shot haptic feedback pulse. Not retained state — the backend
+    /// fires the generator once and discards it.
+    Haptic {
+        /// The intensity and generator style.
+        style: HapticStyle,
     },
 }

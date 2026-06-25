@@ -22,6 +22,17 @@ pub struct PanInfo {
     pub phase: GesturePhase,
 }
 
+/// Payload delivered to [`ViewExt::on_pinch`] on each pinch-gesture update.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PinchInfo {
+    /// Cumulative scale factor since gesture began (1.0 = no change).
+    pub scale: f32,
+    /// Scale velocity in scale-units per second.
+    pub velocity: f32,
+    /// Lifecycle phase (began / changed / ended).
+    pub phase: GesturePhase,
+}
+
 /// A view whose layout style is post-processed by `apply` after it builds.
 pub struct Styled<V, F> {
     inner: V,
@@ -290,6 +301,33 @@ pub trait ViewExt: View + Sized {
                 }
             });
             t.enable_gesture(id, GestureKind::Pan);
+        })
+    }
+
+    /// Runs `f` on each update of a pinch/scale gesture, passing the cumulative
+    /// scale factor, velocity, and phase. Enables zoom-to-scale interactions and
+    /// pinch-to-dismiss.
+    fn on_pinch(
+        self,
+        mut f: impl FnMut(PinchInfo) + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.on(id, EventKind::Pinch, move |event| {
+                if let rax_dom::Event::PinchChanged {
+                    scale,
+                    velocity,
+                    phase,
+                    ..
+                } = event
+                {
+                    f(PinchInfo {
+                        scale: *scale,
+                        velocity: *velocity,
+                        phase: *phase,
+                    });
+                }
+            });
+            t.enable_gesture(id, GestureKind::Pinch);
         })
     }
 

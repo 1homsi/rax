@@ -182,6 +182,11 @@ impl Tree {
         self.host.emit(Mutation::SetBackdrop { color });
     }
 
+    /// Triggers a one-shot haptic feedback pulse via the backend.
+    pub fn haptic(&mut self, style: crate::mutation::HapticStyle) {
+        self.host.emit(Mutation::Haptic { style });
+    }
+
     fn create(&mut self, kind: WidgetKind) -> WidgetId {
         let index = self.nodes.insert(ElementNode {
             kind,

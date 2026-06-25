@@ -13,7 +13,7 @@
 
 use rax_core::{AlignItems, Color, EdgeInsets, JustifyContent};
 use rax_dom::{Tree, WidgetId};
-use rax_reactive::Signal;
+use rax_reactive::{create_effect, create_signal, Signal};
 
 use crate::container::{column, row};
 use crate::dynamic::dynamic;
@@ -584,4 +584,101 @@ pub fn picker(
         })
         .collect();
     column(rows).corner_radius(10.0).background(Color::WHITE)
+}
+
+// ---------------------------------------------------------------------------
+// Network Image
+// ---------------------------------------------------------------------------
+
+/// An image that loads from a URL via the HTTP client. Shows `placeholder` (an
+/// SF Symbol name or asset name) while loading, then displays the fetched image.
+///
+/// Requires `rax-net` to be configured (automatically done on iOS via `rax::run`).
+///
+/// ```
+/// use rax_view::network_image;
+///
+/// let img = network_image("https://example.com/photo.jpg", "photo");
+/// ```
+pub fn network_image(url: impl Into<String>, placeholder: impl Into<String>) -> impl View {
+    let url = url.into();
+    let placeholder = placeholder.into();
+    let bytes = create_signal::<Option<std::sync::Arc<Vec<u8>>>>(None);
+
+    // Kick off the fetch.
+    let res = rax_net::get(url);
+    create_effect(move || {
+        use rax_async::ResourceState;
+        if let ResourceState::Ready(resp) = res.get() {
+            if !resp.body_bytes.is_empty() {
+                bytes.set(Some(std::sync::Arc::new(resp.body_bytes.clone())));
+            }
+        }
+    });
+
+    dynamic(move || match bytes.get() {
+        Some(data) => boxed(image("").data(data)),
+        None => boxed(image(placeholder.clone())),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// AppBar / Toolbar
+// ---------------------------------------------------------------------------
+
+/// A navigation bar with a `title`, an optional back button, and trailing
+/// action buttons.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{app_bar, text};
+/// use rax_core::Color;
+///
+/// let bar = app_bar(
+///     "Settings",
+///     None::<(&str, fn())>,
+///     vec![],
+///     Color::BLACK,
+///     Color::rgb(245, 245, 245),
+/// );
+/// ```
+pub fn app_bar(
+    title: impl Into<String>,
+    back: Option<(impl Into<String> + 'static, impl Fn() + 'static)>,
+    actions: Vec<(String, Box<dyn Fn()>)>,
+    text_color: Color,
+    bg_color: Color,
+) -> impl View {
+    use crate::button::button;
+
+    let title = title.into();
+
+    let back_view: BoxedView = if let Some((label, action)) = back {
+        boxed(button(label.into(), action))
+    } else {
+        boxed(column(()).size(0.0, 0.0))
+    };
+
+    let action_views: Vec<BoxedView> = actions
+        .into_iter()
+        .map(|(label, action)| {
+            let action = Box::new(action);
+            boxed(button(label, move || action()))
+        })
+        .collect();
+
+    row((
+        back_view,
+        boxed(
+            crate::text::text(title)
+                .font_size(17.0)
+                .color(text_color)
+                .grow(1.0),
+        ),
+        boxed(column(action_views).gap(8.0)),
+    ))
+    .gap(8.0)
+    .align(AlignItems::Center)
+    .padding(12.0)
+    .background(bg_color)
 }

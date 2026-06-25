@@ -17,6 +17,28 @@ use rax_dom::{EventSink, Host, Tree, WidgetId, WidgetKind};
 use rax_reactive::{create_root, create_signal, provide_context, use_context, Scope, Signal};
 use rax_view::{mount, View};
 
+// Re-export so callers can name the type without reaching into rax-dom.
+pub use rax_dom::HapticStyle;
+
+thread_local! {
+    /// Haptic pulses queued by [`haptic`] during event handlers. Drained by
+    /// [`App::tick`] after events are processed.
+    static PENDING_HAPTICS: std::cell::RefCell<Vec<rax_dom::HapticStyle>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Triggers a haptic feedback pulse. Call from event handlers (tap callbacks,
+/// gesture handlers, etc.). The pulse is delivered on the next frame tick.
+///
+/// ```no_run
+/// use rax_runtime::{haptic, HapticStyle};
+///
+/// haptic(HapticStyle::Medium);
+/// ```
+pub fn haptic(style: HapticStyle) {
+    PENDING_HAPTICS.with(|q| q.borrow_mut().push(style));
+}
+
 /// The fill shown behind the root — i.e. the safe-area region (notch, status
 /// bar, home indicator) that app content does not cover.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -242,6 +264,16 @@ impl App {
         rax_anim::tick(dt);
 
         self.tree.drain_events();
+
+        // Drain any haptic pulses queued by event handlers.
+        let haptics: Vec<HapticStyle> = PENDING_HAPTICS.with(|q| {
+            let mut v = q.borrow_mut();
+            std::mem::take(&mut *v)
+        });
+        for style in haptics {
+            self.tree.haptic(style);
+        }
+
         self.tree.run_dynamic(); // events/async/anim may have dirtied dynamic subtrees
         self.relayout();
     }

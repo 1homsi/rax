@@ -730,8 +730,10 @@ dependencies = [
 name = "rax-view"
 version = "0.0.1"
 dependencies = [
+ "rax-async",
  "rax-core",
  "rax-dom",
+ "rax-net",
  "rax-reactive",
 ]
 

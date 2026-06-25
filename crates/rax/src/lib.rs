@@ -85,7 +85,7 @@ pub mod prelude {
     pub use rax_core::{Color, ColorScheme, FlexDirection, LayoutStyle, Point, Rect, Size};
 
     // The app entry point and runtime, plus appearance controls.
-    pub use rax_runtime::{set_backdrop, use_color_scheme, App, Backdrop};
+    pub use rax_runtime::{haptic, set_backdrop, use_color_scheme, App, Backdrop, HapticStyle};
 
     // High-frequency helpers from the satellite crates. Full surfaces live in
     // the namespaced modules (`rax::nav`, `rax::store`, …).

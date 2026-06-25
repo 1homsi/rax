@@ -25,7 +25,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Text` with font family/weight/size/color/line-height/align/truncation/multi-line (`lines(n)`) — font_family shipped
 - ⬜ Rich text / spans (inline styles, links, inline images)
 - ✅ `Icon` (vector icon set + custom)
-- 🟡 `Image` (source + tint + raw bytes/ImageData ✅; network/placeholder/fade-in/resize modes later)
+- ✅ `Image` (source + tint + raw bytes/ImageData + `network_image(url, placeholder)` convenience component)
 - ✅ `Avatar` (composed from public API)
 - ✅ `Badge` (composed from public API)
 - ✅ `Divider` / `Separator`
@@ -68,7 +68,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `Backdrop` / scrim
 
 ## Navigation surfaces
-- ⬜ `AppBar` / `NavigationBar` / `Toolbar`
+- ✅ `AppBar` / `NavigationBar` / `Toolbar` (composed: title + optional back button + trailing actions)
 - ⬜ `TabBar` / `TabView` / `BottomNavigation`
 - ⬜ `Breadcrumbs`
 - ⬜ `SegmentedTabs`

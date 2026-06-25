@@ -15,3 +15,5 @@ unsafe_code = "forbid"
 rax-core = { path = "../rax-core" }
 rax-dom = { path = "../rax-dom" }
 rax-reactive = { path = "../rax-reactive" }
+rax-net = { path = "../rax-net" }
+rax-async = { path = "../rax-async" }

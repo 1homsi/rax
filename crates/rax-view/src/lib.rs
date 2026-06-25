@@ -53,8 +53,8 @@ mod view;
 pub use button::{button, Button};
 pub use camera::{camera_scanner, CameraScanner};
 pub use composite::{
-    avatar, badge, bottom_sheet, card, checkbox, chip, modal, picker, radio, toast, Avatar, Badge,
-    Card, Checkbox, Chip, Radio,
+    app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, modal, network_image, picker,
+    radio, toast, Avatar, Badge, Card, Checkbox, Chip, Radio,
 };
 pub use container::{column, row, stack, Container, Stack};
 pub use controls::{segmented, slider, stepper, switch, Segmented, Slider, Stepper, Switch};
@@ -63,7 +63,7 @@ pub use extras::{divider, vertical_divider};
 pub use image::{icon, image, Image};
 pub use indicators::{activity_indicator, progress, ActivityIndicator, Progress};
 pub use list::{each, show};
-pub use modifier::{Decorated, PanInfo, Styled, ViewExt};
+pub use modifier::{Decorated, PanInfo, PinchInfo, Styled, ViewExt};
 pub use scroll::{scroll, Scroll};
 pub use spacer::{spacer, Spacer};
 pub use text::{text, DynamicText, IntoText, StaticText, Text};
