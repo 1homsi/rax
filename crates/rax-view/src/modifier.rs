@@ -176,6 +176,32 @@ pub trait ViewExt: View + Sized {
         })
     }
 
+    // --- reactive paint modifiers (re-emit when their signals change) ---
+
+    /// Reactive background: re-applies whenever the signals `f` reads change.
+    fn background_fn(
+        self,
+        mut f: impl FnMut() -> Color + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::BackgroundColor(f())))
+    }
+
+    /// Reactive opacity (great for fade animations driven by `rax-anim`).
+    fn opacity_fn(
+        self,
+        mut f: impl FnMut() -> f32 + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::Opacity(f())))
+    }
+
+    /// Reactive text color.
+    fn text_color_fn(
+        self,
+        mut f: impl FnMut() -> Color + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::TextColor(f())))
+    }
+
     // --- gesture modifiers (work on any view, not just buttons) ---
 
     /// Runs `f` when this view is tapped.

@@ -45,6 +45,28 @@ fn paint_modifiers_emit_attributes() {
 }
 
 #[test]
+fn reactive_opacity_re_emits_on_signal_change() {
+    use rax_reactive::create_signal;
+    let o = create_signal(1.0_f32);
+    let (_tree, log, id) = build(text("x").opacity_fn(move || o.get()));
+
+    assert!(log.borrow().contains(&Mutation::SetAttribute {
+        id,
+        attr: Attribute::Opacity(1.0)
+    }));
+
+    log.borrow_mut().clear();
+    o.set(0.5);
+    assert!(
+        log.borrow().contains(&Mutation::SetAttribute {
+            id,
+            attr: Attribute::Opacity(0.5)
+        }),
+        "opacity re-emitted reactively"
+    );
+}
+
+#[test]
 fn modifiers_chain_and_accumulate() {
     // Chaining several modifiers preserves all of them.
     let (tree, log, id) = build(text("x").width(100.0).height(40.0).corner_radius(6.0));
