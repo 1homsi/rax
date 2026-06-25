@@ -317,6 +317,14 @@ name = "rax-scheduler"
 version = "0.0.1"
 
 [[package]]
+name = "rax-style"
+version = "0.0.1"
+dependencies = [
+ "rax-core",
+ "rax-reactive",
+]
+
+[[package]]
 name = "rax-view"
 version = "0.0.1"
 dependencies = [
