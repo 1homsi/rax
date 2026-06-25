@@ -163,4 +163,31 @@ impl Reactor {
     pub fn state_of(&self, key: Index) -> Option<NodeState> {
         self.nodes.get(key).map(|n| n.state)
     }
+
+    // --- context (provided down the owner chain) ---------------------------
+
+    /// Provides `value` (keyed by `type_id`) at the current owner scope,
+    /// replacing any existing value of that type at this scope.
+    pub fn provide_context(&mut self, type_id: core::any::TypeId, value: Box<dyn core::any::Any>) {
+        if let Some(owner) = self.owner {
+            if let Some(node) = self.nodes.get_mut(owner) {
+                node.contexts.retain(|(t, _)| *t != type_id);
+                node.contexts.push((type_id, value));
+            }
+        }
+    }
+
+    /// Looks up a context value by type, walking from the current owner up the
+    /// owner chain (nearest scope wins).
+    pub fn lookup_context(&self, type_id: core::any::TypeId) -> Option<&Box<dyn core::any::Any>> {
+        let mut cursor = self.owner;
+        while let Some(id) = cursor {
+            let node = self.nodes.get(id)?;
+            if let Some((_, value)) = node.contexts.iter().find(|(t, _)| *t == type_id) {
+                return Some(value);
+            }
+            cursor = node.owner;
+        }
+        None
+    }
 }

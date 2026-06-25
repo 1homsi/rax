@@ -64,6 +64,9 @@ pub(crate) struct Node {
     pub owner: Option<Index>,
     /// Nodes created while this node was the active owner.
     pub owned: Vec<Index>,
+    /// Context values provided at this scope (keyed by type), looked up by
+    /// walking the owner chain.
+    pub contexts: Vec<(core::any::TypeId, Box<dyn Any>)>,
 }
 
 impl Node {
@@ -82,6 +85,7 @@ impl Node {
             observers: Vec::new(),
             owner: None,
             owned: Vec::new(),
+            contexts: Vec::new(),
         }
     }
 
