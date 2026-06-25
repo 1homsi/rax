@@ -45,7 +45,7 @@ Match Expo/RN CLI + Metro + Flutter CLI + DevTools + hot reload. ✅ · 🟡 · 
 ## Testing
 - ✅ recording backend; host-side pipeline tests
 - 🟡 headless host + finder/query API (find-by-text/role/testID)
-- 🟡 widget interaction tests (tap/type/scroll/gesture)
+- ✅ widget interaction tests (tap / value / long-press / double-tap / pan / arbitrary events)
 - ⬜ snapshot tests (mutation stream + golden images per platform)
 - ⬜ the cross-platform **conformance suite** (release gate)
 - ⬜ property/fuzz tests (layout, reconciler, reactivity)

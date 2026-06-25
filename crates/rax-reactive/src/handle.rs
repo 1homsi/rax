@@ -4,6 +4,7 @@
 
 use core::any::Any;
 use core::marker::PhantomData;
+use std::rc::Rc;
 
 use rax_core::Index;
 
@@ -13,11 +14,14 @@ use crate::runtime::{
 
 /// A reactive source cell holding a value of type `T`.
 ///
-/// Cheap `Copy` handle; clone it freely into `move` closures.
+/// Cheap `Copy` handle; clone it freely into same-thread `move` closures.
+/// Signal handles are intentionally `!Send`/`!Sync`: writes from worker threads
+/// must be marshaled onto the UI thread by the scheduler or platform event sink.
 pub struct Signal<T> {
     rt: runtime::RuntimeId,
     key: Index,
     _ty: PhantomData<fn() -> T>,
+    _thread_local: PhantomData<Rc<()>>,
 }
 
 // Manual impls so the *handle* is `Copy` regardless of whether `T` is.
@@ -29,10 +33,13 @@ impl<T> Clone for Signal<T> {
 impl<T> Copy for Signal<T> {}
 
 /// A derived, memoized value of type `T`.
+///
+/// Like [`Signal`], memo handles are tied to their owning runtime thread.
 pub struct Memo<T> {
     rt: runtime::RuntimeId,
     key: Index,
     _ty: PhantomData<fn() -> T>,
+    _thread_local: PhantomData<Rc<()>>,
 }
 impl<T> Clone for Memo<T> {
     fn clone(&self) -> Self {
@@ -50,6 +57,7 @@ pub fn create_signal<T: 'static>(value: T) -> Signal<T> {
         rt,
         key,
         _ty: PhantomData,
+        _thread_local: PhantomData,
     }
 }
 
@@ -76,6 +84,7 @@ where
         rt,
         key,
         _ty: PhantomData,
+        _thread_local: PhantomData,
     }
 }
 

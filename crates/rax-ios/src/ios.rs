@@ -22,15 +22,14 @@ use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
-    UIPanGestureRecognizer,
-    UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider, UIStepper, UISwitch,
-    UITapGestureRecognizer, UITextBorderStyle, UITextField, UITraitEnvironment,
-    UIUserInterfaceStyle, UIView, UIViewController, UIWindow,
+    UIPanGestureRecognizer, UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider,
+    UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField,
+    UITraitEnvironment, UIUserInterfaceStyle, UIView, UIViewController, UIWindow,
 };
 
 use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use rax_dom::{
-    Attribute, Backend, Event, EventSink, GesturePhase, GestureKind, Host, Mutation, TextSelection,
+    Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, Host, Mutation, TextSelection,
     WidgetId, WidgetKind,
 };
 use rax_runtime::App;
@@ -137,7 +136,7 @@ fn recognizer_tag(recognizer: &UIGestureRecognizer) -> Option<u64> {
 fn handle_text_changed(tag_bits: u64, value: String) {
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
-            let selection = TextSelection::caret(value.chars().count());
+            let selection = TextSelection::caret(value.len());
             state.event_sink.dispatch(Event::TextChanged {
                 target: WidgetId::from_u64(tag_bits),
                 value,
@@ -636,6 +635,8 @@ impl Backend for UiKitBackend {
                             unsafe {
                                 button.setTitleColor_forState(Some(&c), UIControlState::Normal)
                             };
+                        } else if let Ok(field) = view.clone().downcast::<UITextField>() {
+                            unsafe { field.setTextColor(Some(&c)) };
                         }
                     }
                     Attribute::BackgroundColor(color) => {
@@ -662,7 +663,9 @@ impl Backend for UiKitBackend {
                     Attribute::ImageSource(name) => {
                         if let Ok(image_view) = view.clone().downcast::<UIImageView>() {
                             let ns = NSString::from_str(&name);
-                            if let Some(img) = unsafe { UIImage::systemImageNamed(&ns) } {
+                            if let Some(img) = unsafe { UIImage::systemImageNamed(&ns) }
+                                .or_else(|| unsafe { UIImage::imageNamed(&ns) })
+                            {
                                 unsafe { image_view.setImage(Some(&img)) };
                             }
                         }

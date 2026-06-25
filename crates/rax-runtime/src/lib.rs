@@ -92,7 +92,7 @@ pub struct App {
     tree: Tree,
     root: WidgetId,
     /// Owns all reactivity created while mounting; disposed when the app drops.
-    _scope: Scope,
+    scope: Option<Scope>,
     viewport: Size,
     /// Safe-area insets (notch, status bar, home indicator) reported by the
     /// platform. The root is laid out within the safe region and offset by the
@@ -141,7 +141,7 @@ impl App {
         let mut app = App {
             tree,
             root,
-            _scope: scope,
+            scope: Some(scope),
             viewport,
             safe_area: EdgeInsets::ZERO,
             keyboard_inset: 0.0,
@@ -275,6 +275,14 @@ impl App {
                 self.tree.set_content_size(id, layout.content);
                 self.content_sizes.insert(id, layout.content);
             }
+        }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        if let Some(scope) = self.scope.take() {
+            scope.dispose();
         }
     }
 }

@@ -65,3 +65,27 @@ fn dynamic_list_updates_are_queryable() {
     ui.tick();
     assert!(ui.find_text("a,b").is_some());
 }
+
+#[test]
+fn harness_simulates_pan_long_press_and_double_tap() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    use rax_view::{text, ViewExt};
+
+    let dx = Rc::new(Cell::new(0.0_f32));
+    let longed = Rc::new(Cell::new(false));
+    let (d2, l2) = (dx.clone(), longed.clone());
+
+    let mut ui = TestHarness::mount(move || {
+        text("drag me")
+            .on_pan(move |info| d2.set(info.translation.x))
+            .on_long_press(move || l2.set(true))
+    });
+
+    let id = ui.find_text("drag me").expect("text present");
+    ui.pan(id, 40.0, -10.0);
+    assert_eq!(dx.get(), 40.0, "pan reported final translation");
+
+    ui.long_press(id);
+    assert!(longed.get(), "long press fired");
+}

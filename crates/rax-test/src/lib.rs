@@ -30,7 +30,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rax_core::Size;
+use rax_core::{Point, Size};
 use rax_dom::{Attribute, Event, Host, Mutation, RecordingBackend, WidgetId, WidgetKind};
 use rax_runtime::App;
 use rax_view::View;
@@ -164,6 +164,40 @@ impl TestHarness {
         self.app
             .event_sink()
             .dispatch(Event::ValueChanged { target: id, value });
+        self.tick();
+    }
+
+    /// Simulates a long-press on `id` and advances a frame.
+    pub fn long_press(&mut self, id: WidgetId) {
+        self.app
+            .event_sink()
+            .dispatch(Event::LongPress { target: id });
+        self.tick();
+    }
+
+    /// Simulates a double-tap on `id` and advances a frame.
+    pub fn double_tap(&mut self, id: WidgetId) {
+        self.app
+            .event_sink()
+            .dispatch(Event::DoubleTap { target: id });
+        self.tick();
+    }
+
+    /// Simulates a full pan gesture on `id` — a `Began`, a `Changed` at the
+    /// given total translation, then an `Ended` — advancing a frame at the end.
+    /// Useful for testing `on_pan` handlers (drag, swipe-to-dismiss).
+    pub fn pan(&mut self, id: WidgetId, dx: f32, dy: f32) {
+        use rax_dom::GesturePhase;
+        let sink = self.app.event_sink();
+        let at = |tx: f32, ty: f32, phase| Event::PanChanged {
+            target: id,
+            translation: Point::new(tx, ty),
+            velocity: Point::new(0.0, 0.0),
+            phase,
+        };
+        sink.dispatch(at(0.0, 0.0, GesturePhase::Began));
+        sink.dispatch(at(dx, dy, GesturePhase::Changed));
+        sink.dispatch(at(dx, dy, GesturePhase::Ended));
         self.tick();
     }
 

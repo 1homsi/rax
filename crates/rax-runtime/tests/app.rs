@@ -94,6 +94,26 @@ fn relayout_emits_no_redundant_frames_when_nothing_changes() {
 }
 
 #[test]
+fn dropping_app_disposes_root_scope_bindings() {
+    let backend = RecordingBackend::new();
+    let log = backend.log();
+    let count = create_signal(0);
+
+    let app = App::new(Host::new(backend), Size::new(320.0, 640.0), move || {
+        text(move || format!("Count: {}", count.get()))
+    });
+
+    log.borrow_mut().clear();
+    drop(app);
+
+    count.set(1);
+    assert!(
+        log.borrow().is_empty(),
+        "bindings created by the app root scope must not outlive the app"
+    );
+}
+
+#[test]
 fn safe_area_insets_offset_and_shrink_the_root() {
     use rax_core::{EdgeInsets, Rect};
 

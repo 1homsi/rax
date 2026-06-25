@@ -40,6 +40,27 @@ thread_local! {
     static DEFAULT: Cell<Option<RuntimeId>> = const { Cell::new(None) };
 }
 
+struct RuntimeEnterGuard;
+
+impl Drop for RuntimeEnterGuard {
+    fn drop(&mut self) {
+        CURRENT.with(|c| {
+            c.borrow_mut().pop();
+        });
+    }
+}
+
+struct OwnerGuard {
+    rt: RuntimeId,
+    prev_owner: Option<Index>,
+}
+
+impl Drop for OwnerGuard {
+    fn drop(&mut self) {
+        with_rt(self.rt, |r| r.owner = self.prev_owner);
+    }
+}
+
 /// Resolves `id` to its reactor and runs `f` against it. Returns `None` if the
 /// runtime has been disposed. The `REGISTRY` borrow is released before the
 /// reactor borrow so reactor ops may safely re-enter the registry.
@@ -116,11 +137,8 @@ impl Runtime {
     /// Makes this runtime current for the duration of `f`.
     pub fn enter<R>(&self, f: impl FnOnce() -> R) -> R {
         CURRENT.with(|c| c.borrow_mut().push(self.id));
-        let out = f();
-        CURRENT.with(|c| {
-            c.borrow_mut().pop();
-        });
-        out
+        let _guard = RuntimeEnterGuard;
+        f()
     }
 }
 
@@ -161,9 +179,11 @@ pub fn create_root<T>(f: impl FnOnce() -> T) -> (T, Scope) {
     })
     .flatten();
 
+    let guard = OwnerGuard { rt, prev_owner };
+
     let out = f();
 
-    with_rt(rt, |r| r.owner = prev_owner);
+    drop(guard);
     (out, Scope { rt, owner })
 }
 
