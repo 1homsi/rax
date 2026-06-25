@@ -74,6 +74,8 @@ pub enum WidgetKind {
     Camera,
     /// An embedded web view (WKWebView). Receives a URL or HTML string via Attribute::Url.
     WebView,
+    /// A virtualized, recycling list widget (maps to UITableView on iOS).
+    LazyList,
 }
 
 /// A local notification to schedule via the UserNotifications framework.
@@ -306,6 +308,12 @@ pub enum Attribute {
     Html(String),
     /// Use a dynamic-type text style instead of a fixed font size.
     TextStyle(TextStyle),
+    /// For LazyList: total number of items in the data set.
+    ItemCount(usize),
+    /// For LazyList: estimated height per item in points.
+    EstimatedItemHeight(f32),
+    /// When true, animate any frame changes to this view with a spring.
+    AnimateLayout(bool),
 }
 
 /// A semantic text style that scales with the user's preferred reading size
@@ -612,4 +620,9 @@ pub enum Mutation {
     },
     /// Stop motion sensor updates.
     StopMotion,
+    /// Present a media picker (PHPickerViewController). Results arrive via `Event::MediaPicked`.
+    PresentMediaPicker {
+        /// Maximum number of items to select (1 for single-select).
+        max_selection: usize,
+    },
 }

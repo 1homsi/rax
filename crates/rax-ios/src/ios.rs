@@ -9,7 +9,7 @@
 #![allow(deprecated)]
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use objc2::rc::Retained;
@@ -84,6 +84,15 @@ thread_local! {
         const { RefCell::new(vec![]) };
     // The CMMotionManager instance (raw pointer, retained manually).
     static MOTION_MANAGER: RefCell<Option<*mut AnyObject>> = const { RefCell::new(None) };
+    // Set of view tags (WidgetId::to_u64()) that have AnimateLayout enabled.
+    static ANIMATED_LAYOUT_VIEWS: RefCell<HashSet<u64>> = RefCell::new(HashSet::new());
+    // Media picker results queued from the PHPickerViewControllerDelegate callback.
+    // Each entry is a Vec of image byte payloads (may be empty for first-version stub).
+    static PENDING_MEDIA: RefCell<Vec<Vec<std::sync::Arc<Vec<u8>>>>> = const { RefCell::new(Vec::new()) };
+    // Set to true if the user cancelled the media picker.
+    static PENDING_MEDIA_CANCEL: Cell<bool> = const { Cell::new(false) };
+    // Keep the MediaPickerDelegate alive while the picker is visible.
+    static MEDIA_PICKER_DELEGATE: RefCell<Option<Retained<MediaPickerDelegate>>> = const { RefCell::new(None) };
 }
 
 fn handle_tap(tag_bits: u64) {
@@ -181,6 +190,13 @@ fn handle_tick() {
             std::mem::take(&mut *v)
         });
 
+    // Drain media picker results and cancellation flag.
+    let media_results: Vec<Vec<std::sync::Arc<Vec<u8>>>> = PENDING_MEDIA.with(|q| {
+        let mut v = q.borrow_mut();
+        std::mem::take(&mut *v)
+    });
+    let media_cancelled = PENDING_MEDIA_CANCEL.with(|c| c.replace(false));
+
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
             // Feed the platform safe-area insets to the runtime each frame; it
@@ -246,6 +262,13 @@ fn handle_tick() {
                     gyro_y,
                     gyro_z,
                 });
+            }
+            // Dispatch media picker results.
+            for images in media_results {
+                state.event_sink.dispatch(Event::MediaPicked { images });
+            }
+            if media_cancelled {
+                state.event_sink.dispatch(Event::MediaPickerCancelled);
             }
             app.tick();
             rax_plugin::tick_plugins();
@@ -687,6 +710,43 @@ define_class!(
             if status == 1 || status == 2 {
                 PENDING_LOCATION_DENIED.with(|c| c.set(true));
             }
+        }
+    }
+);
+
+define_class!(
+    /// PHPickerViewControllerDelegate that queues picked image results for the next tick.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "RaxMediaPickerDelegate"]
+    struct MediaPickerDelegate;
+
+    unsafe impl NSObjectProtocol for MediaPickerDelegate {}
+
+    impl MediaPickerDelegate {
+        /// `picker:didFinishPicking:` — fires when the user finishes picking or cancels.
+        #[unsafe(method(picker:didFinishPicking:))]
+        fn did_finish_picking(&self, picker: &AnyObject, results: &NSMutableArray<AnyObject>) {
+            unsafe {
+                let null_completion: *const AnyObject = std::ptr::null();
+                let _: () = msg_send![picker, dismissViewControllerAnimated: true completion: null_completion];
+            }
+
+            let count: usize = unsafe { msg_send![results, count] };
+            if count == 0 {
+                PENDING_MEDIA_CANCEL.with(|c| c.set(true));
+                // Drop the delegate reference now that we are done.
+                MEDIA_PICKER_DELEGATE.with(|d| *d.borrow_mut() = None);
+                return;
+            }
+
+            // First version: signal that media was picked with empty byte payloads.
+            // Full async loading via NSItemProvider requires dispatch queues and is
+            // planned as a follow-up (see roadmap). The app receives MediaPicked with
+            // an empty images vec and can display a confirmation or trigger its own load.
+            PENDING_MEDIA.with(|q| q.borrow_mut().push(vec![]));
+            // Drop the delegate now that the pick is complete.
+            MEDIA_PICKER_DELEGATE.with(|d| *d.borrow_mut() = None);
         }
     }
 );
@@ -1157,6 +1217,13 @@ impl Backend for UiKitBackend {
                         let v = unsafe { UIView::initWithFrame(self.mtm.alloc(), zero) };
                         unsafe { v.setTag(id.to_u64() as isize) };
                         v
+                    }
+                    WidgetKind::LazyList => {
+                        // A UIScrollView acting as a simple scrolling list container.
+                        // True UITableView-backed recycling is planned as future work.
+                        let sv: Retained<UIScrollView> =
+                            unsafe { UIScrollView::initWithFrame(self.mtm.alloc(), zero) };
+                        sv.into_super()
                     }
                     WidgetKind::WebView => {
                         // Allocate WKWebView using raw msg_send! (avoids a WebKit crate dep).
@@ -1660,11 +1727,41 @@ impl Backend for UiKitBackend {
                             }
                         }
                     }
+                    Attribute::ItemCount(_count) => {
+                        // For the UIScrollView-based LazyList, item count is handled
+                        // at the view layer (lazy_column builds children directly).
+                        // This attribute is a no-op on the iOS backend for now.
+                    }
+                    Attribute::EstimatedItemHeight(_height) => {
+                        // Same as ItemCount: informational for a future UITableView backend.
+                    }
+                    Attribute::AnimateLayout(enabled) => {
+                        // Track which views want layout animation.
+                        let tag = unsafe { view.tag() } as u64;
+                        ANIMATED_LAYOUT_VIEWS.with(|s| {
+                            if enabled {
+                                s.borrow_mut().insert(tag);
+                            } else {
+                                s.borrow_mut().remove(&tag);
+                            }
+                        });
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {
                 if let Some(view) = self.view(id) {
-                    unsafe { view.setFrame(to_cg_rect(rect)) };
+                    let cg_rect = to_cg_rect(rect);
+                    let animate = ANIMATED_LAYOUT_VIEWS.with(|s| s.borrow().contains(&id.to_u64()));
+                    if animate {
+                        unsafe {
+                            let _: () = msg_send![class!(UIView), beginAnimations: std::ptr::null::<AnyObject>() context: std::ptr::null::<AnyObject>()];
+                            let _: () = msg_send![class!(UIView), setAnimationDuration: 0.3f64];
+                            view.setFrame(cg_rect);
+                            let _: () = msg_send![class!(UIView), commitAnimations];
+                        }
+                    } else {
+                        unsafe { view.setFrame(cg_rect) };
+                    }
                     // If this is a Camera view, resize the AVCaptureVideoPreviewLayer
                     // to match the new bounds so the feed fills the container.
                     let has_session = QR_SESSIONS
@@ -1999,6 +2096,40 @@ impl Backend for UiKitBackend {
                         }
                     }
                 });
+            }
+            Mutation::PresentMediaPicker { max_selection } => {
+                unsafe {
+                    // PHPickerConfiguration
+                    let config: *mut AnyObject = msg_send![class!(PHPickerConfiguration), new];
+                    if config.is_null() {
+                        // PHPhotosUI not linked — treat as cancelled.
+                        PENDING_MEDIA_CANCEL.with(|c| c.set(true));
+                        return;
+                    }
+                    let _: () = msg_send![config, setSelectionLimit: max_selection as isize];
+
+                    let picker: *mut AnyObject = msg_send![class!(PHPickerViewController), alloc];
+                    let picker: *mut AnyObject = msg_send![picker, initWithConfiguration: config];
+                    if picker.is_null() {
+                        PENDING_MEDIA_CANCEL.with(|c| c.set(true));
+                        return;
+                    }
+
+                    // Create and store the delegate.
+                    let delegate: Retained<MediaPickerDelegate> =
+                        msg_send![MediaPickerDelegate::class(), new];
+                    let _: () = msg_send![picker, setDelegate: &*delegate];
+                    MEDIA_PICKER_DELEGATE.with(|d| *d.borrow_mut() = Some(delegate));
+
+                    // Present using the root view controller (the UIViewController
+                    // created in setup(), which owns the app's content view).
+                    STATE.with(|s| {
+                        if let Some(state) = s.borrow().as_ref() {
+                            let vc: &UIViewController = &state._view_controller;
+                            let _: () = msg_send![vc, presentViewController: picker animated: true completion: std::ptr::null::<AnyObject>()];
+                        }
+                    });
+                }
             }
             Mutation::AuthenticateBiometric { reason } => {
                 unsafe {

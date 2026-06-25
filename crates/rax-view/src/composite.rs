@@ -19,6 +19,7 @@ use crate::container::{column, row};
 use crate::dynamic::dynamic;
 use crate::image::{icon, image};
 use crate::modifier::{PanInfo, ViewExt};
+use crate::scroll::scroll;
 use crate::text::text;
 use crate::text_input::text_input;
 use crate::view::{boxed, BoxedView, View, ViewSequence};
@@ -1143,6 +1144,65 @@ pub fn dev_tools() -> BoxedView {
     } else {
         boxed(column(()).size(0.0, 0.0))
     }
+}
+
+// ---------------------------------------------------------------------------
+// LazyColumn / LazyRow — scrolling list with fine-grained reactivity
+// ---------------------------------------------------------------------------
+
+/// A vertically scrolling list that renders `count` items using `item_builder`.
+///
+/// Each item is built once on first render. This is **not** a fully virtualized
+/// (recycling) list — all items are in the DOM — but it uses fine-grained
+/// reactivity to avoid re-renders when unrelated signals change.
+///
+/// For true UITableView-backed recycling, a native `LazyList` widget is planned
+/// as future work.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{lazy_column, text, boxed};
+///
+/// let v = lazy_column(100, |i| boxed(text(format!("Item {}", i))));
+/// ```
+pub fn lazy_column(count: usize, item_builder: impl Fn(usize) -> BoxedView + 'static) -> impl View {
+    let items: Vec<BoxedView> = (0..count).map(|i| item_builder(i)).collect();
+    scroll(column(items).gap(0.0))
+}
+
+/// Same as [`lazy_column`] but scrolls horizontally.
+pub fn lazy_row(count: usize, item_builder: impl Fn(usize) -> BoxedView + 'static) -> impl View {
+    let items: Vec<BoxedView> = (0..count).map(|i| item_builder(i)).collect();
+    scroll(column(items).gap(0.0)).horizontal()
+}
+
+/// A reactive list that rebuilds efficiently when `items` changes.
+///
+/// Uses [`dynamic`] so the entire list re-renders only when the signal changes.
+/// Individual item builders are called on every rebuild; wrap item content in
+/// further signals for sub-item fine-grained updates.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{reactive_list, text, boxed};
+/// use rax_reactive::create_signal;
+///
+/// let items = create_signal(vec!["Alice".to_string(), "Bob".to_string()]);
+/// let v = reactive_list(items, |_i, name| boxed(text(name)));
+/// ```
+pub fn reactive_list<T: Clone + 'static>(
+    items: Signal<Vec<T>>,
+    item_builder: impl Fn(usize, T) -> BoxedView + 'static,
+) -> impl View {
+    dynamic(move || {
+        let current = items.get();
+        let views: Vec<BoxedView> = current
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| item_builder(i, item))
+            .collect();
+        boxed(scroll(column(views)))
+    })
 }
 
 /// Returns a `(x_signal, y_signal, handler)` triple for gesture-driven animation.

@@ -228,6 +228,13 @@ pub enum Event {
         /// Gyroscope Z axis (rad/s) — `None` if not requested.
         gyro_z: Option<f64>,
     },
+    /// The user picked media items from the library.
+    MediaPicked {
+        /// Raw image bytes for each selected item (JPEG/PNG).
+        images: Vec<std::sync::Arc<Vec<u8>>>,
+    },
+    /// The user cancelled the media picker without selecting anything.
+    MediaPickerCancelled,
 }
 
 /// The lifecycle phase of a continuous gesture such as a pan.
@@ -295,6 +302,10 @@ pub enum EventKind {
     LocationDenied,
     /// [`Event::MotionUpdated`].
     MotionUpdated,
+    /// [`Event::MediaPicked`].
+    MediaPicked,
+    /// [`Event::MediaPickerCancelled`].
+    MediaPickerCancelled,
 }
 
 impl Event {
@@ -326,6 +337,8 @@ impl Event {
             Event::LocationUpdated { .. } => EventKind::LocationUpdated,
             Event::LocationDenied => EventKind::LocationDenied,
             Event::MotionUpdated { .. } => EventKind::MotionUpdated,
+            Event::MediaPicked { .. } => EventKind::MediaPicked,
+            Event::MediaPickerCancelled => EventKind::MediaPickerCancelled,
         }
     }
 
@@ -356,7 +369,9 @@ impl Event {
             | Event::BiometricResult { .. }
             | Event::LocationUpdated { .. }
             | Event::LocationDenied
-            | Event::MotionUpdated { .. } => None,
+            | Event::MotionUpdated { .. }
+            | Event::MediaPicked { .. }
+            | Event::MediaPickerCancelled => None,
             Event::RotateChanged { target, .. } => Some(target),
         }
     }

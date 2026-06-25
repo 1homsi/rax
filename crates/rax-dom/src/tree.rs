@@ -175,6 +175,11 @@ impl Tree {
         self.create(WidgetKind::WebView)
     }
 
+    /// Creates a virtualized lazy list (UITableView on iOS).
+    pub fn create_lazy_list(&mut self) -> WidgetId {
+        self.create(WidgetKind::LazyList)
+    }
+
     /// Starts CoreLocation GPS updates. Results arrive as global `Event::LocationUpdated`.
     pub fn start_location(&mut self) {
         self.host.emit(Mutation::StartLocation);
@@ -226,6 +231,12 @@ impl Tree {
     /// The result is delivered as a global [`Event::BiometricResult`].
     pub fn authenticate_biometric(&mut self, reason: String) {
         self.host.emit(Mutation::AuthenticateBiometric { reason });
+    }
+
+    /// Presents the system media picker (PHPickerViewController on iOS).
+    /// Results arrive as global [`Event::MediaPicked`] or [`Event::MediaPickerCancelled`].
+    pub fn present_media_picker(&mut self, max_selection: usize) {
+        self.host.emit(Mutation::PresentMediaPicker { max_selection });
     }
 
     fn create(&mut self, kind: WidgetKind) -> WidgetId {

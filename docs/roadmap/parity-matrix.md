@@ -27,7 +27,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Image (cache/resize/placeholder) | ✓ | ✓ | ✅ (source+tint+ImageData+`network_image`; cache/resize modes later) |
 | Icon (vector / SF Symbols) | community | ✓ | ✅ |
 | ScrollView | ✓ | ✓ | ✅ |
-| Virtualized list + recycling | ✓ | ✓ | ⬜ |
+| Virtualized list + recycling | ✓ | ✓ | 🟡 `lazy_column`/`lazy_row`/`reactive_list` ✅; UITableView recycling ⬜ |
 | SectionList / sticky headers | ✓ | ✓ (slivers) | ⬜ |
 | TextInput (controlled + IME) | ✓ | ✓ | ✅ (controlled, secure, return key, onSubmit; IME later) |
 | Switch / Slider | ✓ | ✓ | ✅ |
@@ -77,7 +77,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Tap / long-press / double-tap | ✓ | ✓ | ✅ |
 | Gesture arena (pan/pinch/rotate) | ✓ | ✓ | ✅ (pan/pinch/rotate ✅; simultaneous recognition via delegate; exclusive arena ⬜) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ✅ (`pan_animation(spring_back)` → (x, y, handler); spring-back on release) |
-| Layout / shared-element animation | community | ✓ | ⬜ |
+| Layout / shared-element animation | community | ✓ | 🟡 `.animate_layout()` (UIView beginAnimations/commitAnimations on frame changes) ✅; hero ⬜ |
 | Off-main-thread animation | ✓ | ✓ | ⬜ |
 | 120fps | ✓ | ✓ | ✅ (CAFrameRateRange{60,120} + setPreferredFramesPerSecond fallback) |
 
@@ -107,7 +107,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 ## Device & platform APIs
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
-| Camera / media picker | ✓ | ✓ | ✅ camera + QR scanner (AVFoundation); ⬜ media picker |
+| Camera / media picker | ✓ | ✓ | ✅ camera + QR scanner + media picker (`present_media_picker`) |
 | Location / maps | ✓ | ✓ | 🟡 GPS ✅ (`start_location()` — CLLocationManager → `Event::LocationUpdated`); maps ⬜ |
 | Push + local notifications | ✓ | ✓ | 🟡 local ✅ (`schedule_notification`); push ⬜ |
 | BLE / NFC | community | plugins | ⬜ |
