@@ -12,6 +12,64 @@ use rax_dom::{Attribute, Tree, WidgetId};
 
 use crate::view::View;
 
+// ---------------------------------------------------------------------------
+// RichText
+// ---------------------------------------------------------------------------
+
+/// A text view with inline spans (each span can have different color/size/weight).
+/// Build via [`rich_text`].
+pub struct RichText {
+    spans: Vec<rax_dom::TextSpan>,
+    number_of_lines: Option<u32>,
+    align: Option<rax_dom::TextAlign>,
+}
+
+/// Creates a rich text view. Add spans via [`RichText::span`].
+pub fn rich_text() -> RichText {
+    RichText {
+        spans: vec![],
+        number_of_lines: None,
+        align: None,
+    }
+}
+
+impl RichText {
+    /// Appends a [`TextSpan`](rax_dom::TextSpan) to this rich text view.
+    #[must_use]
+    pub fn span(mut self, span: rax_dom::TextSpan) -> Self {
+        self.spans.push(span);
+        self
+    }
+
+    /// Sets the maximum number of lines (0 = unlimited).
+    #[must_use]
+    pub fn lines(mut self, n: u32) -> Self {
+        self.number_of_lines = Some(n);
+        self
+    }
+
+    /// Sets the horizontal text alignment.
+    #[must_use]
+    pub fn align(mut self, a: rax_dom::TextAlign) -> Self {
+        self.align = Some(a);
+        self
+    }
+}
+
+impl View for RichText {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        let id = tree.create_text();
+        tree.set(id, Attribute::RichText(self.spans));
+        if let Some(n) = self.number_of_lines {
+            tree.set(id, Attribute::NumberOfLines(n));
+        }
+        if let Some(align) = self.align {
+            tree.set(id, Attribute::TextAlign(align));
+        }
+        id
+    }
+}
+
 /// Marker: the text is a fixed string set once.
 pub struct StaticText;
 /// Marker: the text is a reactive closure bound to signals.

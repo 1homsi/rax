@@ -191,6 +191,8 @@ pub enum GestureKind {
     Pan,
     /// Pinch / scale (continuous; reports scale factor + velocity).
     Pinch,
+    /// Rotation gesture (continuous; reports rotation in radians + velocity).
+    Rotate,
 }
 
 /// A single settable **paint** property on a widget.
@@ -274,6 +276,69 @@ pub enum Attribute {
     FontFamily(String),
     /// Keyboard type for text inputs (maps to `UIKeyboardType` on iOS).
     KeyboardType(KeyboardType),
+    /// Rich text with inline spans (overrides `Text` if present).
+    RichText(Vec<TextSpan>),
+}
+
+/// A text span with inline styling.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextSpan {
+    /// The text content of this span.
+    pub text: String,
+    /// Optional text color.
+    pub color: Option<rax_core::Color>,
+    /// Optional font size in points.
+    pub font_size: Option<f32>,
+    /// Bold weight.
+    pub bold: bool,
+    /// Italic style.
+    pub italic: bool,
+    /// Underline decoration.
+    pub underline: bool,
+}
+
+impl TextSpan {
+    /// Create a new span with the given text and all styling defaults.
+    pub fn new(text: impl Into<String>) -> Self {
+        TextSpan {
+            text: text.into(),
+            color: None,
+            font_size: None,
+            bold: false,
+            italic: false,
+            underline: false,
+        }
+    }
+
+    /// Set the span color.
+    pub fn color(mut self, c: rax_core::Color) -> Self {
+        self.color = Some(c);
+        self
+    }
+
+    /// Set the span font size.
+    pub fn font_size(mut self, s: f32) -> Self {
+        self.font_size = Some(s);
+        self
+    }
+
+    /// Make this span bold.
+    pub fn bold(mut self) -> Self {
+        self.bold = true;
+        self
+    }
+
+    /// Make this span italic.
+    pub fn italic(mut self) -> Self {
+        self.italic = true;
+        self
+    }
+
+    /// Underline this span.
+    pub fn underline(mut self) -> Self {
+        self.underline = true;
+        self
+    }
 }
 
 /// A linear color gradient used as a background fill. `start` and `end` are in

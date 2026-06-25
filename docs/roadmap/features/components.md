@@ -23,7 +23,7 @@ styleable, with a headless core, and replaceable via the theme registry
 
 ## Text & display
 - ✅ `Text` with font family/weight/size/color/line-height/align/truncation/multi-line (`lines(n)`) — font_family shipped
-- ⬜ Rich text / spans (inline styles, links, inline images)
+- ✅ Rich text / spans (`rich_text().span(TextSpan::new(text).bold().color(…))` — NSAttributedString)
 - ✅ `Icon` (vector icon set + custom)
 - ✅ `Image` (source + tint + raw bytes/ImageData + `network_image(url, placeholder)` convenience component)
 - ✅ `Avatar` (composed from public API)
@@ -54,7 +54,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `ProgressBar` (linear) / `ProgressRing` (circular)
 - ✅ `Toast` / `Snackbar` (composed)
 - ✅ `Alert` / `Dialog` (`alert(show, title, message, button_label)` — composed modal overlay)
-- ⬜ `ActionSheet`
+- ✅ `ActionSheet` (`action_sheet(show, title, actions)` — composed from bottom_sheet)
 - ⬜ `Banner` / inline alert
 - ⬜ `RefreshControl` (pull-to-refresh)
 - ⬜ `StatusBar` control (style/color/visibility)

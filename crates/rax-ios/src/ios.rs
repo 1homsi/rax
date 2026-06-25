@@ -22,7 +22,8 @@ use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
-    UIPanGestureRecognizer, UIPinchGestureRecognizer, UIProgressView, UIScreen, UIScrollView,
+    UIPanGestureRecognizer, UIPinchGestureRecognizer, UIProgressView, UIRotationGestureRecognizer,
+    UIScreen, UIScrollView,
     UISegmentedControl, UISlider, UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle,
     UITextField, UITextInputTraits, UITextView, UITraitEnvironment, UIUserInterfaceStyle, UIView,
     UIViewController, UIWindow,
@@ -334,6 +335,29 @@ define_class!(
                 move |target| rax_dom::Event::PinchChanged {
                     target,
                     scale,
+                    velocity,
+                    phase,
+                },
+                tag,
+            );
+        }
+
+        #[unsafe(method(rotateRecognized:))]
+        fn rotate_recognized(&self, recognizer: &UIRotationGestureRecognizer) {
+            let Some(tag) = recognizer_tag(recognizer) else {
+                return;
+            };
+            let rotation = unsafe { recognizer.rotation() as f32 };
+            let velocity = unsafe { recognizer.velocity() as f32 };
+            let phase = match unsafe { recognizer.state() } {
+                UIGestureRecognizerState::Began => GesturePhase::Began,
+                UIGestureRecognizerState::Changed => GesturePhase::Changed,
+                _ => GesturePhase::Ended,
+            };
+            dispatch_target_event(
+                move |target| rax_dom::Event::RotateChanged {
+                    target,
+                    rotation,
                     velocity,
                     phase,
                 },
@@ -1276,6 +1300,61 @@ impl Backend for UiKitBackend {
                             stop_qr_scanner(id.to_u64());
                         }
                     }
+                    Attribute::RichText(spans) => {
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            unsafe {
+                                // Build NSMutableAttributedString by appending each span
+                                let result: *mut AnyObject =
+                                    msg_send![class!(NSMutableAttributedString), new];
+
+                                for span in &spans {
+                                    let ns_str = NSString::from_str(&span.text);
+
+                                    // Build attributes dictionary
+                                    let attrs: *mut AnyObject =
+                                        msg_send![class!(NSMutableDictionary), new];
+
+                                    // Font
+                                    let font_size = span.font_size.unwrap_or(17.0) as f64;
+                                    let font: *mut AnyObject = if span.bold && span.italic {
+                                        msg_send![class!(UIFont), italicSystemFontOfSize: font_size]
+                                    } else if span.bold {
+                                        msg_send![class!(UIFont), boldSystemFontOfSize: font_size]
+                                    } else {
+                                        msg_send![class!(UIFont), systemFontOfSize: font_size]
+                                    };
+                                    let font_key = NSString::from_str("NSFont");
+                                    let _: () = msg_send![attrs, setObject: font forKey: &*font_key];
+
+                                    // Color
+                                    if let Some(c) = span.color {
+                                        let ui_color = to_ui_color(c);
+                                        let color_key = NSString::from_str("NSColor");
+                                        let _: () = msg_send![attrs, setObject: &*ui_color forKey: &*color_key];
+                                    }
+
+                                    // Underline
+                                    if span.underline {
+                                        let underline_key = NSString::from_str("NSUnderline");
+                                        let underline_val: *mut AnyObject =
+                                            msg_send![class!(NSNumber), numberWithInt: 1i32];
+                                        let _: () = msg_send![attrs, setObject: underline_val forKey: &*underline_key];
+                                    }
+
+                                    // Create attributed span and append
+                                    let attr_str: *mut AnyObject =
+                                        msg_send![class!(NSAttributedString), alloc];
+                                    let attr_str: *mut AnyObject = msg_send![attr_str,
+                                        initWithString: &*ns_str
+                                        attributes: attrs
+                                    ];
+                                    let _: () = msg_send![result, appendAttributedString: attr_str];
+                                }
+
+                                let _: () = msg_send![&*label, setAttributedText: result];
+                            }
+                        }
+                    }
                     Attribute::KeyboardType(kt) => {
                         // UIKeyboardType raw values (UITextInputTraits.h).
                         let ktype: isize = match kt {
@@ -1424,6 +1503,16 @@ impl Backend for UiKitBackend {
                                 self.mtm.alloc(),
                                 Some(&self.action_target),
                                 Some(sel!(pinchRecognized:)),
+                            )
+                        };
+                        r.into_super()
+                    }
+                    GestureKind::Rotate => {
+                        let r = unsafe {
+                            UIRotationGestureRecognizer::initWithTarget_action(
+                                self.mtm.alloc(),
+                                Some(&self.action_target),
+                                Some(sel!(rotateRecognized:)),
                             )
                         };
                         r.into_super()

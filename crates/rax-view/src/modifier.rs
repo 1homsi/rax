@@ -33,6 +33,17 @@ pub struct PinchInfo {
     pub phase: GesturePhase,
 }
 
+/// Payload delivered to [`ViewExt::on_rotate`] on each rotation-gesture update.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RotateInfo {
+    /// Cumulative rotation in radians.
+    pub rotation: f32,
+    /// Rotation velocity (radians/second).
+    pub velocity: f32,
+    /// Gesture phase.
+    pub phase: GesturePhase,
+}
+
 /// A view whose layout style is post-processed by `apply` after it builds.
 pub struct Styled<V, F> {
     inner: V,
@@ -328,6 +339,32 @@ pub trait ViewExt: View + Sized {
                 }
             });
             t.enable_gesture(id, GestureKind::Pinch);
+        })
+    }
+
+    /// Runs `f` on each update of a rotation gesture, passing the cumulative
+    /// rotation in radians, velocity, and phase.
+    fn on_rotate(
+        self,
+        mut f: impl FnMut(RotateInfo) + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.on(id, EventKind::RotateChanged, move |event| {
+                if let rax_dom::Event::RotateChanged {
+                    rotation,
+                    velocity,
+                    phase,
+                    ..
+                } = event
+                {
+                    f(RotateInfo {
+                        rotation: *rotation,
+                        velocity: *velocity,
+                        phase: *phase,
+                    });
+                }
+            });
+            t.enable_gesture(id, GestureKind::Rotate);
         })
     }
 

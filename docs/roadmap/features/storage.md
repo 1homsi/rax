@@ -10,7 +10,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 - ✅ reactive storage (persisted signals)
 
 ## Structured / database
-- ⬜ SQLite (`rusqlite`) with a typed query layer
+- ✅ SQLite (`rax-sqlite::Database` — rusqlite bundled, open/execute/query/query_with)
 - ⬜ migrations (versioned, automatic)
 - ⬜ an ORM/query-builder option
 - ⬜ embedded document/KV DB option (sled/redb)

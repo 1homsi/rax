@@ -861,6 +861,75 @@ pub fn app_bar(
 }
 
 // ---------------------------------------------------------------------------
+// ActionSheet — bottom sheet with a list of labeled action buttons
+// ---------------------------------------------------------------------------
+
+/// An action sheet showing a list of action buttons and a cancel button.
+///
+/// `show` controls visibility; each action is a `(label, callback)` pair using
+/// `Arc<dyn Fn()>` so the closures can be cloned into the rendered children.
+/// The cancel button always hides the sheet. Each action callback is called
+/// before closing the sheet.
+///
+/// # Example
+/// ```rust
+/// use rax_view::action_sheet;
+/// use rax_reactive::create_signal;
+/// use std::sync::Arc;
+///
+/// let open = create_signal(false);
+/// let v = action_sheet(
+///     open,
+///     Some("Choose an action".to_string()),
+///     vec![
+///         ("Delete".to_string(), Arc::new(|| println!("Deleted")) as Arc<dyn Fn() + Send + Sync>),
+///     ],
+/// );
+/// ```
+pub fn action_sheet(
+    show: Signal<bool>,
+    title: Option<String>,
+    actions: Vec<(String, std::sync::Arc<dyn Fn() + Send + Sync>)>,
+) -> impl View {
+    use crate::button::button;
+    use rax_dom::TextAlign;
+
+    bottom_sheet(show, move || show.set(false), move || {
+        let mut children: Vec<BoxedView> = vec![];
+
+        if let Some(ref t) = title {
+            children.push(boxed(
+                text(t.clone())
+                    .font_size(13.0)
+                    .color(Color::rgba(0, 0, 0, 128))
+                    .align(TextAlign::Center),
+            ));
+        }
+
+        for (label, action) in &actions {
+            let action = action.clone();
+            let show2 = show;
+            children.push(boxed(item_separator(Color::rgba(0, 0, 0, 26), 0.0)));
+            children.push(boxed(
+                column((boxed(button(label.clone(), move || {
+                    action();
+                    show2.set(false);
+                })),))
+                .padding(16.0),
+            ));
+        }
+
+        // Cancel button
+        children.push(boxed(item_separator(Color::rgba(0, 0, 0, 51), 0.0)));
+        children.push(boxed(
+            column((boxed(button("Cancel", move || show.set(false))),)).padding(16.0),
+        ));
+
+        column(children).padding(8.0)
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Drawer / SideMenu — slides in from the left
 // ---------------------------------------------------------------------------
 

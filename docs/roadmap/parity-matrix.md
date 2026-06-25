@@ -36,7 +36,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Checkbox / Radio | ✓ | ✓ | ✅ (composed in userland) |
 | Picker | ✓ | ✓ | ✅ (inline, composed) |
 | ActivityIndicator / Progress | ✓ | ✓ | ✅ |
-| Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ✅ (Modal + BottomSheet + Alert/Dialog composed; ActionSheet ⬜) |
+| Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ✅ (Modal + BottomSheet + Alert/Dialog + ActionSheet — all composed) |
 | Tabs / BottomNav | community | ✓ | ✅ |
 | Drawer | community | ✓ | ✅ (composed) |
 | Divider / Spacer | ✓ | ✓ | ✅ |
@@ -75,7 +75,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Timing + easing animations | ✓ | ✓ | ✅ |
 | Spring / decay | ✓ | ✓ | ✅ |
 | Tap / long-press / double-tap | ✓ | ✓ | ✅ |
-| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch ✅; rotate ⬜; arena ⬜) |
+| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch ✅; rotate ✅; arena ⬜) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ⬜ |
 | Layout / shared-element animation | community | ✓ | ⬜ |
 | Off-main-thread animation | ✓ | ✓ | ⬜ |
@@ -85,7 +85,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
 | Font weight / italic / align | ✓ | ✓ | ✅ |
-| Rich text / spans | ✓ | ✓ | ⬜ |
+| Rich text / spans | ✓ | ✓ | ✅ (`rich_text().span(TextSpan)` — NSAttributedString font/color/underline) |
 | Custom fonts / dynamic type | ✓ | ✓ | ✅ custom font family (`font_family()`); ⬜ dynamic type |
 | RTL / bidi | ✓ | ✓ | ⬜ |
 | i18n (catalog + interpolation) | community | ✓ (intl) | 🟡 (ICU/plurals later) |
@@ -100,7 +100,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Resource (async data + loading state) | community | community | ✅ |
 | Query cache (react-query-like) | community | community | ⬜ |
 | KV storage (+ persisted signals) | community | ✓ | ✅ |
-| SQLite + secure storage | community | ✓ | ⬜ |
+| SQLite + secure storage | community | ✓ | 🟡 SQLite ✅ (`rax-sqlite::Database` — rusqlite bundled); secure storage ⬜ |
 | Offline-first sync | community | community | ⬜ |
 | Async runtime (no GC pauses) | JS event loop | Dart isolates | ✅ **(Rust async)** |
 

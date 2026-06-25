@@ -178,6 +178,17 @@ pub enum Event {
         /// Lifecycle phase of the gesture.
         phase: GesturePhase,
     },
+    /// A rotation gesture updated on `target`. Fires repeatedly through the gesture.
+    RotateChanged {
+        /// The rotated widget.
+        target: WidgetId,
+        /// Cumulative rotation in radians.
+        rotation: f32,
+        /// Rotation velocity (radians/second).
+        velocity: f32,
+        /// Lifecycle phase of the gesture.
+        phase: GesturePhase,
+    },
     /// The app received a deep link URL (from openURL: or continueUserActivity:).
     DeepLink {
         /// The full URL string.
@@ -250,6 +261,8 @@ pub enum EventKind {
     DeepLink,
     /// [`Event::BiometricResult`].
     BiometricResult,
+    /// [`Event::RotateChanged`].
+    RotateChanged,
 }
 
 impl Event {
@@ -277,6 +290,7 @@ impl Event {
             Event::PinchChanged { .. } => EventKind::Pinch,
             Event::DeepLink { .. } => EventKind::DeepLink,
             Event::BiometricResult { .. } => EventKind::BiometricResult,
+            Event::RotateChanged { .. } => EventKind::RotateChanged,
         }
     }
 
@@ -305,6 +319,7 @@ impl Event {
             | Event::AppLifecycle(_)
             | Event::DeepLink { .. }
             | Event::BiometricResult { .. } => None,
+            Event::RotateChanged { target, .. } => Some(target),
         }
     }
 }

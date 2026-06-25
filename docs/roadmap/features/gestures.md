@@ -14,7 +14,7 @@ competing recognizers. ✅ · 🟡 · ⬜.
 - ✅ long-press (with duration, movement tolerance)
 - ✅ pan / drag (translation + velocity + phase); ⬜ thresholds/axis-lock
 - ✅ pinch / zoom (`on_pinch()` — scale + velocity + phase via `UIPinchGestureRecognizer`)
-- ⬜ rotation
+- ✅ rotation (`on_rotate()` — RotateInfo{rotation, velocity, phase} via UIRotationGestureRecognizer)
 - ⬜ fling / swipe (directional)
 - ⬜ force/3D-touch / pressure
 - ⬜ edge / screen-edge gestures

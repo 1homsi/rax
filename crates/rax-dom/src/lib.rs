@@ -37,6 +37,6 @@ pub use event::{
 };
 pub use mutation::{
     Attribute, GestureKind, HapticStyle, KeyboardType, LinearGradient, LocalNotification, Mutation,
-    ReturnKeyType, Role, Shadow, TextAlign, Transform, WidgetId, WidgetKind,
+    ReturnKeyType, Role, Shadow, TextAlign, TextSpan, Transform, WidgetId, WidgetKind,
 };
 pub use tree::{BuildThunk, Tree};
