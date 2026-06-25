@@ -64,7 +64,7 @@ pub use modifier::{Decorated, PanInfo, Styled, ViewExt};
 pub use scroll::{scroll, Scroll};
 pub use spacer::{spacer, Spacer};
 pub use text::{text, DynamicText, IntoText, StaticText, Text};
-pub use text_input::{text_input, TextInput};
+pub use text_input::{text_area, text_input, TextArea, TextInput};
 pub use view::{boxed, BoxedView, View, ViewSequence};
 
 // Re-export the style enums used by the builder API for convenience.

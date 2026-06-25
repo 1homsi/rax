@@ -16,14 +16,14 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
 use objc2::{define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
-use objc2_foundation::{NSMutableArray, NSNotification, NSNotificationCenter, NSString};
+use objc2_foundation::{NSData, NSMutableArray, NSNotification, NSNotificationCenter, NSString};
 use objc2_quartz_core::{CADisplayLink, CAGradientLayer};
 use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
     UIPanGestureRecognizer, UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider,
-    UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField,
+    UIStepper, UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField, UITextView,
     UITraitEnvironment, UIUserInterfaceStyle, UIView, UIViewController, UIWindow,
 };
 
@@ -223,6 +223,18 @@ define_class!(
             handle_text_changed(tag, text);
         }
 
+        #[unsafe(method(textViewDidChange:))]
+        fn text_view_did_change(&self, sender: &UITextView) {
+            let tag = unsafe { sender.tag() } as u64;
+            // UITextView.text() returns Option<Retained<NSString>> or Retained<NSString>
+            // depending on objc2 version. Use msg_send to be safe.
+            let text: String = unsafe {
+                let ns: Option<Retained<objc2_foundation::NSString>> = msg_send![sender, text];
+                ns.map(|s| s.to_string()).unwrap_or_default()
+            };
+            handle_text_changed(tag, text);
+        }
+
         #[unsafe(method(tapRecognized:))]
         fn tap_recognized(&self, recognizer: &UITapGestureRecognizer) {
             if let Some(tag) = recognizer_tag(recognizer) {
@@ -316,6 +328,8 @@ fn new_instance<T: ClassType>() -> Retained<T> {
 // ---------------------------------------------------------------------------
 
 fn setup(mtm: MainThreadMarker) {
+    // Install the ureq-backed HTTP client for the main thread.
+    rax_net::set_client(crate::http::UreqClient);
     // Persist rax-store keys to NSUserDefaults across launches.
     rax_store::set_storage(crate::storage::UiKitStorage);
 
@@ -568,6 +582,17 @@ impl Backend for UiKitBackend {
                         }
                         field.into_super().into_super()
                     }
+                    WidgetKind::TextArea => {
+                        let tv: Retained<UITextView> =
+                            unsafe { UITextView::initWithFrame(self.mtm.alloc(), zero) };
+                        unsafe {
+                            tv.setTag(id.to_u64() as isize);
+                            // Use msg_send to set delegate since UITextViewDelegate protocol binding
+                            let _: () = msg_send![&*tv, setDelegate: &*self.action_target];
+                        }
+                        // UITextView -> UIScrollView -> UIView
+                        tv.into_super().into_super()
+                    }
                 };
                 self.views.insert(id.to_u64(), view);
             }
@@ -587,6 +612,11 @@ impl Backend for UiKitBackend {
                             let editing = unsafe { field.isFirstResponder() };
                             if !editing {
                                 unsafe { field.setText(Some(&ns)) };
+                            }
+                        } else if let Ok(tv) = view.clone().downcast::<UITextView>() {
+                            let editing = unsafe { tv.isFirstResponder() };
+                            if !editing {
+                                unsafe { tv.setText(Some(&ns)) };
                             }
                         }
                     }
@@ -644,6 +674,8 @@ impl Backend for UiKitBackend {
                             };
                         } else if let Ok(field) = view.clone().downcast::<UITextField>() {
                             unsafe { field.setTextColor(Some(&c)) };
+                        } else if let Ok(tv) = view.clone().downcast::<UITextView>() {
+                            unsafe { tv.setTextColor(Some(&c)) };
                         }
                     }
                     Attribute::BackgroundColor(color) => {
@@ -798,6 +830,27 @@ impl Backend for UiKitBackend {
                             y: g.end.1 as f64,
                         });
                         layer.setFrame(view.bounds());
+                    }
+                    Attribute::NumberOfLines(n) => {
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            unsafe {
+                                label.setNumberOfLines(n as isize);
+                            }
+                        }
+                    }
+                    Attribute::ImageData(bytes) => {
+                        if let Ok(image_view) = view.clone().downcast::<UIImageView>() {
+                            let data = unsafe {
+                                NSData::initWithBytes_length(
+                                    self.mtm.alloc(),
+                                    bytes.as_ptr() as *const std::ffi::c_void,
+                                    bytes.len(),
+                                )
+                            };
+                            if let Some(img) = unsafe { UIImage::imageWithData(&data) } {
+                                unsafe { image_view.setImage(Some(&img)) };
+                            }
+                        }
                     }
                 }
             }

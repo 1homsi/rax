@@ -265,6 +265,8 @@ fn measure_leaf(
         WidgetKind::Segmented => (glyphs * glyph_w + 48.0, line_h.max(32.0)),
         // UIStepper standard intrinsic size.
         WidgetKind::Stepper => (94.0, 29.0),
+        // TextArea grows to fill; give a sensible minimum height.
+        WidgetKind::TextArea => (180.0, line_h.max(80.0)),
         WidgetKind::View | WidgetKind::Scroll => (0.0, 0.0),
     };
 

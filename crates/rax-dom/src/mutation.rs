@@ -65,6 +65,8 @@ pub enum WidgetKind {
     /// A -/+ stepper for a bounded numeric value (maps to `UIStepper`); the
     /// current value comes from `FloatValue` and the bounds from `Range`.
     Stepper,
+    /// A multi-line editable text area (maps to `UITextView`).
+    TextArea,
 }
 
 /// Horizontal text alignment.
@@ -174,6 +176,10 @@ pub enum Attribute {
     Transform(Transform),
     /// A linear gradient background fill.
     Gradient(LinearGradient),
+    /// Number of lines for a text label (0 = unlimited).
+    NumberOfLines(u32),
+    /// Raw image bytes (PNG/JPEG) to display in an image view.
+    ImageData(std::sync::Arc<Vec<u8>>),
 }
 
 /// A linear color gradient used as a background fill. `start` and `end` are in

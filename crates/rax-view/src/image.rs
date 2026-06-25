@@ -9,6 +9,7 @@ use crate::view::View;
 pub struct Image {
     source: String,
     tint: Option<Color>,
+    data: Option<std::sync::Arc<Vec<u8>>>,
 }
 
 /// Creates an image from an asset name or a system-symbol name.
@@ -16,6 +17,7 @@ pub fn image(source: impl Into<String>) -> Image {
     Image {
         source: source.into(),
         tint: None,
+        data: None,
     }
 }
 
@@ -33,6 +35,13 @@ impl Image {
         self.tint = Some(color);
         self
     }
+
+    /// Sets a raw image from bytes (PNG/JPEG). Takes precedence over `src`.
+    #[must_use]
+    pub fn data(mut self, bytes: std::sync::Arc<Vec<u8>>) -> Self {
+        self.data = Some(bytes);
+        self
+    }
 }
 
 impl View for Image {
@@ -41,6 +50,9 @@ impl View for Image {
         tree.set(id, Attribute::ImageSource(self.source));
         if let Some(tint) = self.tint {
             tree.set(id, Attribute::TintColor(tint));
+        }
+        if let Some(bytes) = self.data {
+            tree.set(id, Attribute::ImageData(bytes));
         }
         id
     }

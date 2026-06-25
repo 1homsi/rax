@@ -17,6 +17,7 @@ rax-dom = { path = "../rax-dom" }
 rax-runtime = { path = "../rax-runtime" }
 rax-view = { path = "../rax-view" }
 rax-store = { path = "../rax-store" }
+rax-net = { path = "../rax-net" }
 
 # UIKit is only present on Apple mobile targets; gate the bindings so the rest
 # of the workspace still builds on the host.
@@ -29,6 +30,7 @@ objc2-foundation = { version = "0.3", features = [
     "NSThread",
     "NSRunLoop",
     "NSUserDefaults",
+    "NSData",
 ] }
 objc2-ui-kit = { version = "0.3", features = [
     "UIResponder",
@@ -50,6 +52,7 @@ objc2-ui-kit = { version = "0.3", features = [
     "UISegmentedControl",
     "UIStepper",
     "UITextField",
+    "UITextView",
     "UIGestureRecognizer",
     "UITapGestureRecognizer",
     "UILongPressGestureRecognizer",
@@ -67,3 +70,5 @@ objc2-quartz-core = { version = "0.3", features = [
 ] }
 objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 objc2-core-graphics = { version = "0.3", features = ["CGColor"] }
+futures = { version = "0.3", default-features = false, features = ["executor", "std"] }
+ureq = { version = "2", features = [] }

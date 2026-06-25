@@ -50,6 +50,7 @@ pub struct Text<M, T: IntoText<M>> {
     weight: Option<f32>,
     italic: bool,
     align: Option<rax_dom::TextAlign>,
+    number_of_lines: Option<u32>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -62,6 +63,7 @@ pub fn text<M, T: IntoText<M>>(value: T) -> Text<M, T> {
         weight: None,
         italic: false,
         align: None,
+        number_of_lines: None,
         _marker: PhantomData,
     }
 }
@@ -108,6 +110,13 @@ impl<M, T: IntoText<M>> Text<M, T> {
         self.align = Some(align);
         self
     }
+
+    /// Sets the maximum number of lines (0 = unlimited).
+    #[must_use]
+    pub fn lines(mut self, n: u32) -> Self {
+        self.number_of_lines = Some(n);
+        self
+    }
 }
 
 impl<M, T: IntoText<M>> View for Text<M, T> {
@@ -128,6 +137,9 @@ impl<M, T: IntoText<M>> View for Text<M, T> {
         }
         if let Some(align) = self.align {
             tree.set(id, Attribute::TextAlign(align));
+        }
+        if let Some(n) = self.number_of_lines {
+            tree.set(id, Attribute::NumberOfLines(n));
         }
         self.value.apply(tree, id);
         id

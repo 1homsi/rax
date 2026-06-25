@@ -91,14 +91,18 @@ pub struct Response {
     pub status: u16,
     /// Response body.
     pub body: String,
+    /// Response body as raw bytes.
+    pub body_bytes: Vec<u8>,
 }
 
 impl Response {
     /// A `200 OK` response with `body`.
     pub fn ok(body: impl Into<String>) -> Response {
+        let body = body.into();
         Response {
             status: 200,
-            body: body.into(),
+            body_bytes: body.as_bytes().to_vec(),
+            body,
         }
     }
 

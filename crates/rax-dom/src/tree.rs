@@ -155,6 +155,11 @@ impl Tree {
         self.create(WidgetKind::Stepper)
     }
 
+    /// Creates a multi-line editable text area.
+    pub fn create_text_area(&mut self) -> WidgetId {
+        self.create(WidgetKind::TextArea)
+    }
+
     /// Emits a content-size update for a scroll container.
     pub fn set_content_size(&mut self, id: WidgetId, size: rax_core::Size) {
         if self.nodes.get(id.0).is_some() {
