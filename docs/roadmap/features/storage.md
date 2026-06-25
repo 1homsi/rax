@@ -18,7 +18,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 - ⬜ reactive queries (live results as signals)
 
 ## Files & blobs
-- ⬜ file system access (app dirs, cache, documents, temp)
+- ✅ file system access (`rax-fs`: `app_documents_dir/cache_dir/temp_dir/support_dir`; `read_text/bytes`, `write_text/bytes`, `append_text`, `delete_file`, `list_files`, `exists`, `file_size`, `create_dir`)
 - ⬜ streaming read/write, large files
 - ⬜ blob/asset storage + image cache integration
 

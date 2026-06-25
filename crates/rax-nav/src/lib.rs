@@ -138,6 +138,63 @@ pub enum NavigationTransition {
     None,
 }
 
+// ---------------------------------------------------------------------------
+// Screen lifecycle
+// ---------------------------------------------------------------------------
+
+use std::cell::RefCell;
+
+thread_local! {
+    static APPEAR_HANDLERS: RefCell<Vec<(String, Box<dyn Fn()>)>> = RefCell::new(vec![]);
+    static DISAPPEAR_HANDLERS: RefCell<Vec<(String, Box<dyn Fn()>)>> = RefCell::new(vec![]);
+}
+
+/// Register a callback that fires when the screen with the given route key appears.
+///
+/// Call this at the top of a screen's composable function.
+/// The callback is cleared when the screen is popped.
+pub fn on_appear(route: &str, f: impl Fn() + 'static) {
+    APPEAR_HANDLERS.with(|h| {
+        h.borrow_mut().push((route.to_string(), Box::new(f)));
+    });
+}
+
+/// Register a callback that fires when the screen with the given route key disappears.
+pub fn on_disappear(route: &str, f: impl Fn() + 'static) {
+    DISAPPEAR_HANDLERS.with(|h| {
+        h.borrow_mut().push((route.to_string(), Box::new(f)));
+    });
+}
+
+/// Called by the navigation system when a screen appears (e.g. after push completes).
+pub fn fire_appear(route: &str) {
+    APPEAR_HANDLERS.with(|h| {
+        for (key, cb) in h.borrow().iter() {
+            if key == route {
+                cb();
+            }
+        }
+    });
+}
+
+/// Called by the navigation system when a screen disappears (e.g. before pop).
+pub fn fire_disappear(route: &str) {
+    DISAPPEAR_HANDLERS.with(|h| {
+        for (key, cb) in h.borrow().iter() {
+            if key == route {
+                cb();
+            }
+        }
+    });
+}
+
+/// Run a side effect whenever the current screen gains focus.
+/// The callback is called immediately and on every re-focus.
+/// Pass the current route key.
+pub fn use_focus_effect(route: &str, f: impl Fn() + 'static) {
+    on_appear(route, f);
+}
+
 /// Like [`routes`] but animates screen transitions according to `transition`.
 ///
 /// On each push/pop the incoming screen plays the enter animation; the

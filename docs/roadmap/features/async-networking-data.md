@@ -12,19 +12,24 @@ Match `fetch`/axios/react-query (RN) and `http`/`dio`/`riverpod` (Flutter). ⬜.
 
 ## Networking
 - ✅ HTTP client behind a trait (GET/POST/etc., headers, query, body) — ureq-backed `HttpClient`
-- ⬜ TLS, cert pinning, cookies, redirects, timeouts, retries/backoff
-- ⬜ multipart upload, streaming download, progress
+- ✅ timeouts + retries (`RequestConfig{timeout_secs, retry_count, retry_delay_ms}`; `get_with_config`/`post_with_config`)
+- ✅ request interceptors (`add_interceptor(fn(url,headers))` — applied before every request)
+- ✅ upload (`upload_bytes(url, data, content_type)` — raw byte POST)
+- ⬜ TLS, cert pinning, cookies, redirects, backoff
+- ⬜ streaming download, progress
 - ⬜ JSON (serde) + form/urlencoded; typed request/response
-- ✅ WebSocket client (`connect_ws(url, on_message)` — tungstenite, background thread, send/receive); ⬜ SSE
-- ⬜ GraphQL helper (queries/mutations/subscriptions)
+- ✅ WebSocket client (`connect_ws(url, on_message)` — tungstenite, background thread, send/receive)
+- ✅ SSE (`connect_sse(url, on_event)` — ureq BufReader)
+- ✅ GraphQL (`graphql(endpoint, query, variables) -> Resource<Response>`)
+- ⬜ subscriptions, gRPC
 - ⬜ gRPC (optional)
 - ⬜ connectivity awareness, offline detection, request queueing
 
 ## Data fetching layer (react-query-style)
-- ⬜ query caching, staleness, revalidation, dedup
+- ✅ query caching + staleness (`use_query`, `use_query_stale(url, secs)`, `invalidate_query`, `gc_query_cache`)
 - ⬜ mutations + cache invalidation
 - ⬜ optimistic updates + rollback
-- ⬜ pagination / infinite queries
+- ✅ pagination (`use_paginated(initial_items)` → `Paginated{items,page,loading,has_more}`; `.load_next(fetch_fn)`)
 - ⬜ background refetch, polling, focus refetch
 - ✅ `Resource`/suspense integration with the reactive layer
 - ⬜ offline-first sync primitives

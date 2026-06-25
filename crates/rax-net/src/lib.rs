@@ -324,6 +324,318 @@ pub fn connect_ws(
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+// ---------------------------------------------------------------------------
+// Request configuration — timeout, extra headers, and automatic retries
+// ---------------------------------------------------------------------------
+
+/// Per-request configuration: timeout, extra headers, and automatic retries.
+///
+/// Build once and pass to [`HttpClient::get_with_config`] or
+/// [`HttpClient::post_with_config`]. The defaults match common REST-API usage.
+///
+/// # Example
+/// ```rust,ignore
+/// let cfg = RequestConfig {
+///     timeout_secs: 10,
+///     headers: vec![("Authorization".into(), "Bearer tok".into())],
+///     retry_count: 3,
+///     retry_delay_ms: 500,
+/// };
+/// let res = get_with_config("https://api.example.com/data", cfg)?;
+/// ```
+#[derive(Debug, Clone)]
+pub struct RequestConfig {
+    /// Maximum seconds to wait for the server to respond. Default: `30`.
+    pub timeout_secs: u64,
+    /// Extra HTTP headers sent with every request. Default: none.
+    pub headers: Vec<(String, String)>,
+    /// How many times to retry on failure **after** the initial attempt. Default: `0`.
+    pub retry_count: u32,
+    /// Milliseconds to sleep between retry attempts. Default: `1000`.
+    pub retry_delay_ms: u64,
+}
+
+impl Default for RequestConfig {
+    fn default() -> Self {
+        Self {
+            timeout_secs: 30,
+            headers: vec![],
+            retry_count: 0,
+            retry_delay_ms: 1000,
+        }
+    }
+}
+
+/// Performs a GET request with the given [`RequestConfig`] (timeout, headers,
+/// retries).
+///
+/// On each attempt, a fresh ureq agent is built with the configured timeout so
+/// the timeout is honoured per-attempt rather than for the whole retry loop.
+/// Returns the first successful [`Response`], or the last error if every
+/// attempt fails.
+///
+/// # Errors
+/// Returns `Err(String)` when all attempts are exhausted.
+pub fn get_with_config(url: &str, config: RequestConfig) -> Result<Response, String> {
+    do_request_with_config(url, None, config)
+}
+
+/// Performs a POST request with `body` and the given [`RequestConfig`].
+///
+/// See [`get_with_config`] for retry and timeout semantics.
+///
+/// # Errors
+/// Returns `Err(String)` when all attempts are exhausted.
+pub fn post_with_config(url: &str, body: &str, config: RequestConfig) -> Result<Response, String> {
+    do_request_with_config(url, Some(body), config)
+}
+
+/// Internal helper shared by [`get_with_config`] and [`post_with_config`].
+fn do_request_with_config(
+    url: &str,
+    body: Option<&str>,
+    config: RequestConfig,
+) -> Result<Response, String> {
+    let max_attempts = config.retry_count + 1;
+    let mut last_err = String::new();
+
+    for attempt in 0..max_attempts {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(config.retry_delay_ms));
+        }
+
+        // Build an effective URL and headers, running all registered interceptors.
+        let mut effective_url = url.to_string();
+        let mut effective_headers = config.headers.clone();
+        apply_interceptors(&mut effective_url, &mut effective_headers);
+
+        // Build a fresh ureq agent with the per-request timeout.
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(config.timeout_secs))
+            .build();
+
+        let result = if let Some(body_str) = body {
+            let mut req = agent.post(&effective_url);
+            for (name, value) in &effective_headers {
+                req = req.set(name, value);
+            }
+            req.send_string(body_str)
+        } else {
+            let mut req = agent.get(&effective_url);
+            for (name, value) in &effective_headers {
+                req = req.set(name, value);
+            }
+            req.call()
+        };
+
+        match result {
+            Ok(resp) => {
+                let status = resp.status();
+                let body_bytes = resp
+                    .into_string()
+                    .unwrap_or_default()
+                    .into_bytes();
+                let body_text = String::from_utf8_lossy(&body_bytes).into_owned();
+                return Ok(Response {
+                    status,
+                    body: body_text,
+                    body_bytes,
+                });
+            }
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+
+    Err(last_err)
+}
+
+// ---------------------------------------------------------------------------
+// Request interceptors — mutate URL / headers before every outgoing request
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    /// Thread-local list of request interceptors.
+    /// Each interceptor receives `(url_mut, headers_mut)` and may modify both.
+    static INTERCEPTORS: RefCell<Vec<Box<dyn Fn(&mut String, &mut Vec<(String, String)>)>>> =
+        RefCell::new(vec![]);
+}
+
+/// Registers a request interceptor on the current thread.
+///
+/// The closure is called once per HTTP request, just before the network call,
+/// and may modify the URL or add / remove headers. Interceptors are applied
+/// in registration order.
+///
+/// ```rust,ignore
+/// add_interceptor(|url, headers| {
+///     headers.push(("X-Tenant".into(), "acme".into()));
+/// });
+/// ```
+pub fn add_interceptor(
+    f: impl Fn(&mut String, &mut Vec<(String, String)>) + 'static,
+) {
+    INTERCEPTORS.with(|list| list.borrow_mut().push(Box::new(f)));
+}
+
+/// Removes all registered interceptors on the current thread.
+pub fn clear_interceptors() {
+    INTERCEPTORS.with(|list| list.borrow_mut().clear());
+}
+
+/// Applies every registered interceptor to `url` and `headers`.
+fn apply_interceptors(url: &mut String, headers: &mut Vec<(String, String)>) {
+    INTERCEPTORS.with(|list| {
+        for f in list.borrow().iter() {
+            f(url, headers);
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Upload helper — raw bytes via HTTP POST
+// ---------------------------------------------------------------------------
+
+/// Uploads raw bytes to `url` using HTTP POST.
+///
+/// The `content_type` value is sent as the `Content-Type` header. Suitable
+/// for raw binary uploads; for multipart forms, build the body externally and
+/// pass `"multipart/form-data; boundary=…"` as the content type.
+///
+/// Registered interceptors are applied before the request is sent.
+///
+/// # Errors
+/// Returns `Err(String)` describing the ureq error on failure.
+///
+/// # Example
+/// ```rust,ignore
+/// let png = std::fs::read("avatar.png").unwrap();
+/// let resp = upload_bytes("https://api.example.com/avatar", png, "image/png")?;
+/// assert!(resp.is_success());
+/// ```
+pub fn upload_bytes(url: &str, data: Vec<u8>, content_type: &str) -> Result<Response, String> {
+    let mut effective_url = url.to_string();
+    let mut headers: Vec<(String, String)> = vec![
+        ("Content-Type".to_string(), content_type.to_string()),
+    ];
+    apply_interceptors(&mut effective_url, &mut headers);
+
+    let mut req = ureq::post(&effective_url);
+    for (name, value) in &headers {
+        req = req.set(name, value);
+    }
+
+    let result = req.send_bytes(&data).map_err(|e| e.to_string())?;
+    let status = result.status();
+    let body_bytes = result.into_string().unwrap_or_default().into_bytes();
+    let body_text = String::from_utf8_lossy(&body_bytes).into_owned();
+    Ok(Response {
+        status,
+        body: body_text,
+        body_bytes,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Cache-control helpers
+// ---------------------------------------------------------------------------
+
+/// Returns `true` when `response` indicates it may be cached.
+///
+/// A response is considered cacheable when its status is `200 OK`. In
+/// practice, callers should inspect the raw `Cache-Control` / `Expires`
+/// headers they receive; this helper is a lightweight stand-in for the most
+/// common case.
+///
+/// TTL-based caching of full [`Resource`]s is already handled by
+/// [`use_query_stale`], which re-fetches automatically when the entry is
+/// older than `stale_after_secs`.
+pub fn is_cacheable(response: &Response) -> bool {
+    response.status == 200
+}
+
+// ---------------------------------------------------------------------------
+// Pagination helpers — cursor-based reactive page loading
+// ---------------------------------------------------------------------------
+
+use rax_reactive::Signal;
+
+/// Cursor-based paginated data holder backed by reactive [`Signal`]s.
+///
+/// All fields are [`Signal`] handles, which are unconditionally `Copy`, so
+/// `Paginated<T>` itself is `Copy` / `Clone` regardless of `T`.
+///
+/// Create one via [`use_paginated`] and advance pages with [`load_next`].
+///
+/// [`load_next`]: Paginated::load_next
+#[derive(Clone, Copy)]
+pub struct Paginated<T: Clone + 'static> {
+    /// Accumulated items across all loaded pages.
+    pub items: Signal<Vec<T>>,
+    /// The index of the last successfully loaded page (0 = nothing loaded yet).
+    pub page: Signal<u32>,
+    /// `true` while a page fetch is in progress.
+    pub loading: Signal<bool>,
+    /// `false` once a fetch returns an empty slice (no further pages exist).
+    pub has_more: Signal<bool>,
+}
+
+impl<T: Clone + 'static> Paginated<T> {
+    /// Fetches the next page by calling `fetch(next_page_index)`.
+    ///
+    /// Does nothing when a fetch is already in progress (`loading == true`) or
+    /// when the end of the list has been reached (`has_more == false`).
+    ///
+    /// The `fetch` closure receives the **1-based** page number to load and
+    /// should return the items for that page. An empty return value signals
+    /// that no more pages exist.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let paged = use_paginated::<Post>(vec![]);
+    /// paged.load_next(|page| api_fetch_posts(page));
+    /// ```
+    pub fn load_next(&self, fetch: impl Fn(u32) -> Vec<T>) {
+        if self.loading.get() || !self.has_more.get() {
+            return;
+        }
+        self.loading.set(true);
+        let next_page = self.page.get() + 1;
+        let new_items = fetch(next_page);
+        if new_items.is_empty() {
+            self.has_more.set(false);
+        } else {
+            self.items.update(|v| v.extend(new_items));
+            self.page.set(next_page);
+        }
+        self.loading.set(false);
+    }
+}
+
+/// Creates a reactive [`Paginated<T>`] pre-seeded with `initial_items`.
+///
+/// The returned value holds four reactive signals; it is `Copy` and can be
+/// moved freely into closures on the same thread.
+///
+/// ```rust,ignore
+/// use rax_reactive::create_root;
+/// use rax_net::use_paginated;
+///
+/// let (paged, _scope) = create_root(|| use_paginated::<String>(vec![]));
+/// paged.load_next(|page| fetch_page(page));
+/// ```
+pub fn use_paginated<T: Clone + 'static>(initial_items: Vec<T>) -> Paginated<T> {
+    Paginated {
+        items: rax_reactive::create_signal(initial_items),
+        page: rax_reactive::create_signal(0u32),
+        loading: rax_reactive::create_signal(false),
+        has_more: rax_reactive::create_signal(true),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Query cache — react-query-style deduplication
+// ---------------------------------------------------------------------------
+
 thread_local! {
     static QUERY_CACHE: RefCell<HashMap<String, Resource<Response>>> =
         RefCell::new(HashMap::new());

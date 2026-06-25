@@ -47,6 +47,7 @@ mod context;
 mod control;
 mod effect;
 mod handle;
+mod history;
 mod runtime;
 mod store;
 
@@ -54,5 +55,6 @@ pub use context::{expect_context, provide_context, use_context};
 pub use control::{batch, untrack};
 pub use effect::{create_effect, Effect};
 pub use handle::{create_memo, create_signal, Memo, Signal};
+pub use history::{use_history, History};
 pub use runtime::{create_root, Runtime, Scope};
 pub use store::Store;

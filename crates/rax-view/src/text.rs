@@ -111,6 +111,10 @@ pub struct Text<M, T: IntoText<M>> {
     number_of_lines: Option<u32>,
     font_family: Option<String>,
     text_style: Option<rax_dom::TextStyle>,
+    letter_spacing: Option<f32>,
+    line_height: Option<f32>,
+    text_decoration: Option<rax_dom::TextDecoration>,
+    text_shadow: Option<(Color, f32, f32, f32)>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -126,6 +130,10 @@ pub fn text<M, T: IntoText<M>>(value: T) -> Text<M, T> {
         number_of_lines: None,
         font_family: None,
         text_style: None,
+        letter_spacing: None,
+        line_height: None,
+        text_decoration: None,
+        text_shadow: None,
         _marker: PhantomData,
     }
 }
@@ -195,6 +203,45 @@ impl<M, T: IntoText<M>> Text<M, T> {
         self.text_style = Some(style);
         self
     }
+
+    /// Sets letter spacing (tracking) in points.
+    #[must_use]
+    pub fn letter_spacing(mut self, kern: f32) -> Self {
+        self.letter_spacing = Some(kern);
+        self
+    }
+
+    /// Sets the line height multiplier.
+    #[must_use]
+    pub fn line_height(mut self, h: f32) -> Self {
+        self.line_height = Some(h);
+        self
+    }
+
+    /// Applies a single underline decoration.
+    #[must_use]
+    pub fn underline(mut self) -> Self {
+        self.text_decoration = Some(rax_dom::TextDecoration::Underline);
+        self
+    }
+
+    /// Applies a strikethrough decoration.
+    #[must_use]
+    pub fn strikethrough(mut self) -> Self {
+        self.text_decoration = Some(rax_dom::TextDecoration::Strikethrough);
+        self
+    }
+
+    /// Applies a text shadow.
+    ///
+    /// - `color` — shadow color (alpha controls opacity).
+    /// - `offset_x` / `offset_y` — shadow offset in points.
+    /// - `blur` — blur radius in points.
+    #[must_use]
+    pub fn text_shadow(mut self, color: Color, offset_x: f32, offset_y: f32, blur: f32) -> Self {
+        self.text_shadow = Some((color, offset_x, offset_y, blur));
+        self
+    }
 }
 
 impl<M, T: IntoText<M>> View for Text<M, T> {
@@ -224,6 +271,18 @@ impl<M, T: IntoText<M>> View for Text<M, T> {
         }
         if let Some(style) = self.text_style {
             tree.set(id, Attribute::TextStyle(style));
+        }
+        if let Some(kern) = self.letter_spacing {
+            tree.set(id, Attribute::LetterSpacing(kern));
+        }
+        if let Some(h) = self.line_height {
+            tree.set(id, Attribute::LineHeight(h));
+        }
+        if let Some(decoration) = self.text_decoration {
+            tree.set(id, Attribute::TextDecoration(decoration));
+        }
+        if let Some((color, offset_x, offset_y, blur)) = self.text_shadow {
+            tree.set(id, Attribute::TextShadow { color, offset_x, offset_y, blur });
         }
         self.value.apply(tree, id);
         id

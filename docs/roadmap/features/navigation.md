@@ -30,7 +30,7 @@ Rust-owned navigation state with native transition primitives. ⬜ planned.
 
 ## State & lifecycle
 - ⬜ navigation state restoration (kill/restore)
-- ⬜ screen focus/blur lifecycle events
+- ✅ screen focus/blur lifecycle events (`on_appear(route, fn)`, `on_disappear(route, fn)`, `use_focus_effect(route, fn)`, `fire_appear/disappear` hooks)
 - ⬜ params passing + result return (e.g. pick-and-return)
 - ⬜ back-handling (hardware back, escape key)
 - ⬜ navigation events / listeners / analytics hooks

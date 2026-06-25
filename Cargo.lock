@@ -820,6 +820,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax-fs"
+version = "0.0.1"
+
+[[package]]
 name = "rax-i18n"
 version = "0.0.1"
 dependencies = [

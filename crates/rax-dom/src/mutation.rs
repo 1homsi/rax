@@ -352,6 +352,37 @@ pub enum Attribute {
         /// Points added to the left of the view.
         left: f32,
     },
+    /// Letter spacing (tracking) in points. Maps to `NSKernAttributeName` on iOS.
+    LetterSpacing(f32),
+    /// Line height multiplier. Maps to `NSParagraphStyle.lineSpacing` on iOS.
+    LineHeight(f32),
+    /// Text decoration (underline / strikethrough). Maps to NSUnderline /
+    /// NSStrikethrough attribute keys on iOS.
+    TextDecoration(TextDecoration),
+    /// Text shadow. Maps to `NSShadowAttributeName` on iOS.
+    TextShadow {
+        /// Shadow color (alpha controls opacity).
+        color: Color,
+        /// Horizontal offset in points.
+        offset_x: f32,
+        /// Vertical offset in points.
+        offset_y: f32,
+        /// Blur radius in points.
+        blur: f32,
+    },
+}
+
+/// Text decoration applied to a label or span.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TextDecoration {
+    /// No decoration.
+    None,
+    /// Single underline.
+    Underline,
+    /// Horizontal strikethrough.
+    Strikethrough,
+    /// Double underline.
+    UnderlineDouble,
 }
 
 /// A semantic text style that scales with the user's preferred reading size
@@ -397,6 +428,10 @@ pub struct TextSpan {
     pub italic: bool,
     /// Underline decoration.
     pub underline: bool,
+    /// Strikethrough decoration.
+    pub strikethrough: bool,
+    /// Letter spacing (tracking) in points.
+    pub letter_spacing: Option<f32>,
 }
 
 impl TextSpan {
@@ -409,6 +444,8 @@ impl TextSpan {
             bold: false,
             italic: false,
             underline: false,
+            strikethrough: false,
+            letter_spacing: None,
         }
     }
 
@@ -439,6 +476,18 @@ impl TextSpan {
     /// Underline this span.
     pub fn underline(mut self) -> Self {
         self.underline = true;
+        self
+    }
+
+    /// Strikethrough this span.
+    pub fn strikethrough(mut self) -> Self {
+        self.strikethrough = true;
+        self
+    }
+
+    /// Set letter spacing (tracking) in points.
+    pub fn letter_spacing(mut self, kern: f32) -> Self {
+        self.letter_spacing = Some(kern);
         self
     }
 }

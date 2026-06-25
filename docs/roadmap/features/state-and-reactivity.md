@@ -33,7 +33,7 @@ surgical. ✅ · 🟡 · ⬜.
 - ⬜ persisted signals/stores (auto-save/restore)
 - ⬜ hydration (SSR/web), state restoration (mobile)
 - ⬜ time-travel debugging via devtools
-- ⬜ undo/redo helpers
+- ✅ undo/redo helpers (`History<T>` — `use_history(init)`, `.push(val)`, `.undo()`, `.redo()`, `.can_undo/can_redo()`, `.signal()`)
 
 ## Tooling
 - ⬜ signal-graph inspector (dependencies, recompute counts)

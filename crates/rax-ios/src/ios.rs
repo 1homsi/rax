@@ -16,7 +16,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
 use objc2::{class, define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
-use objc2_foundation::{NSData, NSMutableArray, NSNotification, NSNotificationCenter, NSString};
+use objc2_foundation::{
+    NSData, NSMutableArray, NSNotification, NSNotificationCenter, NSRange, NSString,
+};
 use objc2_quartz_core::{CADisplayLink, CAGradientLayer};
 use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
@@ -34,7 +36,7 @@ use block2::RcBlock;
 use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use rax_dom::{
     Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host,
-    KeyboardType, LayoutDirection, Mutation, TextSelection, WidgetId, WidgetKind,
+    KeyboardType, LayoutDirection, Mutation, TextDecoration, TextSelection, WidgetId, WidgetKind,
 };
 // TextStyle is referenced as rax_dom::TextStyle in the match arms.
 use rax_runtime::App;
@@ -1655,6 +1657,22 @@ impl Backend for UiKitBackend {
                                         let _: () = msg_send![attrs, setObject: underline_val forKey: &*underline_key];
                                     }
 
+                                    // Strikethrough
+                                    if span.strikethrough {
+                                        let strike_key = NSString::from_str("NSStrikethrough");
+                                        let strike_val: *mut AnyObject =
+                                            msg_send![class!(NSNumber), numberWithInt: 1i32];
+                                        let _: () = msg_send![attrs, setObject: strike_val forKey: &*strike_key];
+                                    }
+
+                                    // Letter spacing
+                                    if let Some(kern) = span.letter_spacing {
+                                        let kern_key = NSString::from_str("NSKern");
+                                        let kern_val: *mut AnyObject =
+                                            msg_send![class!(NSNumber), numberWithFloat: kern as f64];
+                                        let _: () = msg_send![attrs, setObject: kern_val forKey: &*kern_key];
+                                    }
+
                                     // Create attributed span and append
                                     let attr_str: *mut AnyObject =
                                         msg_send![class!(NSAttributedString), alloc];
@@ -1902,6 +1920,176 @@ impl Backend for UiKitBackend {
                         // subclasses to read via hitTest:withEvent:.
                         // For now set as a no-op with doc reference.
                         let _ = (top, right, bottom, left);
+                    }
+                    Attribute::LetterSpacing(kern) => {
+                        // Letter spacing via NSKernAttributeName on UILabel's attributedText.
+                        // We build an NSMutableAttributedString from the label's current text
+                        // and apply kern to the full range.
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            unsafe {
+                                // Retrieve current plain text so we don't lose it.
+                                let current_text: *mut AnyObject = msg_send![&*label, text];
+                                let text_to_use: *mut AnyObject = if current_text.is_null() {
+                                    let empty = NSString::from_str("");
+                                    &*empty as *const _ as *mut AnyObject
+                                } else {
+                                    current_text
+                                };
+
+                                let len: usize = msg_send![text_to_use, length];
+                                // NSRange { location: 0, length }
+                                let full_range = NSRange::new(0, len);
+
+                                let attr_str: *mut AnyObject =
+                                    msg_send![class!(NSMutableAttributedString), alloc];
+                                let attr_str: *mut AnyObject =
+                                    msg_send![attr_str, initWithString: text_to_use];
+
+                                let kern_key = NSString::from_str("NSKern");
+                                let kern_val: *mut AnyObject =
+                                    msg_send![class!(NSNumber), numberWithFloat: kern as f64];
+                                let _: () = msg_send![attr_str,
+                                    addAttribute: &*kern_key
+                                    value: kern_val
+                                    range: full_range
+                                ];
+
+                                let _: () = msg_send![&*label, setAttributedText: attr_str];
+                            }
+                        }
+                    }
+                    Attribute::LineHeight(h) => {
+                        // Line height via NSParagraphStyle on UILabel's attributedText.
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            unsafe {
+                                let current_text: *mut AnyObject = msg_send![&*label, text];
+                                let text_to_use: *mut AnyObject = if current_text.is_null() {
+                                    let empty = NSString::from_str("");
+                                    &*empty as *const _ as *mut AnyObject
+                                } else {
+                                    current_text
+                                };
+
+                                let len: usize = msg_send![text_to_use, length];
+                                let full_range = NSRange::new(0, len);
+
+                                let para_style: *mut AnyObject =
+                                    msg_send![class!(NSMutableParagraphStyle), new];
+                                // lineSpacing is additional points between lines; `h` is a
+                                // multiplier so we leave it as an absolute value here.
+                                // TODO: compute (h - 1.0) * fontSize for a true multiplier.
+                                let _: () = msg_send![para_style, setLineSpacing: h as f64];
+
+                                let attr_str: *mut AnyObject =
+                                    msg_send![class!(NSMutableAttributedString), alloc];
+                                let attr_str: *mut AnyObject =
+                                    msg_send![attr_str, initWithString: text_to_use];
+
+                                let para_key =
+                                    NSString::from_str("NSParagraphStyle");
+                                let _: () = msg_send![attr_str,
+                                    addAttribute: &*para_key
+                                    value: para_style
+                                    range: full_range
+                                ];
+
+                                let _: () = msg_send![&*label, setAttributedText: attr_str];
+                            }
+                        }
+                    }
+                    Attribute::TextDecoration(decoration) => {
+                        // Underline / strikethrough via NSAttributedString attribute keys.
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            unsafe {
+                                let current_text: *mut AnyObject = msg_send![&*label, text];
+                                let text_to_use: *mut AnyObject = if current_text.is_null() {
+                                    let empty = NSString::from_str("");
+                                    &*empty as *const _ as *mut AnyObject
+                                } else {
+                                    current_text
+                                };
+
+                                let len: usize = msg_send![text_to_use, length];
+                                let full_range = NSRange::new(0, len);
+
+                                let attr_str: *mut AnyObject =
+                                    msg_send![class!(NSMutableAttributedString), alloc];
+                                let attr_str: *mut AnyObject =
+                                    msg_send![attr_str, initWithString: text_to_use];
+
+                                // NSUnderlineStyleNone = 0, NSUnderlineStyleSingle = 1,
+                                // NSUnderlineStyleDouble = 9
+                                let (underline_style, strike_style): (i32, i32) =
+                                    match decoration {
+                                        TextDecoration::None => (0, 0),
+                                        TextDecoration::Underline => (1, 0),
+                                        TextDecoration::Strikethrough => (0, 1),
+                                        TextDecoration::UnderlineDouble => (9, 0),
+                                    };
+
+                                let underline_key = NSString::from_str("NSUnderline");
+                                let underline_val: *mut AnyObject =
+                                    msg_send![class!(NSNumber), numberWithInt: underline_style];
+                                let _: () = msg_send![attr_str,
+                                    addAttribute: &*underline_key
+                                    value: underline_val
+                                    range: full_range
+                                ];
+
+                                let strike_key = NSString::from_str("NSStrikethrough");
+                                let strike_val: *mut AnyObject =
+                                    msg_send![class!(NSNumber), numberWithInt: strike_style];
+                                let _: () = msg_send![attr_str,
+                                    addAttribute: &*strike_key
+                                    value: strike_val
+                                    range: full_range
+                                ];
+
+                                let _: () = msg_send![&*label, setAttributedText: attr_str];
+                            }
+                        }
+                    }
+                    Attribute::TextShadow { color, offset_x, offset_y, blur } => {
+                        // NSShadowAttributeName on UILabel's attributedText.
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            unsafe {
+                                let current_text: *mut AnyObject = msg_send![&*label, text];
+                                let text_to_use: *mut AnyObject = if current_text.is_null() {
+                                    let empty = NSString::from_str("");
+                                    &*empty as *const _ as *mut AnyObject
+                                } else {
+                                    current_text
+                                };
+
+                                let len: usize = msg_send![text_to_use, length];
+                                let full_range = NSRange::new(0, len);
+
+                                let attr_str: *mut AnyObject =
+                                    msg_send![class!(NSMutableAttributedString), alloc];
+                                let attr_str: *mut AnyObject =
+                                    msg_send![attr_str, initWithString: text_to_use];
+
+                                // NSShadow object
+                                let shadow: *mut AnyObject = msg_send![class!(NSShadow), new];
+                                let ui_color = to_ui_color(color);
+                                let _: () = msg_send![shadow, setShadowColor: &*ui_color];
+                                let offset = CGSize {
+                                    width: offset_x as f64,
+                                    height: offset_y as f64,
+                                };
+                                let _: () = msg_send![shadow, setShadowOffset: offset];
+                                let _: () = msg_send![shadow, setShadowBlurRadius: blur as f64];
+
+                                let shadow_key = NSString::from_str("NSShadow");
+                                let _: () = msg_send![attr_str,
+                                    addAttribute: &*shadow_key
+                                    value: shadow
+                                    range: full_range
+                                ];
+
+                                let _: () = msg_send![&*label, setAttributedText: attr_str];
+                            }
+                        }
                     }
                 }
             }
