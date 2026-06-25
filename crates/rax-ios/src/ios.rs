@@ -21,8 +21,9 @@ use objc2_quartz_core::CADisplayLink;
 use objc2_ui_kit::{
     UIApplication, UIApplicationDelegate, UIButton, UIButtonType, UIColor, UIControl,
     UIControlEvents, UIControlState, UIFont, UIGestureRecognizer, UIGestureRecognizerState,
-    UIImage, UIImageView, UILabel, UILongPressGestureRecognizer, UIScreen, UISlider, UISwitch,
-    UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
+    UIImage, UIImageView, UILabel, UILongPressGestureRecognizer, UIScreen, UIScrollView, UISlider,
+    UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController,
+    UIWindow,
 };
 
 use rax_core::{Color, Rect, Size};
@@ -396,6 +397,11 @@ impl Backend for UiKitBackend {
                         }
                         sl.into_super().into_super()
                     }
+                    WidgetKind::Scroll => {
+                        let sv: Retained<UIScrollView> =
+                            unsafe { UIScrollView::initWithFrame(self.mtm.alloc(), zero) };
+                        sv.into_super()
+                    }
                     WidgetKind::TextInput => {
                         let field: Retained<UITextField> =
                             unsafe { UITextField::initWithFrame(self.mtm.alloc(), zero) };
@@ -579,6 +585,18 @@ impl Backend for UiKitBackend {
                     }
                 };
                 unsafe { view.addGestureRecognizer(&recognizer) };
+            }
+            Mutation::SetContentSize { id, size } => {
+                if let Some(view) = self.view(id) {
+                    if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                        unsafe {
+                            sv.setContentSize(CGSize {
+                                width: size.width as f64,
+                                height: size.height as f64,
+                            })
+                        };
+                    }
+                }
             }
         }
     }

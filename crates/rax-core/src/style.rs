@@ -128,6 +128,8 @@ pub struct LayoutStyle {
     pub max_height: Dimension,
     /// Width/height ratio, if constrained.
     pub aspect_ratio: Option<f32>,
+    /// Whether this node scrolls its overflowing content vertically.
+    pub scroll: bool,
 }
 
 impl Default for LayoutStyle {
@@ -153,6 +155,7 @@ impl Default for LayoutStyle {
             max_width: Dimension::Auto,
             max_height: Dimension::Auto,
             aspect_ratio: None,
+            scroll: false,
         }
     }
 }

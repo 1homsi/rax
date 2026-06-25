@@ -130,6 +130,18 @@ impl Tree {
         self.create(WidgetKind::TextInput)
     }
 
+    /// Creates a scroll container.
+    pub fn create_scroll(&mut self) -> WidgetId {
+        self.create(WidgetKind::Scroll)
+    }
+
+    /// Emits a content-size update for a scroll container.
+    pub fn set_content_size(&mut self, id: WidgetId, size: rax_core::Size) {
+        if self.nodes.get(id.0).is_some() {
+            self.host.emit(Mutation::SetContentSize { id, size });
+        }
+    }
+
     fn create(&mut self, kind: WidgetKind) -> WidgetId {
         let index = self.nodes.insert(ElementNode {
             kind,

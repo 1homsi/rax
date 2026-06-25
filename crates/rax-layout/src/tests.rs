@@ -3,12 +3,22 @@ use rax_dom::{Host, RecordingBackend, Tree};
 
 use super::compute;
 
-fn frame_of(frames: &[(rax_dom::WidgetId, Rect)], id: rax_dom::WidgetId) -> Rect {
+fn frame_of(frames: &[(rax_dom::WidgetId, super::NodeLayout)], id: rax_dom::WidgetId) -> Rect {
     frames
         .iter()
         .find(|(i, _)| *i == id)
         .expect("frame present")
         .1
+        .frame
+}
+
+fn content_of(frames: &[(rax_dom::WidgetId, super::NodeLayout)], id: rax_dom::WidgetId) -> Size {
+    frames
+        .iter()
+        .find(|(i, _)| *i == id)
+        .expect("present")
+        .1
+        .content
 }
 
 #[test]
@@ -140,6 +150,48 @@ fn absolute_position_uses_inset() {
         frame_of(&frames, child).origin,
         rax_core::Point::new(40.0, 25.0),
         "positioned by inset"
+    );
+}
+
+#[test]
+fn scroll_container_reports_content_taller_than_its_frame() {
+    let mut tree = Tree::new(Host::new(RecordingBackend::new()));
+    let root = tree.create_view();
+    tree.set_style(root, LayoutStyle::default());
+    let scroll = tree.create_scroll();
+    tree.set_style(
+        scroll,
+        LayoutStyle {
+            scroll: true,
+            direction: FlexDirection::Column,
+            width: rax_core::Dimension::Points(200.0),
+            height: rax_core::Dimension::Points(100.0),
+            ..LayoutStyle::default()
+        },
+    );
+    tree.append(root, scroll);
+    for _ in 0..5 {
+        let item = tree.create_view();
+        tree.set_style(
+            item,
+            LayoutStyle {
+                height: rax_core::Dimension::Points(50.0),
+                // Don't shrink to fit the clipped frame — overflow instead.
+                flex_shrink: 0.0,
+                ..LayoutStyle::default()
+            },
+        );
+        tree.append(scroll, item);
+    }
+
+    let frames = compute(&tree, root, Size::new(300.0, 300.0));
+    assert!(
+        (frame_of(&frames, scroll).size.height - 100.0).abs() < 0.5,
+        "frame is clipped to 100"
+    );
+    assert!(
+        content_of(&frames, scroll).height >= 249.0,
+        "content spans all 5 items (~250)"
     );
 }
 

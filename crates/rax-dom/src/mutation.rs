@@ -7,7 +7,7 @@
 //! the whole framework testable with zero platform code (assert on the stream)
 //! and is the seam that later allows diffing off the main thread.
 
-use rax_core::{Color, Index, Rect};
+use rax_core::{Color, Index, Rect, Size};
 
 /// A stable handle to a node in the retained element tree (and, 1:1, to a native
 /// view created by the backend).
@@ -52,6 +52,8 @@ pub enum WidgetKind {
     Slider,
     /// A single-line editable text field (maps to `UITextField` / `EditText`).
     TextInput,
+    /// A scroll container (maps to `UIScrollView` / `ScrollView`).
+    Scroll,
 }
 
 /// A gesture a widget should recognize (the backend attaches a recognizer).
@@ -174,5 +176,12 @@ pub enum Mutation {
         id: WidgetId,
         /// Which gesture to recognize.
         gesture: GestureKind,
+    },
+    /// Set a scroll container's scrollable content size.
+    SetContentSize {
+        /// Scroll widget.
+        id: WidgetId,
+        /// Total content size.
+        size: Size,
     },
 }

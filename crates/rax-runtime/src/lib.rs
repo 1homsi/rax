@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use rax_core::{Rect, Size};
-use rax_dom::{EventSink, Host, Tree, WidgetId};
+use rax_dom::{EventSink, Host, Tree, WidgetId, WidgetKind};
 use rax_reactive::{create_root, Scope};
 use rax_view::{mount, View};
 
@@ -24,6 +24,8 @@ pub struct App {
     viewport: Size,
     /// Last frame emitted per widget, so re-layout only emits real changes.
     frames: HashMap<WidgetId, Rect>,
+    /// Last content size emitted per scroll widget.
+    content_sizes: HashMap<WidgetId, Size>,
     /// Wall-clock of the previous tick, for animation deltas.
     last_tick: Option<std::time::Instant>,
 }
@@ -44,6 +46,7 @@ impl App {
             _scope: scope,
             viewport,
             frames: HashMap::new(),
+            content_sizes: HashMap::new(),
             last_tick: None,
         };
         app.tree.run_dynamic(); // materialize dynamic subtrees before first layout
@@ -89,13 +92,20 @@ impl App {
         self.relayout();
     }
 
-    /// Recomputes layout and emits only the frames that actually changed.
+    /// Recomputes layout and emits only the frames (and scroll content sizes)
+    /// that actually changed.
     fn relayout(&mut self) {
         let computed = rax_layout::compute(&self.tree, self.root, self.viewport);
-        for (id, rect) in computed {
-            if self.frames.get(&id) != Some(&rect) {
-                self.tree.set_frame(id, rect);
-                self.frames.insert(id, rect);
+        for (id, layout) in computed {
+            if self.frames.get(&id) != Some(&layout.frame) {
+                self.tree.set_frame(id, layout.frame);
+                self.frames.insert(id, layout.frame);
+            }
+            if self.tree.kind_of(id) == Some(WidgetKind::Scroll)
+                && self.content_sizes.get(&id) != Some(&layout.content)
+            {
+                self.tree.set_content_size(id, layout.content);
+                self.content_sizes.insert(id, layout.content);
             }
         }
     }

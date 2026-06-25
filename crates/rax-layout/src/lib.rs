@@ -23,11 +23,20 @@ struct LeafContext {
     text: Option<String>,
 }
 
+/// The layout result for one widget: its frame (in parent coordinates) and the
+/// total size of its content (which exceeds the frame for scroll containers).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodeLayout {
+    /// Frame in the parent's coordinate space.
+    pub frame: Rect,
+    /// Total content extent (for scroll containers; equals the frame otherwise).
+    pub content: Size,
+}
+
 /// Computes layout for the subtree rooted at `root`, filling `available`.
 ///
-/// Returns `(WidgetId, frame)` for every widget in the subtree, with each frame
-/// expressed in its parent's coordinate space.
-pub fn compute(tree: &Tree, root: WidgetId, available: Size) -> Vec<(WidgetId, Rect)> {
+/// Returns `(WidgetId, NodeLayout)` for every widget in the subtree.
+pub fn compute(tree: &Tree, root: WidgetId, available: Size) -> Vec<(WidgetId, NodeLayout)> {
     let mut taffy: TaffyTree<LeafContext> = TaffyTree::new();
     let mut mapping: Vec<(NodeId, WidgetId)> = Vec::new();
 
@@ -61,15 +70,18 @@ pub fn compute(tree: &Tree, root: WidgetId, available: Size) -> Vec<(WidgetId, R
         .iter()
         .filter_map(|(node, id)| {
             taffy.layout(*node).ok().map(|layout| {
-                (
-                    *id,
-                    Rect::new(
-                        layout.location.x,
-                        layout.location.y,
-                        layout.size.width,
-                        layout.size.height,
-                    ),
-                )
+                let frame = Rect::new(
+                    layout.location.x,
+                    layout.location.y,
+                    layout.size.width,
+                    layout.size.height,
+                );
+                // content_size covers overflow; clamp to at least the frame size.
+                let content = Size::new(
+                    layout.content_size.width.max(layout.size.width),
+                    layout.content_size.height.max(layout.size.height),
+                );
+                (*id, NodeLayout { frame, content })
             })
         })
         .collect()
@@ -125,6 +137,14 @@ fn to_taffy_style(style: LayoutStyle) -> Style {
             rax_core::FlexWrap::NoWrap => taffy::FlexWrap::NoWrap,
             rax_core::FlexWrap::Wrap => taffy::FlexWrap::Wrap,
             rax_core::FlexWrap::WrapReverse => taffy::FlexWrap::WrapReverse,
+        },
+        overflow: taffy::Point {
+            x: taffy::Overflow::Visible,
+            y: if style.scroll {
+                taffy::Overflow::Scroll
+            } else {
+                taffy::Overflow::Visible
+            },
         },
         align_items: Some(to_align(style.align_items)),
         align_self: style.align_self.map(to_align),
@@ -239,7 +259,7 @@ fn measure_leaf(
         WidgetKind::Image => (44.0, 44.0),
         // Editable fields stretch horizontally; give a sensible row height.
         WidgetKind::TextInput => (180.0, line_h.max(36.0)),
-        WidgetKind::View => (0.0, 0.0),
+        WidgetKind::View | WidgetKind::Scroll => (0.0, 0.0),
     };
 
     taffy::Size {
