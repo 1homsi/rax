@@ -73,6 +73,68 @@ impl Database {
         Ok(rows)
     }
 
+    /// Apply versioned SQL migrations in order.
+    ///
+    /// Each entry in `migrations` is `(version, sql)` where `version` is a
+    /// monotonically increasing integer (e.g. `1`, `2`, `3`, …). Applied
+    /// versions are recorded in a `_rax_migrations` table that is created
+    /// automatically on first call. Already-applied versions are skipped, so
+    /// this method is safe to call on every app start.
+    ///
+    /// # Reactive use
+    ///
+    /// `migrate` is a one-shot setup call and is not reactive itself.  If you
+    /// need to expose query results reactively, wrap them in a `create_memo`
+    /// from `rax-reactive`:
+    ///
+    /// ```no_run
+    /// # use rax_sqlite::Database;
+    /// # use rax_reactive::create_memo;
+    /// # let db = Database::open(":memory:").unwrap();
+    /// let notes = create_memo(move || db.query("SELECT body FROM notes", |r| r.get(0)).unwrap_or_default::<Vec<String>>());
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string if any SQL statement fails to execute.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use rax_sqlite::Database;
+    ///
+    /// let db = Database::open("app.db").unwrap();
+    /// db.migrate(&[
+    ///     (1, "CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, body TEXT)"),
+    ///     (2, "ALTER TABLE notes ADD COLUMN created_at TEXT"),
+    /// ]).unwrap();
+    /// ```
+    pub fn migrate(&self, migrations: &[(u32, &str)]) -> Result<(), String> {
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS _rax_migrations \
+             (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
+        )?;
+
+        let applied: Vec<u32> = self.query(
+            "SELECT version FROM _rax_migrations ORDER BY version",
+            |row| row.get::<_, u32>(0),
+        )?;
+
+        for (version, sql) in migrations {
+            if applied.contains(version) {
+                continue;
+            }
+            self.execute(sql)?;
+            let v: i64 = *version as i64;
+            self.execute_with(
+                "INSERT INTO _rax_migrations (version, applied_at) VALUES (?1, datetime('now'))",
+                &[&v as &dyn rusqlite::types::ToSql],
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// Return a path to the given `filename` in the app's Documents directory
     /// (the standard location for user data on iOS).
     ///

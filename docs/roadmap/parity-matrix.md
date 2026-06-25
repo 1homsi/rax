@@ -53,6 +53,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Dark mode | ✓ | ✓ | ✅ |
 | High contrast | ✓ | ✓ | ✅ (`use_high_contrast()` signal — UIAccessibilityIsDarkerSystemColorsEnabled) |
 | Reactive paint (theme/anim-driven) | partial | ✓ | ✅ |
+| Design tokens (color/spacing/typography/motion) | community | ✓ (ThemeData) | ✅ (`ColorTokens` + `SpacingTokens` + `TypographyTokens` + `RadiusTokens` + `MotionTokens` in `Theme`) |
 | Variants + headless components | community | partial | ⬜ **(first-class)** |
 | Replace any widget app-wide | — | partial | ⬜ **(registry)** |
 | Per-platform look from one code | partial | ✓ | ✅ (`rax::platform::{IS_IOS, PLATFORM}` + `platform_value(ios, android)`) |

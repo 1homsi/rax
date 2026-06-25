@@ -813,6 +813,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax-form"
+version = "0.0.1"
+dependencies = [
+ "rax-reactive",
+]
+
+[[package]]
 name = "rax-intl"
 version = "0.0.1"
 dependencies = [

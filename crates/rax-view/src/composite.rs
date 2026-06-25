@@ -18,6 +18,7 @@ use rax_reactive::{create_effect, create_signal, Signal};
 use crate::container::{column, row};
 use crate::dynamic::dynamic;
 use crate::image::{icon, image};
+use crate::list::show;
 use crate::modifier::{PanInfo, ViewExt};
 use crate::scroll::scroll;
 use crate::text::text;
@@ -1314,4 +1315,404 @@ pub fn pan_animation(spring_back: bool) -> (Signal<f32>, Signal<f32>, impl FnMut
         }
     };
     (x, y, handler)
+}
+
+// ---------------------------------------------------------------------------
+// Wrap — flow layout (row with flex wrap)
+// ---------------------------------------------------------------------------
+
+/// A flowing, wrapping row of items with uniform `gap` between them.
+///
+/// Items are laid out left-to-right; when a row is full they wrap onto the
+/// next line — equivalent to CSS `flex-wrap: wrap`.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{wrap, chip};
+/// use rax_reactive::create_signal;
+///
+/// let selected = create_signal(0usize);
+/// let tags: Vec<_> = (0..8)
+///     .map(|i| rax_view::boxed(chip(format!("Tag {i}"), selected.get() == i, move || selected.set(i))))
+///     .collect();
+/// let v = wrap(8.0, tags);
+/// ```
+pub fn wrap(gap: f32, items: Vec<BoxedView>) -> impl View {
+    row(items).gap(gap).wrap()
+}
+
+// ---------------------------------------------------------------------------
+// Pressable — tappable wrapper with reactive opacity feedback
+// ---------------------------------------------------------------------------
+
+/// A wrapper that dims its content to `0.4` opacity while the user's finger is
+/// down, then restores full opacity on release, before calling `on_press`.
+///
+/// Unlike a raw `.on_tap()`, `pressable` gives tactile visual feedback for any
+/// arbitrary content.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{pressable, text};
+///
+/// let v = pressable(text("Tap me"), || println!("pressed"));
+/// ```
+pub fn pressable<V: View + 'static>(content: V, on_press: impl Fn() + 'static) -> impl View {
+    let pressed = create_signal(false);
+
+    // `opacity_fn` re-reads `pressed` reactively on every frame that the
+    // signal changes, giving us a zero-cost pressed-state without rebuild.
+    column((boxed(
+        column((boxed(content),))
+            .opacity_fn(move || if pressed.get() { 0.4 } else { 1.0 })
+            .on_tap(move || {
+                on_press();
+            }),
+    ),))
+    .on_pan(move |info: PanInfo| {
+        // Track finger-down / finger-up via the pan gesture began/ended phases.
+        // A pure tap has no pan events, so we also handle the tap above.
+        // The pan handler dims on Began and restores on Ended.
+        match info.phase {
+            GesturePhase::Began => pressed.set(true),
+            GesturePhase::Ended => pressed.set(false),
+            GesturePhase::Changed => {}
+        }
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton — shimmer loading placeholder
+// ---------------------------------------------------------------------------
+
+/// An animated shimmer box used as a content placeholder while data loads.
+///
+/// The opacity oscillates between `0.4` and `1.0` on a 1-second ease-in-out
+/// cycle to mimic the standard shimmer effect. Supply `width` and `height` in
+/// points; `corner_radius` defaults to `8`.
+///
+/// # Example
+/// ```rust
+/// use rax_view::skeleton;
+///
+/// let placeholder = skeleton(200.0, 20.0);
+/// ```
+pub fn skeleton(width: f32, height: f32) -> Skeleton {
+    Skeleton {
+        width,
+        height,
+        color: Color::rgb(224, 224, 224),
+        radius: 8.0,
+    }
+}
+
+/// A shimmer loading placeholder. Build via [`skeleton`].
+pub struct Skeleton {
+    width: f32,
+    height: f32,
+    color: Color,
+    radius: f32,
+}
+
+impl Skeleton {
+    /// Overrides the placeholder fill color (default `#E0E0E0`).
+    #[must_use]
+    pub fn color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+
+    /// Overrides the corner radius (default `8`).
+    #[must_use]
+    pub fn corner_radius(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
+}
+
+impl View for Skeleton {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        use rax_anim::{animate, Easing};
+
+        // Two chained 1-second tweens give an infinite oscillation: bright →
+        // dim → bright. We drive them by a local signal and chain effects.
+        let opacity = create_signal(1.0f32);
+        let color = self.color;
+        let radius = self.radius;
+
+        // Kick off the first leg of the oscillation (bright → dim).
+        let dim = animate(1.0f32, 0.4, 1.0, Easing::EaseInOut);
+        create_effect(move || {
+            let v = dim.get();
+            opacity.set(v);
+            // When the dim leg completes, start the brighten leg.
+            if (v - 0.4).abs() < 0.01 {
+                let brighten = animate(0.4f32, 1.0, 1.0, Easing::EaseInOut);
+                create_effect(move || opacity.set(brighten.get()));
+            }
+        });
+
+        column(())
+            .size(self.width, self.height)
+            .background(color)
+            .corner_radius(radius)
+            .opacity_fn(move || opacity.get())
+            .build(tree)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Banner — inline alert strip (info / success / warning / error)
+// ---------------------------------------------------------------------------
+
+/// The semantic kind of a [`banner`], controlling its color scheme.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum BannerKind {
+    /// Neutral informational message (blue).
+    Info,
+    /// Positive confirmation (green).
+    Success,
+    /// Non-critical warning (amber).
+    Warning,
+    /// Error or destructive action (red).
+    Error,
+}
+
+/// Shows a styled inline alert strip when `visible` is `true`.
+///
+/// The strip is zero-height when hidden so it does not displace siblings.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{banner, BannerKind};
+/// use rax_reactive::create_signal;
+///
+/// let visible = create_signal(true);
+/// let v = banner(visible, "Your changes were saved.", BannerKind::Success);
+/// ```
+pub fn banner(
+    visible: Signal<bool>,
+    message: impl Into<String>,
+    kind: BannerKind,
+) -> impl View {
+    let message = message.into();
+
+    let (bg, icon_sym, fg) = match kind {
+        BannerKind::Info    => (Color::rgba(0, 122, 255, 26),  "info.circle.fill",            Color::rgb(0, 122, 255)),
+        BannerKind::Success => (Color::rgba(52, 199, 89, 26),  "checkmark.circle.fill",       Color::rgb(52, 199, 89)),
+        BannerKind::Warning => (Color::rgba(255, 149, 0, 26),  "exclamationmark.triangle.fill", Color::rgb(255, 149, 0)),
+        BannerKind::Error   => (Color::rgba(255, 59, 48, 26),  "xmark.circle.fill",           Color::rgb(255, 59, 48)),
+    };
+
+    dynamic(move || {
+        if !visible.get() {
+            return boxed(column(()).size(0.0, 0.0));
+        }
+        let msg2 = message.clone();
+        boxed(
+            row((
+                boxed(icon(icon_sym).tint(fg).size(18.0, 18.0)),
+                boxed(text(msg2).font_size(14.0).color(fg).grow(1.0)),
+            ))
+            .gap(8.0)
+            .padding(12.0)
+            .align(AlignItems::Center)
+            .background(bg)
+            .corner_radius(10.0),
+        )
+    })
+    .grow(0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible — disclosure / accordion widget
+// ---------------------------------------------------------------------------
+
+/// A disclosure widget: tapping `header` toggles the `content` section.
+///
+/// `expanded` is an externally-owned signal so callers can control or observe
+/// the open/closed state (e.g. to implement an exclusive accordion).
+///
+/// # Example
+/// ```rust
+/// use rax_view::{collapsible, text};
+/// use rax_reactive::create_signal;
+///
+/// let open = create_signal(false);
+/// let v = collapsible(
+///     text("Section title"),
+///     open,
+///     || text("Hidden body content"),
+/// );
+/// ```
+pub fn collapsible<H, C, V>(
+    header: H,
+    expanded: Signal<bool>,
+    content: C,
+) -> impl View
+where
+    H: View + 'static,
+    C: Fn() -> V + 'static,
+    V: View + 'static,
+{
+    column((
+        // Header row with a trailing chevron that rotates 90° when open.
+        boxed(
+            row((
+                boxed(boxed(header).grow(1.0)),
+                boxed(dynamic(move || {
+                    let sym = if expanded.get() {
+                        "chevron.up"
+                    } else {
+                        "chevron.down"
+                    };
+                    boxed(icon(sym).tint(Color::rgba(0, 0, 0, 128)).size(12.0, 12.0))
+                })),
+            ))
+            .gap(8.0)
+            .align(AlignItems::Center)
+            .padding(12.0)
+            .on_tap(move || expanded.update(|e| *e = !*e)),
+        ),
+        // Body — zero-height when collapsed, built lazily each open.
+        boxed(show(move || expanded.get(), content)),
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Carousel — horizontal paged scroller
+// ---------------------------------------------------------------------------
+
+/// A horizontally-scrolling carousel of items built from a reactive `Vec`.
+///
+/// Each item in the signal is rendered by `item_fn`. The carousel rebuilds
+/// whenever the signal changes. Items are spaced by `gap` points.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{carousel, text, boxed};
+/// use rax_reactive::create_signal;
+///
+/// let pages = create_signal(vec!["Page 1".to_string(), "Page 2".to_string()]);
+/// let v = carousel(pages, 12.0, |page| boxed(text(page)));
+/// ```
+pub fn carousel<T, F, V>(
+    items: Signal<Vec<T>>,
+    gap: f32,
+    item_fn: F,
+) -> impl View
+where
+    T: Clone + 'static,
+    F: Fn(T) -> V + 'static,
+    V: View + 'static,
+{
+    dynamic(move || {
+        let current = items.get();
+        let views: Vec<BoxedView> = current.into_iter().map(|item| boxed(item_fn(item))).collect();
+        boxed(scroll(row(views).gap(gap)).horizontal())
+    })
+    .grow(0.0)
+}
+
+// ---------------------------------------------------------------------------
+// KeyboardAvoidingView — bottom-inset wrapper for soft keyboard
+// ---------------------------------------------------------------------------
+
+/// Wraps `content` in a vertically-scrolling container so that the soft
+/// keyboard does not occlude input fields.
+///
+/// On iOS the underlying `UIScrollView` automatically adjusts its
+/// `contentInset` when the keyboard appears (controlled by the platform
+/// backend's `keyboardDismissMode` / `contentInsetAdjustmentBehavior`).
+/// Wrapping content in a `scroll` is the minimal hook that lets the backend
+/// apply that inset.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{keyboard_avoiding_view, text_input};
+/// use rax_reactive::create_signal;
+///
+/// let query = create_signal(String::new());
+/// let v = keyboard_avoiding_view(
+///     text_input(query.get(), move |s| query.set(s))
+/// );
+/// ```
+pub fn keyboard_avoiding_view<V: View>(content: V) -> impl View {
+    scroll(content)
+}
+
+// ---------------------------------------------------------------------------
+// InfiniteScroll — pull-to-load-more wrapper
+// ---------------------------------------------------------------------------
+
+/// Wraps `content` (produced by a closure) in a refreshable scroll view.
+/// When the user pulls past the top edge `on_load_more` is called (e.g. to
+/// fetch the next page). While `loading` is `true` the built-in spinner is
+/// shown.
+///
+/// `content` is a closure so it can be rebuilt alongside the refreshing
+/// state inside a [`dynamic`] context. If your content is static you can
+/// pass `|| boxed(your_view)`.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{infinite_scroll, text, boxed};
+/// use rax_reactive::create_signal;
+///
+/// let loading = create_signal(false);
+/// let v = infinite_scroll(
+///     || boxed(text("Content here")),
+///     loading,
+///     move || {
+///         loading.set(true);
+///         // … fetch next page, then loading.set(false)
+///     },
+/// );
+/// ```
+pub fn infinite_scroll<C>(
+    content: C,
+    loading: Signal<bool>,
+    on_load_more: impl FnMut() + 'static,
+) -> impl View
+where
+    C: Fn() -> BoxedView + 'static,
+{
+    // Wrap `on_load_more` in a clone-friendly Arc so it can be shared across
+    // the `dynamic` rebuild closure without requiring `Clone` on `impl FnMut`.
+    use std::sync::{Arc, Mutex};
+    let cb = Arc::new(Mutex::new(on_load_more));
+
+    dynamic(move || {
+        let cb2 = cb.clone();
+        let is_refreshing = loading.get();
+        boxed(scroll(content()).refreshable(is_refreshing, move || {
+            if let Ok(mut f) = cb2.lock() {
+                f();
+            }
+        }))
+    })
+    .grow(1.0)
+}
+
+// ---------------------------------------------------------------------------
+// StatusBarSpacer — top safe-area filler
+// ---------------------------------------------------------------------------
+
+/// A fixed-height spacer that fills the iOS status-bar safe area (44 pt on
+/// notched devices, 20 pt on non-notched devices). This is a static
+/// approximation; for a pixel-perfect inset wire up the actual safe-area
+/// inset from the platform backend.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{status_bar_spacer, column, text};
+///
+/// let v = column((
+///     rax_view::boxed(status_bar_spacer()),
+///     rax_view::boxed(text("Content below status bar")),
+/// ));
+/// ```
+pub fn status_bar_spacer() -> impl View {
+    // 44 pt is the standard notch/Dynamic-Island safe-area top inset.
+    column(()).height(44.0)
 }

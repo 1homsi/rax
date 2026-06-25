@@ -8,7 +8,7 @@ surgical. ✅ · 🟡 · ⬜.
 - ✅ signals (sources), memos (derived), effects (sinks)
 - ✅ glitch-free propagation, batching, untracked reads
 - ✅ explicit `Runtime` + ownership scopes (auto-dispose)
-- ⬜ stores (struct-of-signals) + selectors
+- ✅ stores (struct-of-signals) + selectors (`Store<S>` — wraps `Signal<S>`, `store.select(|s| s.field)` → `Memo`, `store.update(|s| …)`)
 - ✅ context / providers (dependency injection down the tree)
 - ✅ `Resource` (async-aware signal: loading/error/data)
 - ⬜ derived collections (fine-grained list reactivity, `keyed_for`)
@@ -16,10 +16,10 @@ surgical. ✅ · 🟡 · ⬜.
 - ⬜ signal equality customization / structural memo
 
 ## App-state patterns
-- ⬜ global stores + scoped stores
+- ✅ global stores + scoped stores (`Store<S>` is `Copy` — pass it anywhere; `provide_context(store)` for scoped)
 - ⬜ actions/reducers pattern (opt-in, Elm/Redux-style) on top of signals
 - ⬜ middleware / interceptors (logging, persistence, devtools)
-- ⬜ selectors with memoization
+- ✅ selectors with memoization (`store.select(fn) -> Memo<U>` — glitch-free derived memos)
 - ⬜ transactions / batched commits
 - ⬜ optimistic updates + rollback
 

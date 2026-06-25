@@ -26,11 +26,11 @@ Typed, predictable styling with a runtime-switchable theme system. The core of
 - ⬜ style composition / merge / extend
 
 ## Design tokens (typed)
-- ⬜ color palette + semantic roles (primary/surface/onSurface/error/…)
-- ⬜ spacing scale, radius scale, border widths
-- ⬜ typography scale (families, sizes, weights, line-heights, letter-spacing)
+- ✅ color palette + semantic roles (`ColorTokens` — primary/surface/onSurface/error/success/warning/info/outline + light/dark Material-3 palettes)
+- ✅ spacing scale, radius scale (`SpacingTokens{xs/sm/md/lg/xl/xxl}`, `RadiusTokens{xs/sm/md/lg/xl/full}`)
+- ✅ typography scale (`TypographyTokens` — display/headline/title/body/label at all sizes)
 - ⬜ shadow/elevation tokens
-- ⬜ motion tokens (durations, easing curves)
+- ✅ motion tokens (`MotionTokens` — duration_short/medium/long + easing names)
 - ⬜ z-index, opacity, breakpoints tokens
 - ⬜ custom/user-defined tokens (extend the type-safe theme)
 

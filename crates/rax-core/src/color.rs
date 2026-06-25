@@ -52,6 +52,22 @@ impl Color {
     pub const fn with_alpha(self, a: u8) -> Self {
         Color { a, ..self }
     }
+
+    /// Construct a color from a packed `0xRRGGBBAA` hex literal.
+    ///
+    /// # Example
+    /// ```
+    /// use rax_core::Color;
+    /// let c = Color::hex(0x6750A4FF); // r=0x67, g=0x50, b=0xA4, a=0xFF
+    /// ```
+    pub const fn hex(rrggbbaa: u32) -> Self {
+        Color {
+            r: ((rrggbbaa >> 24) & 0xFF) as u8,
+            g: ((rrggbbaa >> 16) & 0xFF) as u8,
+            b: ((rrggbbaa >> 8) & 0xFF) as u8,
+            a: (rrggbbaa & 0xFF) as u8,
+        }
+    }
 }
 
 /// The system appearance, reported by the platform.

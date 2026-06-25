@@ -49,6 +49,7 @@ mod scroll;
 mod spacer;
 mod text;
 mod text_input;
+mod theme;
 mod view;
 mod web_view;
 
@@ -56,10 +57,12 @@ pub use button::{button, Button};
 pub use map::{map_view, MapView};
 pub use camera::{camera_scanner, CameraScanner};
 pub use composite::{
-    action_sheet, alert, app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, dev_tools,
-    drawer, error_overlay, fade_transition, grid, item_separator, lazy_column, lazy_row, modal,
-    network_image, pan_animation, picker, radio, reactive_list, search_bar, section_list,
-    swipe_actions, toast, Avatar, Badge, Card, Checkbox, Chip, Radio, Section,
+    action_sheet, alert, app_bar, avatar, badge, banner, bottom_sheet, card, carousel, checkbox,
+    chip, collapsible, dev_tools, drawer, error_overlay, fade_transition, grid, infinite_scroll,
+    item_separator, keyboard_avoiding_view, lazy_column, lazy_row, modal, network_image,
+    pan_animation, picker, pressable, radio, reactive_list, search_bar, section_list, skeleton,
+    status_bar_spacer, swipe_actions, toast, wrap, Avatar, Badge, BannerKind, Card, Checkbox,
+    Chip, Radio, Section, Skeleton,
 };
 pub use web_view::{web_view, web_view_html, WebView};
 pub use container::{column, row, stack, Container, Stack};
@@ -75,6 +78,10 @@ pub use spacer::{spacer, Spacer};
 pub use text::{rich_text, text, DynamicText, IntoText, RichText, StaticText, Text};
 pub use rax_dom::TextSpan;
 pub use text_input::{text_area, text_input, TextArea, TextInput};
+pub use theme::{
+    provide_theme, try_use_theme, use_theme, ColorTokens, MotionTokens, RadiusTokens,
+    SpacingTokens, Theme, TypographyTokens,
+};
 pub use view::{boxed, BoxedView, View, ViewSequence};
 
 // Re-export the style enums used by the builder API for convenience.

@@ -25,17 +25,18 @@ Flutter `TextField`/`Form` completely. ⬜ planned unless noted.
 - ⬜ emoji & dictation input
 
 ## Keyboard
-- ⬜ keyboard avoidance (content moves with keyboard)
+- ✅ keyboard avoidance (`keyboard_avoiding_view(content)` — scroll-backed, UIScrollView adjusts contentInset)
 - ⬜ keyboard show/hide events + frame
 - ⬜ input accessory view / toolbar (done button, custom)
 - ⬜ hardware keyboard + shortcuts (desktop/tablet), key events, modifiers
 - ⬜ custom in-app keyboards
 
 ## Forms
-- ⬜ form state management (values, touched, dirty)
-- ⬜ validation (sync + async), error messages, schema validation
-- ⬜ field-level + form-level validation
-- ⬜ submit handling, reset
+- ✅ form state management (values, touched, dirty) — `rax-form`: `FormField{value, error, dirty}` signals
+- ✅ validation (sync), error messages — `Validator::{Required, MinLength, MaxLength, Email, Contains, Custom}`
+- ✅ field-level + form-level validation — `FormField::validate()` + `Form::validate()` (all fields)
+- ✅ submit handling, reset — `Form::validate() -> bool`, `Form::reset()`
+- ⬜ async validation, schema validation
 - ⬜ accessible labels/errors wiring
 - ⬜ multi-step / wizard helpers
 - ⬜ controlled groups (radio/checkbox/select)

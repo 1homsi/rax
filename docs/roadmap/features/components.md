@@ -13,7 +13,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Spacer`
 - ✅ `Dynamic` (reactive subtree)
 - ✅ `Stack` / `ZStack` (overlapping, z-ordered children)
-- ⬜ `Wrap` (flow layout)
+- ✅ `Wrap` (flow layout — `wrap(gap, items)` → row with FlexWrap::Wrap)
 - ✅ `Grid` (`grid(columns, gap, items)` — composed); ⬜ `LazyGrid` (virtualized)
 - ⬜ `Expanded` / `Flexible` helpers
 - ⬜ `AspectRatio`, `Center`, `Align`, `Positioned` (absolute)
@@ -32,7 +32,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Card` primitive (composed from public API)
 - ✅ `Chip` / `Tag` (composed from public API)
 - ⬜ `Tooltip`
-- ⬜ `Skeleton` / shimmer placeholder
+- ✅ `Skeleton` / shimmer placeholder (`skeleton(width, height)` — animated opacity oscillation; `.color()` / `.radius()` builder)
 
 ## Input & controls
 - ✅ `TextInput` / `TextField` (single + multi-line) — see [text-input](text-input-and-forms.md)
@@ -44,7 +44,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `SegmentedControl`
 - ✅ `Picker` / `Select` / `Dropdown` (inline, composed)
 - ⬜ `DatePicker` / `TimePicker` / `DateTimePicker`
-- ⬜ `Pressable` / `Touchable` (with pressed/hover/focus states)
+- ✅ `Pressable` / `Touchable` (`pressable(content, on_press)` — opacity 0.4 while pressed via pan-began/ended signal)
 - ⬜ `RatingBar`
 - ✅ `SearchBar` (`search_bar(query, on_change, placeholder)` — composed)
 - ⬜ `ColorPicker`
@@ -55,7 +55,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Toast` / `Snackbar` (composed)
 - ✅ `Alert` / `Dialog` (`alert(show, title, message, button_label)` — composed modal overlay)
 - ✅ `ActionSheet` (`action_sheet(show, title, actions)` — composed from bottom_sheet)
-- ⬜ `Banner` / inline alert
+- ✅ `Banner` / inline alert (`banner(visible, message, BannerKind::{Info|Success|Warning|Error})` — composed colored strip)
 - ⬜ `RefreshControl` (pull-to-refresh)
 - ⬜ `StatusBar` control (style/color/visibility)
 
@@ -75,11 +75,11 @@ styleable, with a headless core, and replaceable via the theme registry
 
 ## Containers & disclosure
 - ⬜ `Accordion` / `Disclosure` / `ExpansionPanel`
-- ⬜ `Collapsible`
-- ⬜ `Carousel` / `PageView` (paged horizontal)
-- ⬜ `SwipeActions` (swipe-to-delete etc.)
-- ⬜ `Pull-to-refresh`, `infinite scroll` helpers
-- ⬜ `KeyboardAvoidingView`
+- ✅ `Collapsible` (`collapsible(header, expanded, content)` — tappable header flips chevron, `show()` gates body)
+- ✅ `Carousel` / `PageView` (`carousel(items_signal, gap, item_fn)` — dynamic horizontal scroll)
+- ✅ `SwipeActions` (swipe-to-delete etc.) — see composite.rs `swipe_actions`
+- ✅ `Pull-to-refresh` + `infinite_scroll(content, loading, on_load_more)` helpers
+- ✅ `KeyboardAvoidingView` (`keyboard_avoiding_view(content)` — scroll-backed, platform adjusts insets)
 - ⬜ `Resizable` / `SplitView` (desktop/tablet)
 
 ## Data display
@@ -92,8 +92,8 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `Image`, `AnimatedImage` (GIF/WebP), `SVG`
 - ⬜ `Video` player
 - ✅ `Camera` preview view / QR scanner (AVFoundation-backed)
-- ⬜ `Map` view
-- ⬜ `WebView` (escape hatch, not the rendering model)
+- ✅ `Map` view (`map_view(lat, lon).span(lat_d, lon_d).annotation(lat, lon, title)` — MKMapView backed)
+- ✅ `WebView` (`web_view(url)` / `web_view_html(html)` — WKWebView escape hatch)
 
 ## Cross-cutting requirements for every component
 - Styleable inline + via theme tokens + per-type variants.

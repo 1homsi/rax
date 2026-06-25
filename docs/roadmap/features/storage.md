@@ -11,7 +11,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 
 ## Structured / database
 - ✅ SQLite (`rax-sqlite::Database` — rusqlite bundled, open/execute/query/query_with)
-- ⬜ migrations (versioned, automatic)
+- ✅ migrations (versioned, automatic — `Database::migrate(&[(version, sql)])` tracks applied versions in `_rax_migrations`)
 - ⬜ an ORM/query-builder option
 - ⬜ embedded document/KV DB option (sled/redb)
 - ⬜ full-text search
