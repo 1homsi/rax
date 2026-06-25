@@ -180,6 +180,11 @@ impl Tree {
         self.create(WidgetKind::LazyList)
     }
 
+    /// Creates a native map view (MKMapView on iOS).
+    pub fn create_map_view(&mut self) -> WidgetId {
+        self.create(WidgetKind::MapView)
+    }
+
     /// Starts CoreLocation GPS updates. Results arrive as global `Event::LocationUpdated`.
     pub fn start_location(&mut self) {
         self.host.emit(Mutation::StartLocation);

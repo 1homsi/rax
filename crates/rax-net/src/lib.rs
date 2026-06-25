@@ -179,6 +179,46 @@ pub fn post(url: impl Into<String>, body: impl Into<String>) -> Resource<Respons
     send(Request::post(url, body))
 }
 
+/// Execute a GraphQL query or mutation against `endpoint`.
+///
+/// Builds a JSON body `{"query": "...", "variables": {...}}` and POSTs it with
+/// the standard `Content-Type: application/json` header. Returns the full JSON
+/// response body as a `Resource<Response>`.
+///
+/// # Example
+/// ```rust,ignore
+/// let res = graphql(
+///     "https://api.example.com/graphql",
+///     r#"query { user(id: "1") { name email } }"#,
+///     None,
+/// );
+/// ```
+pub fn graphql(
+    endpoint: impl Into<String>,
+    query: impl Into<String>,
+    variables: Option<String>,
+) -> Resource<Response> {
+    let endpoint = endpoint.into();
+    let query_str = query.into();
+
+    let body = if let Some(vars) = variables {
+        format!(r#"{{"query":{:?},"variables":{}}}"#, query_str, vars)
+    } else {
+        format!(r#"{{"query":{:?}}}"#, query_str)
+    };
+
+    let req = Request {
+        method: Method::Post,
+        url: endpoint,
+        headers: vec![
+            ("Content-Type".to_string(), "application/json".to_string()),
+            ("Accept".to_string(), "application/json".to_string()),
+        ],
+        body: Some(body),
+    };
+    send(req)
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket client
 // ---------------------------------------------------------------------------

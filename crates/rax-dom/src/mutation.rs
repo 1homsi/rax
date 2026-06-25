@@ -76,6 +76,8 @@ pub enum WidgetKind {
     WebView,
     /// A virtualized, recycling list widget (maps to UITableView on iOS).
     LazyList,
+    /// A map view (MKMapView).
+    MapView,
 }
 
 /// A local notification to schedule via the UserNotifications framework.
@@ -314,6 +316,18 @@ pub enum Attribute {
     EstimatedItemHeight(f32),
     /// When true, animate any frame changes to this view with a spring.
     AnimateLayout(bool),
+    /// For MapView: set the center coordinate.
+    MapCenter { latitude: f64, longitude: f64 },
+    /// For MapView: set the zoom level (degrees of span; smaller = more zoomed in).
+    MapSpan { lat_span: f64, lon_span: f64 },
+    /// For MapView: add or update an annotation at a coordinate.
+    MapAnnotation {
+        /// Unique ID for this annotation.
+        annotation_id: String,
+        latitude: f64,
+        longitude: f64,
+        title: String,
+    },
 }
 
 /// A semantic text style that scales with the user's preferred reading size

@@ -43,6 +43,7 @@ mod extras;
 mod image;
 mod indicators;
 mod list;
+pub mod map;
 mod modifier;
 mod scroll;
 mod spacer;
@@ -52,6 +53,7 @@ mod view;
 mod web_view;
 
 pub use button::{button, Button};
+pub use map::{map_view, MapView};
 pub use camera::{camera_scanner, CameraScanner};
 pub use composite::{
     action_sheet, alert, app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, dev_tools,
@@ -83,6 +85,40 @@ pub use rax_dom::{
 };
 
 use rax_dom::{Tree, WidgetId};
+
+// ---------------------------------------------------------------------------
+// FPS tracking (updated by the platform backend each tick)
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    static FPS_SIGNAL: std::cell::Cell<Option<rax_reactive::Signal<f32>>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Returns a reactive [`Signal<f32>`] that is updated each frame with the
+/// current frames-per-second count.
+///
+/// Call from within a reactive context (e.g. `dev_tools()` or a custom debug
+/// overlay). The signal is lazily created on first use.
+pub fn use_fps() -> rax_reactive::Signal<f32> {
+    let existing = FPS_SIGNAL.with(|s| s.get());
+    if let Some(sig) = existing {
+        return sig;
+    }
+    let sig = rax_reactive::create_signal(60.0f32);
+    FPS_SIGNAL.with(|s| s.set(Some(sig)));
+    sig
+}
+
+/// Updates the FPS signal. Called by the platform backend each tick.
+///
+/// This is a public but low-level hook — app code should use [`use_fps`]
+/// to read the value reactively.
+pub fn update_fps(fps: f32) {
+    if let Some(sig) = FPS_SIGNAL.with(|s| s.get()) {
+        sig.set(fps);
+    }
+}
 
 /// Builds `view` into `tree` and marks it as the tree root. Returns the root id.
 pub fn mount(tree: &mut Tree, view: impl View) -> WidgetId {

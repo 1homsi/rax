@@ -1129,17 +1129,23 @@ pub fn swipe_actions(
 /// ```
 pub fn dev_tools() -> BoxedView {
     if cfg!(debug_assertions) {
+        let fps = crate::use_fps();
         boxed(
-            row((
+            dynamic(move || {
+                let fps_val = fps.get();
                 boxed(
-                    text("rax [debug]")
-                        .font_size(10.0)
-                        .color(Color::rgb(255, 255, 255)),
-                ),
-            ))
-            .padding(4.0)
-            .background(Color::rgba(0, 0, 0, 153))
-            .corner_radius(4.0),
+                    row((
+                        boxed(
+                            text(move || format!("rax [debug] {:.0}fps", fps_val))
+                                .font_size(10.0)
+                                .color(Color::rgb(255, 255, 255)),
+                        ),
+                    ))
+                    .padding(4.0)
+                    .background(Color::rgba(0, 0, 0, 153))
+                    .corner_radius(4.0),
+                )
+            })
         )
     } else {
         boxed(column(()).size(0.0, 0.0))

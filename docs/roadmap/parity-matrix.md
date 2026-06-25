@@ -96,7 +96,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
 | HTTP / fetch | ✓ | ✓ | ✅ (ureq-backed `HttpClient`) |
-| WebSocket / SSE / GraphQL | community | community | 🟡 WebSocket ✅ + SSE ✅ (`connect_sse` — ureq streaming); GraphQL ⬜ |
+| WebSocket / SSE / GraphQL | community | community | ✅ WebSocket + SSE + `graphql(endpoint, query, variables)` → Resource |
 | Resource (async data + loading state) | community | community | ✅ |
 | Query cache (react-query-like) | community | community | ✅ `use_query` + `use_query_stale(url, secs)` + `invalidate_query` + `gc_query_cache` |
 | KV storage (+ persisted signals) | community | ✓ | ✅ |
@@ -108,11 +108,11 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
 | Camera / media picker | ✓ | ✓ | ✅ camera + QR scanner + media picker (`present_media_picker`) |
-| Location / maps | ✓ | ✓ | 🟡 GPS ✅ (`start_location()` — CLLocationManager → `Event::LocationUpdated`); maps ⬜ |
+| Location / maps | ✓ | ✓ | ✅ GPS (`start_location`) + Map view (`map_view(lat, lon).span().annotation()` — MKMapView) |
 | Push + local notifications | ✓ | ✓ | 🟡 local ✅ (`schedule_notification`); push ⬜ |
 | BLE / NFC | community | plugins | ⬜ |
 | Biometrics / secure auth | ✓ | ✓ | 🟡 biometrics ✅ (`authenticate_biometric`); OAuth/passkeys ⬜ |
-| In-app purchases | ✓ | ✓ | ⬜ |
+| In-app purchases | ✓ | ✓ | ⬜ (StoreKit delegate pattern requires additional objc2 bindings) |
 | Sensors / haptics / background tasks | ✓ | ✓ | ✅ haptics + sensors + background tasks (`register_background_task` + BGTaskScheduler) |
 | Plugin system / native modules | ✓ | ✓ | ✅ (`rax-plugin`: Plugin trait + PluginRegistry; on_start/tick/stop/event hooks) |
 
@@ -130,7 +130,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 |---|---|---|---|
 | CLI + project gen | ✓ | ✓ | ✅ (`rax new <name>` scaffolds Cargo.toml + src/lib.rs + .gitignore) |
 | Hot reload / fast refresh | ✓ | ✓ | ⬜ |
-| DevTools / inspector | ✓ | ✓ | ✅ (`dev_tools()` debug overlay + `rax_version()`; FPS/tree inspector ⬜) |
+| DevTools / inspector | ✓ | ✓ | ✅ (`dev_tools()` live FPS overlay via `use_fps()` signal; tree inspector ⬜) |
 | Error overlay | ✓ | ✓ | ✅ (`install_error_overlay()` panic hook + `error_overlay(signal)` composable) |
 | Testing framework | ✓ | ✓ | 🟡 |
 | OTA / code-push | ✓ (community) | partial | ⬜ |

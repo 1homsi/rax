@@ -93,6 +93,9 @@ thread_local! {
     static PENDING_MEDIA_CANCEL: Cell<bool> = const { Cell::new(false) };
     // Keep the MediaPickerDelegate alive while the picker is visible.
     static MEDIA_PICKER_DELEGATE: RefCell<Option<Retained<MediaPickerDelegate>>> = const { RefCell::new(None) };
+    // Frame timestamps for FPS calculation (ring buffer of the last 1 second).
+    static FRAME_TIMESTAMPS: RefCell<std::collections::VecDeque<std::time::Instant>> =
+        RefCell::new(std::collections::VecDeque::new());
 }
 
 fn handle_tap(tag_bits: u64) {
@@ -272,6 +275,20 @@ fn handle_tick() {
             }
             app.tick();
             rax_plugin::tick_plugins();
+
+            // Update FPS counter: keep a sliding window of timestamps for the
+            // last 1 second and push the count into the reactive FPS signal.
+            let fps = FRAME_TIMESTAMPS.with(|ts| {
+                let now = std::time::Instant::now();
+                let mut deq = ts.borrow_mut();
+                deq.push_back(now);
+                // Evict timestamps older than 1 second.
+                while deq.front().map(|t| now.duration_since(*t) > std::time::Duration::from_secs(1)).unwrap_or(false) {
+                    deq.pop_front();
+                }
+                deq.len() as f32
+            });
+            rax_view::update_fps(fps);
         }
     });
 }
@@ -1242,6 +1259,18 @@ impl Backend for UiKitBackend {
                             }
                         }
                     }
+                    WidgetKind::MapView => {
+                        unsafe {
+                            let frame = CGRect {
+                                origin: CGPoint { x: 0.0, y: 0.0 },
+                                size: CGSize { width: 100.0, height: 100.0 },
+                            };
+                            let mv: *mut AnyObject = msg_send![class!(MKMapView), alloc];
+                            let mv: *mut AnyObject = msg_send![mv, initWithFrame: frame];
+                            let mv_view: *mut UIView = mv as *mut UIView;
+                            Retained::retain(mv_view).expect("MKMapView init failed")
+                        }
+                    }
                 };
                 self.views.insert(id.to_u64(), view);
             }
@@ -1745,6 +1774,79 @@ impl Backend for UiKitBackend {
                                 s.borrow_mut().remove(&tag);
                             }
                         });
+                    }
+                    Attribute::MapCenter { latitude, longitude } => {
+                        unsafe {
+                            #[repr(C)]
+                            struct CLLocationCoordinate2D { latitude: f64, longitude: f64 }
+                            unsafe impl objc2::Encode for CLLocationCoordinate2D {
+                                const ENCODING: objc2::encode::Encoding =
+                                    objc2::encode::Encoding::Struct("CLLocationCoordinate2D", &[
+                                        f64::ENCODING, f64::ENCODING,
+                                    ]);
+                            }
+                            let coord = CLLocationCoordinate2D { latitude, longitude };
+                            let _: () = msg_send![&*view, setCenterCoordinate: coord animated: false];
+                        }
+                    }
+                    Attribute::MapSpan { lat_span, lon_span } => {
+                        unsafe {
+                            #[repr(C)]
+                            struct CLLocationCoordinate2D { latitude: f64, longitude: f64 }
+                            unsafe impl objc2::Encode for CLLocationCoordinate2D {
+                                const ENCODING: objc2::encode::Encoding =
+                                    objc2::encode::Encoding::Struct("CLLocationCoordinate2D", &[
+                                        f64::ENCODING, f64::ENCODING,
+                                    ]);
+                            }
+                            #[repr(C)]
+                            struct MKCoordinateSpan { latitude_delta: f64, longitude_delta: f64 }
+                            unsafe impl objc2::Encode for MKCoordinateSpan {
+                                const ENCODING: objc2::encode::Encoding =
+                                    objc2::encode::Encoding::Struct("MKCoordinateSpan", &[
+                                        f64::ENCODING, f64::ENCODING,
+                                    ]);
+                            }
+                            #[repr(C)]
+                            struct MKCoordinateRegion {
+                                center: CLLocationCoordinate2D,
+                                span: MKCoordinateSpan,
+                            }
+                            unsafe impl objc2::Encode for MKCoordinateRegion {
+                                const ENCODING: objc2::encode::Encoding =
+                                    objc2::encode::Encoding::Struct("MKCoordinateRegion", &[
+                                        CLLocationCoordinate2D::ENCODING,
+                                        MKCoordinateSpan::ENCODING,
+                                    ]);
+                            }
+                            let center: CLLocationCoordinate2D = msg_send![&*view, centerCoordinate];
+                            let region = MKCoordinateRegion {
+                                center,
+                                span: MKCoordinateSpan {
+                                    latitude_delta: lat_span,
+                                    longitude_delta: lon_span,
+                                },
+                            };
+                            let _: () = msg_send![&*view, setRegion: region animated: false];
+                        }
+                    }
+                    Attribute::MapAnnotation { annotation_id, latitude, longitude, title } => {
+                        unsafe {
+                            #[repr(C)]
+                            struct CLLocationCoordinate2D { latitude: f64, longitude: f64 }
+                            unsafe impl objc2::Encode for CLLocationCoordinate2D {
+                                const ENCODING: objc2::encode::Encoding =
+                                    objc2::encode::Encoding::Struct("CLLocationCoordinate2D", &[
+                                        f64::ENCODING, f64::ENCODING,
+                                    ]);
+                            }
+                            let coord = CLLocationCoordinate2D { latitude, longitude };
+                            let pin: *mut AnyObject = msg_send![class!(MKPointAnnotation), new];
+                            let _: () = msg_send![pin, setCoordinate: coord];
+                            let _: () = msg_send![pin, setTitle: &*NSString::from_str(&title)];
+                            let _: () = msg_send![&*view, addAnnotation: pin];
+                            let _ = annotation_id; // used as key for future update/remove
+                        }
                     }
                 }
             }
