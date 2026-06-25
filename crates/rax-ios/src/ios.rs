@@ -16,7 +16,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
 use objc2::{define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
-use objc2_foundation::{NSMutableArray, NSNotification, NSString};
+use objc2_foundation::{NSMutableArray, NSNotification, NSNotificationCenter, NSString};
 use objc2_quartz_core::{CADisplayLink, CAGradientLayer};
 use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
@@ -91,6 +91,16 @@ fn handle_tick() {
                 bottom: insets.bottom as f32,
                 left: insets.left as f32,
             });
+            app.tick();
+        }
+    });
+}
+
+fn handle_keyboard(height: f32) {
+    STATE.with(|s| {
+        if let Some(state) = s.borrow().as_ref() {
+            let mut app = state.app.borrow_mut();
+            app.set_keyboard_inset(height);
             app.tick();
         }
     });
@@ -175,6 +185,31 @@ define_class!(
                 0.0
             };
             handle_value_changed(tag, value);
+        }
+
+        #[unsafe(method(keyboardWillShow:))]
+        fn keyboard_will_show(&self, note: &NSNotification) {
+            // Pull the keyboard's end frame from the notification's userInfo and
+            // treat its height as the obscured region (docked keyboard).
+            let height: f32 = unsafe {
+                let info: *mut AnyObject = msg_send![note, userInfo];
+                if info.is_null() {
+                    return;
+                }
+                let key = NSString::from_str("UIKeyboardFrameEndUserInfoKey");
+                let value: *mut AnyObject = msg_send![info, objectForKey: &*key];
+                if value.is_null() {
+                    return;
+                }
+                let rect: CGRect = msg_send![value, CGRectValue];
+                rect.size.height as f32
+            };
+            handle_keyboard(height);
+        }
+
+        #[unsafe(method(keyboardWillHide:))]
+        fn keyboard_will_hide(&self, _note: &NSNotification) {
+            handle_keyboard(0.0);
         }
 
         #[unsafe(method(textChanged:))]
@@ -262,6 +297,23 @@ fn setup(mtm: MainThreadMarker) {
         .expect("view controller has a content view");
 
     let action_target: Retained<ActionTarget> = new_instance();
+
+    // Observe keyboard show/hide so the runtime can inset content above it.
+    unsafe {
+        let center = NSNotificationCenter::defaultCenter();
+        center.addObserver_selector_name_object(
+            &action_target,
+            sel!(keyboardWillShow:),
+            Some(&NSString::from_str("UIKeyboardWillShowNotification")),
+            None,
+        );
+        center.addObserver_selector_name_object(
+            &action_target,
+            sel!(keyboardWillHide:),
+            Some(&NSString::from_str("UIKeyboardWillHideNotification")),
+            None,
+        );
+    }
 
     let backend = UiKitBackend {
         mtm,

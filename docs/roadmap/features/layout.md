@@ -33,7 +33,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 - ✅ padding
 - ⬜ border width per-edge (paint side: color/style/radius)
 - ✅ safe-area insets (auto root inset from the platform safe area; notch + home indicator)
-- 🟡 keyboard insets (avoidance) — runtime folds keyboard height into the bottom inset; iOS notification wiring pending
+- ✅ keyboard insets (avoidance) — runtime folds keyboard height into the bottom inset; iOS observes keyboard show/hide notifications
 
 ## Grid
 - ⬜ CSS-grid: template rows/cols, areas, auto-flow, gaps
