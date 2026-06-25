@@ -20,13 +20,15 @@ use objc2_foundation::{NSNotification, NSString};
 use objc2_quartz_core::CADisplayLink;
 use objc2_ui_kit::{
     UIApplication, UIApplicationDelegate, UIButton, UIButtonType, UIColor, UIControl,
-    UIControlEvents, UIControlState, UIFont, UIImage, UIImageView, UILabel, UIScreen, UISlider,
-    UISwitch, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
+    UIControlEvents, UIControlState, UIFont, UIGestureRecognizer, UIGestureRecognizerState,
+    UIImage, UIImageView, UILabel, UILongPressGestureRecognizer, UIScreen, UISlider, UISwitch,
+    UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
 };
 
 use rax_core::{Color, Rect, Size};
 use rax_dom::{
-    Attribute, Backend, Event, EventSink, Host, Mutation, TextSelection, WidgetId, WidgetKind,
+    Attribute, Backend, Event, EventSink, GestureKind, Host, Mutation, TextSelection, WidgetId,
+    WidgetKind,
 };
 use rax_runtime::App;
 use rax_view::View;
@@ -84,6 +86,21 @@ fn handle_value_changed(tag_bits: u64, value: f64) {
     });
 }
 
+fn dispatch_target_event(make: impl FnOnce(WidgetId) -> Event, tag_bits: u64) {
+    STATE.with(|s| {
+        if let Some(state) = s.borrow().as_ref() {
+            state
+                .event_sink
+                .dispatch(make(WidgetId::from_u64(tag_bits)));
+            state.app.borrow_mut().tick();
+        }
+    });
+}
+
+fn recognizer_tag(recognizer: &UIGestureRecognizer) -> Option<u64> {
+    unsafe { recognizer.view() }.map(|v| unsafe { v.tag() } as u64)
+}
+
 fn handle_text_changed(tag_bits: u64, value: String) {
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
@@ -139,6 +156,29 @@ define_class!(
             let tag = unsafe { sender.tag() } as u64;
             let text = unsafe { sender.text() }.map(|s| s.to_string()).unwrap_or_default();
             handle_text_changed(tag, text);
+        }
+
+        #[unsafe(method(tapRecognized:))]
+        fn tap_recognized(&self, recognizer: &UITapGestureRecognizer) {
+            if let Some(tag) = recognizer_tag(recognizer) {
+                dispatch_target_event(|target| Event::Tap { target }, tag);
+            }
+        }
+
+        #[unsafe(method(doubleTapRecognized:))]
+        fn double_tap_recognized(&self, recognizer: &UITapGestureRecognizer) {
+            if let Some(tag) = recognizer_tag(recognizer) {
+                dispatch_target_event(|target| Event::DoubleTap { target }, tag);
+            }
+        }
+
+        #[unsafe(method(longPressRecognized:))]
+        fn long_press_recognized(&self, recognizer: &UILongPressGestureRecognizer) {
+            if unsafe { recognizer.state() } == UIGestureRecognizerState::Began {
+                if let Some(tag) = recognizer_tag(recognizer) {
+                    dispatch_target_event(|target| Event::LongPress { target }, tag);
+                }
+            }
         }
     }
 );
@@ -498,6 +538,47 @@ impl Backend for UiKitBackend {
                 if let Some(view) = self.view(id).cloned() {
                     self.container.addSubview(&view);
                 }
+            }
+            Mutation::AddGesture { id, gesture } => {
+                let Some(view) = self.view(id).cloned() else {
+                    return;
+                };
+                // Labels/images need interaction enabled to receive gestures.
+                unsafe { view.setUserInteractionEnabled(true) };
+                let recognizer: Retained<UIGestureRecognizer> = match gesture {
+                    GestureKind::Tap => {
+                        let r = unsafe {
+                            UITapGestureRecognizer::initWithTarget_action(
+                                self.mtm.alloc(),
+                                Some(&self.action_target),
+                                Some(sel!(tapRecognized:)),
+                            )
+                        };
+                        r.into_super()
+                    }
+                    GestureKind::DoubleTap => {
+                        let r = unsafe {
+                            UITapGestureRecognizer::initWithTarget_action(
+                                self.mtm.alloc(),
+                                Some(&self.action_target),
+                                Some(sel!(doubleTapRecognized:)),
+                            )
+                        };
+                        unsafe { r.setNumberOfTapsRequired(2) };
+                        r.into_super()
+                    }
+                    GestureKind::LongPress => {
+                        let r = unsafe {
+                            UILongPressGestureRecognizer::initWithTarget_action(
+                                self.mtm.alloc(),
+                                Some(&self.action_target),
+                                Some(sel!(longPressRecognized:)),
+                            )
+                        };
+                        r.into_super()
+                    }
+                };
+                unsafe { view.addGestureRecognizer(&recognizer) };
             }
         }
     }

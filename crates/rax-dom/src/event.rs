@@ -61,6 +61,16 @@ pub enum Event {
         /// Hit-tested widget.
         target: WidgetId,
     },
+    /// A double tap on a widget.
+    DoubleTap {
+        /// Hit-tested widget.
+        target: WidgetId,
+    },
+    /// A long press on a widget.
+    LongPress {
+        /// Hit-tested widget.
+        target: WidgetId,
+    },
     /// A pointer pressed down.
     PointerDown {
         /// Hit-tested widget.
@@ -137,6 +147,10 @@ pub enum Event {
 pub enum EventKind {
     /// [`Event::Tap`].
     Tap,
+    /// [`Event::DoubleTap`].
+    DoubleTap,
+    /// [`Event::LongPress`].
+    LongPress,
     /// [`Event::PointerDown`].
     PointerDown,
     /// [`Event::PointerMove`].
@@ -166,6 +180,8 @@ impl Event {
     pub fn kind(&self) -> EventKind {
         match self {
             Event::Tap { .. } => EventKind::Tap,
+            Event::DoubleTap { .. } => EventKind::DoubleTap,
+            Event::LongPress { .. } => EventKind::LongPress,
             Event::PointerDown { .. } => EventKind::PointerDown,
             Event::PointerMove { .. } => EventKind::PointerMove,
             Event::PointerUp { .. } => EventKind::PointerUp,
@@ -185,6 +201,8 @@ impl Event {
     pub fn target(&self) -> Option<WidgetId> {
         match *self {
             Event::Tap { target }
+            | Event::DoubleTap { target }
+            | Event::LongPress { target }
             | Event::PointerDown { target, .. }
             | Event::PointerMove { target, .. }
             | Event::PointerUp { target, .. }

@@ -361,6 +361,14 @@ impl Tree {
         });
     }
 
+    /// Asks the backend to attach a gesture recognizer to `id`, so it emits the
+    /// corresponding event. Pair with [`on`](Tree::on) for the handler.
+    pub fn enable_gesture(&mut self, id: WidgetId, gesture: crate::mutation::GestureKind) {
+        if self.nodes.get(id.0).is_some() {
+            self.host.emit(Mutation::AddGesture { id, gesture });
+        }
+    }
+
     /// A `Send` handle a backend uses to enqueue platform events.
     pub fn event_sink(&self) -> EventSink {
         EventSink::new(self.event_tx.clone())

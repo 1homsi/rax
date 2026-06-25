@@ -54,6 +54,17 @@ pub enum WidgetKind {
     TextInput,
 }
 
+/// A gesture a widget should recognize (the backend attaches a recognizer).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GestureKind {
+    /// Single tap.
+    Tap,
+    /// Double tap.
+    DoubleTap,
+    /// Long press.
+    LongPress,
+}
+
 /// A single settable **paint** property on a widget.
 ///
 /// These are forwarded to the backend and not retained. Layout *inputs*
@@ -156,5 +167,12 @@ pub enum Mutation {
     SetRoot {
         /// The root widget.
         id: WidgetId,
+    },
+    /// Attach a gesture recognizer to `id` so it emits the corresponding event.
+    AddGesture {
+        /// Target widget.
+        id: WidgetId,
+        /// Which gesture to recognize.
+        gesture: GestureKind,
     },
 }

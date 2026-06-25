@@ -4,7 +4,7 @@
 //! customizability mechanism: layout control on *every* view, not just containers.
 
 use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Position};
-use rax_dom::{Attribute, Shadow, Tree, WidgetId};
+use rax_dom::{Attribute, EventKind, GestureKind, Shadow, Tree, WidgetId};
 
 use crate::view::View;
 
@@ -173,6 +173,41 @@ pub trait ViewExt: View + Sized {
                     dy,
                 }),
             )
+        })
+    }
+
+    // --- gesture modifiers (work on any view, not just buttons) ---
+
+    /// Runs `f` when this view is tapped.
+    fn on_tap(
+        self,
+        mut f: impl FnMut() + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.on(id, EventKind::Tap, move |_| f());
+            t.enable_gesture(id, GestureKind::Tap);
+        })
+    }
+
+    /// Runs `f` when this view is double-tapped.
+    fn on_double_tap(
+        self,
+        mut f: impl FnMut() + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.on(id, EventKind::DoubleTap, move |_| f());
+            t.enable_gesture(id, GestureKind::DoubleTap);
+        })
+    }
+
+    /// Runs `f` when this view is long-pressed.
+    fn on_long_press(
+        self,
+        mut f: impl FnMut() + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.on(id, EventKind::LongPress, move |_| f());
+            t.enable_gesture(id, GestureKind::LongPress);
         })
     }
 }
