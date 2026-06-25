@@ -16,4 +16,5 @@ rax-core = { path = "../rax-core" }
 rax-dom = { path = "../rax-dom" }
 rax-layout = { path = "../rax-layout" }
 rax-reactive = { path = "../rax-reactive" }
+rax-async = { path = "../rax-async" }
 rax-view = { path = "../rax-view" }

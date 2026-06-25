@@ -66,8 +66,9 @@ impl App {
     /// emit paint mutations synchronously), then re-run layout and emit any
     /// changed frames.
     pub fn tick(&mut self) {
+        rax_async::run_until_stalled(); // advance async tasks (may resolve resources)
         self.tree.drain_events();
-        self.tree.run_dynamic(); // events may have dirtied dynamic subtrees
+        self.tree.run_dynamic(); // events/async may have dirtied dynamic subtrees
         self.relayout();
     }
 
