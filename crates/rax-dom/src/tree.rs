@@ -6,11 +6,20 @@
 //! reactive-runtime "ownership" gap noted in `rax-reactive` is closed for the UI:
 //! effect lifetime is tied to element lifetime.
 
+use std::sync::mpsc::{channel, Receiver, Sender};
+
 use rax_core::Arena;
 use rax_reactive::{create_effect, Effect};
 
 use crate::backend::Host;
+use crate::event::{Event, EventKind, EventSink};
 use crate::mutation::{Attribute, Mutation, WidgetId, WidgetKind};
+
+/// A registered event handler and the kind of event it responds to.
+struct Handler {
+    kind: EventKind,
+    callback: Box<dyn FnMut(&Event)>,
+}
 
 struct ElementNode {
     // Read back once the reconciler/inspector land (they match on node kind).
@@ -20,6 +29,8 @@ struct ElementNode {
     children: Vec<WidgetId>,
     /// Reactive bindings owned by this node, disposed when it is removed.
     effects: Vec<Effect>,
+    /// Event handlers, dropped when the node is removed.
+    handlers: Vec<Handler>,
 }
 
 /// The retained element tree, paired with the backend it emits mutations to.
@@ -27,15 +38,24 @@ pub struct Tree {
     host: Host,
     nodes: Arena<ElementNode>,
     root: Option<WidgetId>,
+    /// Handlers for app-global (untargeted) events.
+    global_handlers: Vec<Handler>,
+    /// Inbound event queue, filled by [`EventSink`]s and drained on the UI thread.
+    event_tx: Sender<Event>,
+    event_rx: Receiver<Event>,
 }
 
 impl Tree {
     /// Creates an empty tree that emits mutations through `host`.
     pub fn new(host: Host) -> Self {
+        let (event_tx, event_rx) = channel();
         Tree {
             host,
             nodes: Arena::new(),
             root: None,
+            global_handlers: Vec::new(),
+            event_tx,
+            event_rx,
         }
     }
 
@@ -66,6 +86,7 @@ impl Tree {
             parent: None,
             children: Vec::new(),
             effects: Vec::new(),
+            handlers: Vec::new(),
         });
         let id = WidgetId(index);
         self.host.emit(Mutation::Create { id, kind });
@@ -172,6 +193,104 @@ impl Tree {
 
         self.nodes.remove(id.0);
         self.host.emit(Mutation::Destroy { id });
+    }
+
+    // --- events (inbound seam) ---------------------------------------------
+
+    /// Registers a handler for `kind` events targeting `id`. Multiple handlers
+    /// per widget/kind are allowed and run in registration order. The handler
+    /// lives as long as the widget.
+    pub fn on(&mut self, id: WidgetId, kind: EventKind, callback: impl FnMut(&Event) + 'static) {
+        if let Some(node) = self.nodes.get_mut(id.0) {
+            node.handlers.push(Handler {
+                kind,
+                callback: Box::new(callback),
+            });
+        }
+    }
+
+    /// Registers a handler for an app-global event kind (e.g.
+    /// [`EventKind::BackPressed`], lifecycle, keyboard).
+    pub fn on_global(&mut self, kind: EventKind, callback: impl FnMut(&Event) + 'static) {
+        self.global_handlers.push(Handler {
+            kind,
+            callback: Box::new(callback),
+        });
+    }
+
+    /// A `Send` handle a backend uses to enqueue platform events.
+    pub fn event_sink(&self) -> EventSink {
+        EventSink::new(self.event_tx.clone())
+    }
+
+    /// Drains and dispatches all queued events. A driver calls this once per
+    /// frame (the scheduler's `PreFrame` phase).
+    pub fn drain_events(&mut self) {
+        while let Ok(event) = self.event_rx.try_recv() {
+            self.dispatch(&event);
+        }
+    }
+
+    /// Routes one event to its handlers immediately.
+    ///
+    /// Targeted events fire on the target, then **bubble** up through ancestors
+    /// (so a container can handle taps on its children). Global events fire on
+    /// handlers registered via [`on_global`](Tree::on_global).
+    pub fn dispatch(&mut self, event: &Event) {
+        let kind = event.kind();
+        match event.target() {
+            Some(target) => {
+                // Walk target -> root, collecting the live ancestor chain.
+                let mut chain = Vec::new();
+                let mut cursor = Some(target);
+                while let Some(id) = cursor {
+                    match self.nodes.get(id.0) {
+                        Some(node) => {
+                            chain.push(id);
+                            cursor = node.parent;
+                        }
+                        None => break,
+                    }
+                }
+                for id in chain {
+                    self.run_handlers_on(id, kind, event);
+                }
+            }
+            None => self.run_global_handlers(kind, event),
+        }
+    }
+
+    /// Runs matching handlers on a single node. Handlers are moved out for the
+    /// duration so they cannot alias the node while running (they may freely
+    /// write signals, which run effects synchronously).
+    fn run_handlers_on(&mut self, id: WidgetId, kind: EventKind, event: &Event) {
+        let mut handlers = match self.nodes.get_mut(id.0) {
+            Some(node) => core::mem::take(&mut node.handlers),
+            None => return,
+        };
+        for handler in handlers.iter_mut() {
+            if handler.kind == kind {
+                (handler.callback)(event);
+            }
+        }
+        if let Some(node) = self.nodes.get_mut(id.0) {
+            // Keep any handlers registered during dispatch (today: none).
+            let added = core::mem::take(&mut node.handlers);
+            handlers.extend(added);
+            node.handlers = handlers;
+        }
+    }
+
+    fn run_global_handlers(&mut self, kind: EventKind, event: &Event) {
+        let mut handlers = core::mem::take(&mut self.global_handlers);
+        for handler in handlers.iter_mut() {
+            if handler.kind == kind {
+                (handler.callback)(event);
+            }
+        }
+        let added = core::mem::take(&mut self.global_handlers);
+        handlers.extend(added);
+        self.global_handlers = handlers;
     }
 
     // --- introspection (for tests / inspector) -----------------------------

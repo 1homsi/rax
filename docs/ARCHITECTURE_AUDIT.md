@@ -56,6 +56,14 @@ These are ranked. Each is a **STOP**: do not write more code on top of the curre
 
 **Recommendation:** Split the frame into phases: **(1)** signals mark dependents dirty (no eager run); **(2)** a `Scheduler` flushes effects once per frame to produce attribute/structure mutations; **(3)** the layout engine computes geometry → emits `SetFrame` mutations; **(4)** the command buffer is handed to the backend in one commit. The reactive runtime's `flush_effects` becomes scheduler-owned, not `set`-owned. **Freeze the Scheduler interface before the layout engine.**
 
+> **R3 — RESOLVED (2026-06-25).** `rax-dom` gained the inbound dual of `Mutation`:
+> an `Event`/`EventKind` schema, a `Send` `EventSink` for backends, a per-widget
+> handler registry with bubbling, app-global handlers, and a `drain_events` path
+> for the scheduler's `PreFrame` phase. Round trip verified in `tests/events.rs`
+> (platform event → handler → signal write → one mutation). **M0 complete.**
+> Deferred to M1 integration: wiring the scheduler `Commit` phase to a buffered
+> `Host` flush, and `PreFrame` to `Tree::drain_events` — both live in `rax-runtime`.
+
 ### R3 — The command buffer is one-directional. Native → engine events have no defined channel.
 
 **What we have:** `Backend::apply(Mutation)` — engine talks *to* the platform. Nothing comes *back*.

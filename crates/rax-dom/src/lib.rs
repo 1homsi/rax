@@ -27,12 +27,11 @@
 #![forbid(unsafe_code)]
 
 mod backend;
+mod event;
 mod mutation;
 mod tree;
 
 pub use backend::{Backend, Host, RecordingBackend};
+pub use event::{Event, EventKind, EventSink, Lifecycle, PointerId, TextSelection};
 pub use mutation::{Attribute, Mutation, WidgetId, WidgetKind};
 pub use tree::Tree;
-
-#[cfg(test)]
-mod tests;

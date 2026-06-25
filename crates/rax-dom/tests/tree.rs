@@ -1,19 +1,10 @@
-//! End-to-end tests for the element tree + mutation stream, using the recording
-//! backend in place of a real platform. These pin down the central thesis:
-//! a signal change produces exactly one targeted mutation.
+//! Element-tree structure and the reactive mutation stream.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+mod common;
+use common::harness;
 
+use rax_dom::*;
 use rax_reactive::create_signal;
-
-use super::*;
-
-fn harness() -> (Tree, Rc<RefCell<Vec<Mutation>>>) {
-    let backend = RecordingBackend::new();
-    let log = backend.log();
-    (Tree::new(Host::new(backend)), log)
-}
 
 #[test]
 fn create_emits_create_mutation() {
@@ -87,7 +78,6 @@ fn reactive_bind_emits_exactly_one_mutation_per_change() {
         Attribute::Text(format!("Count: {}", count.get()))
     });
 
-    // Create + initial bind value.
     assert_eq!(
         *log.borrow(),
         vec![
@@ -106,7 +96,6 @@ fn reactive_bind_emits_exactly_one_mutation_per_change() {
     count.set(1);
     count.set(2);
 
-    // The thesis: one targeted SetAttribute per change. No tree diff, no churn.
     assert_eq!(
         *log.borrow(),
         vec![
@@ -134,8 +123,6 @@ fn remove_tears_down_subtree_children_first_and_disposes_bindings() {
     log.borrow_mut().clear();
     tree.remove(root);
 
-    // RemoveChild is not emitted for root (it has no parent); Destroy is emitted
-    // children-first: child before root.
     assert_eq!(
         *log.borrow(),
         vec![
@@ -145,7 +132,6 @@ fn remove_tears_down_subtree_children_first_and_disposes_bindings() {
     );
     assert!(tree.is_empty());
 
-    // The binding was disposed: further signal changes emit nothing.
     log.borrow_mut().clear();
     count.set(99);
     assert!(log.borrow().is_empty(), "disposed binding must not emit");
