@@ -15,3 +15,4 @@ unsafe_code = "forbid"
 rax-reactive = { path = "../rax-reactive" }
 rax-async = { path = "../rax-async" }
 tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+ureq = { version = "2", features = [] }

@@ -11,6 +11,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Mutex;
 
 use rax_core::{Color, ColorScheme, EdgeInsets, Rect, Size};
 use rax_dom::{Event, EventKind, EventSink, Host, Tree, WidgetId, WidgetKind};
@@ -41,6 +42,53 @@ thread_local! {
     /// Biometric authentication reasons queued by [`authenticate_biometric`]. Drained by [`App::tick`].
     static PENDING_BIOMETRICS: RefCell<Vec<String>> =
         const { RefCell::new(Vec::new()) };
+}
+
+// ---------------------------------------------------------------------------
+// Error overlay (dev mode)
+// ---------------------------------------------------------------------------
+
+/// Global storage for the last panic message, written from the panic hook.
+/// Uses `Mutex<Option<String>>` because the hook fires from any thread.
+static PANIC_MESSAGE: Mutex<Option<String>> = Mutex::new(None);
+
+/// Installs a panic hook that captures the panic message so it can be surfaced
+/// to the user via [`last_panic`] and, typically, [`rax_view::error_overlay`].
+///
+/// Call this **once** at the very start of `main`, before any other setup.
+/// In release builds you can omit it; the hook is a no-op overhead in that
+/// case. The original hook is preserved and still runs (so crash logs still
+/// appear in the Xcode console).
+///
+/// ```no_run
+/// use rax_runtime::install_error_overlay;
+///
+/// install_error_overlay();
+/// ```
+pub fn install_error_overlay() {
+    let original = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let msg = info.to_string();
+        if let Ok(mut guard) = PANIC_MESSAGE.lock() {
+            *guard = Some(msg);
+        }
+        original(info);
+    }));
+}
+
+/// Returns the panic message captured by [`install_error_overlay`], or `None`
+/// if no panic has occurred (or the hook was not installed).
+///
+/// Pair with a reactive signal to drive [`rax_view::error_overlay`]:
+///
+/// ```no_run
+/// use rax_runtime::last_panic;
+/// use rax_reactive::create_signal;
+///
+/// let msg = create_signal(last_panic());
+/// ```
+pub fn last_panic() -> Option<String> {
+    PANIC_MESSAGE.lock().ok()?.clone()
 }
 
 /// Triggers a haptic feedback pulse. Call from event handlers (tap callbacks,

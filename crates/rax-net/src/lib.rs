@@ -277,5 +277,143 @@ pub fn connect_ws(
     Ok(WsHandle { tx })
 }
 
+// ---------------------------------------------------------------------------
+// Query cache — react-query-style deduplication
+// ---------------------------------------------------------------------------
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+thread_local! {
+    static QUERY_CACHE: RefCell<HashMap<String, Resource<Response>>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Returns a cached [`Resource<Response>`] for the given URL.
+///
+/// The first caller fires an HTTP GET; all subsequent callers with the **same
+/// URL** receive the identical `Resource` — the request is never duplicated.
+/// The cache is per-thread (all rax work happens on the main thread).
+///
+/// # Example
+/// ```
+/// use rax_net::{use_query, set_client, MockClient, Response};
+/// use rax_async::run_until_stalled;
+/// use rax_reactive::create_root;
+///
+/// set_client(MockClient::new(|_| Ok(Response::ok("[]"))));
+/// let (res, scope) = create_root(|| use_query("https://api.example.com/items"));
+/// run_until_stalled();
+/// assert!(res.data().is_some());
+/// scope.dispose();
+/// ```
+pub fn use_query(url: impl Into<String>) -> Resource<Response> {
+    let url = url.into();
+    QUERY_CACHE.with(|cache| {
+        if let Some(cached) = cache.borrow().get(&url) {
+            return *cached;
+        }
+        // First caller — fire the request and cache the resource.
+        let resource = get(url.clone());
+        cache.borrow_mut().insert(url, resource);
+        resource
+    })
+}
+
+/// Removes the cached entry for `url` so the next [`use_query`] call fires a
+/// fresh HTTP GET.
+pub fn invalidate_query(url: impl Into<String>) {
+    QUERY_CACHE.with(|cache| {
+        cache.borrow_mut().remove(&url.into());
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Server-Sent Events (SSE)
+// ---------------------------------------------------------------------------
+
+/// A parsed Server-Sent Event.
+#[derive(Debug, Clone)]
+pub struct SseEvent {
+    /// The event type. Defaults to `"message"` when the stream omits `event:`.
+    pub event: String,
+    /// The data payload (multi-line `data:` fields are joined with `'\n'`).
+    pub data: String,
+    /// The optional event id from the `id:` field.
+    pub id: Option<String>,
+}
+
+/// Connect to a Server-Sent Events endpoint at `url`.
+///
+/// Spawns a background thread that reads the stream line-by-line and calls
+/// `on_event` for every complete event. The thread exits when the server closes
+/// the connection or an I/O error occurs. Drop the returned
+/// [`std::thread::JoinHandle`] to detach (it will not abort the thread, but the
+/// thread will exit on the next failed read once the server closes the stream).
+///
+/// ```no_run
+/// use rax_net::{connect_sse, SseEvent};
+///
+/// let _handle = connect_sse("https://example.com/events", |ev| {
+///     println!("[{}] {}", ev.event, ev.data);
+/// });
+/// ```
+pub fn connect_sse(
+    url: impl Into<String>,
+    on_event: impl Fn(SseEvent) + Send + 'static,
+) -> std::thread::JoinHandle<()> {
+    let url = url.into();
+    std::thread::spawn(move || {
+        let response = match ureq::get(&url)
+            .set("Accept", "text/event-stream")
+            .set("Cache-Control", "no-cache")
+            .call()
+        {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+
+        let mut reader = std::io::BufReader::new(response.into_reader());
+        let mut event_type = String::from("message");
+        let mut data_buf = String::new();
+        let mut id_buf: Option<String> = None;
+
+        use std::io::BufRead;
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => break, // EOF
+                Err(_) => break,
+                _ => {}
+            }
+            let line = line.trim_end_matches('\n').trim_end_matches('\r');
+
+            if line.is_empty() {
+                // Empty line dispatches the buffered event.
+                if !data_buf.is_empty() {
+                    on_event(SseEvent {
+                        event: event_type.clone(),
+                        data: data_buf.trim_end_matches('\n').to_string(),
+                        id: id_buf.clone(),
+                    });
+                }
+                event_type = "message".to_string();
+                data_buf.clear();
+                id_buf = None;
+            } else if let Some(data) = line.strip_prefix("data:") {
+                if !data_buf.is_empty() {
+                    data_buf.push('\n');
+                }
+                data_buf.push_str(data.trim_start());
+            } else if let Some(ev) = line.strip_prefix("event:") {
+                event_type = ev.trim_start().to_string();
+            } else if let Some(id) = line.strip_prefix("id:") {
+                id_buf = Some(id.trim_start().to_string());
+            }
+            // Lines starting with ':' are comments — ignored.
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests;

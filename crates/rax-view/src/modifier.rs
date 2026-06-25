@@ -5,8 +5,8 @@
 
 use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Point, Position};
 use rax_dom::{
-    Attribute, EventKind, GesturePhase, GestureKind, LinearGradient, Role, Shadow, Transform, Tree,
-    WidgetId,
+    Attribute, EventKind, GesturePhase, GestureKind, LayoutDirection, LinearGradient, Role, Shadow,
+    Transform, Tree, WidgetId,
 };
 
 use crate::view::View;
@@ -390,9 +390,39 @@ pub trait ViewExt: View + Sized {
         self.decorate(move |t, id| t.set(id, Attribute::AccessibilityLabel(label)))
     }
 
+    /// Sets the accessibility hint — a brief phrase that describes the result
+    /// of performing an action. VoiceOver reads this after the label.
+    fn accessibility_hint(
+        self,
+        hint: impl Into<String>,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        let hint = hint.into();
+        self.decorate(move |t, id| t.set(id, Attribute::AccessibilityHint(hint)))
+    }
+
     /// Sets the accessibility role (mapped to platform traits).
     fn role(self, role: Role) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |t, id| t.set(id, Attribute::AccessibilityRole(role)))
+    }
+
+    /// Hides or shows this element from assistive technologies. Set `true` for
+    /// decorative elements that add no semantic information.
+    fn accessibility_hidden(
+        self,
+        hidden: bool,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::AccessibilityHidden(hidden)))
+    }
+
+    /// Sets the layout direction for this view and all of its descendants.
+    ///
+    /// Use [`LayoutDirection::Rtl`] for right-to-left locales (Arabic, Hebrew,
+    /// Persian, …) to flip text direction and child ordering automatically.
+    fn direction(
+        self,
+        dir: LayoutDirection,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::Direction(dir)))
     }
 }
 

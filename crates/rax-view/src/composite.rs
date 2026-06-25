@@ -970,3 +970,44 @@ pub fn drawer<V: View + 'static>(
     })
     .grow(0.0)
 }
+
+// ---------------------------------------------------------------------------
+// Error overlay — dev-mode panic display
+// ---------------------------------------------------------------------------
+
+/// Shows a red error overlay when `message` is `Some`. Typically used with
+/// [`rax_runtime::last_panic`] to surface panics as a visible overlay in
+/// debug builds rather than silently freezing the app.
+///
+/// Place at the **top** of your root view tree (e.g. in a `stack`) so it
+/// always renders above your other content:
+///
+/// ```no_run
+/// use rax_view::{error_overlay, stack};
+/// use rax_reactive::create_signal;
+///
+/// // let msg = create_signal(rax_runtime::last_panic());
+/// // let view = stack((your_app_view, error_overlay(msg)));
+/// ```
+pub fn error_overlay(message: rax_reactive::Signal<Option<String>>) -> impl View {
+    dynamic(move || match message.get() {
+        Some(msg) => boxed(
+            column((
+                boxed(
+                    text("Panic")
+                        .font_size(18.0)
+                        .color(Color::rgb(255, 255, 255)),
+                ),
+                boxed(
+                    text(msg)
+                        .font_size(12.0)
+                        .color(Color::rgba(255, 204, 204, 255)),
+                ),
+            ))
+            .padding(16.0)
+            .background(Color::rgba(204, 0, 0, 242))
+            .grow(),
+        ),
+        None => boxed(column(()).size(0.0, 0.0)),
+    })
+}

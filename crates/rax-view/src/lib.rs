@@ -54,8 +54,8 @@ pub use button::{button, Button};
 pub use camera::{camera_scanner, CameraScanner};
 pub use composite::{
     action_sheet, alert, app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, drawer,
-    fade_transition, grid, item_separator, modal, network_image, picker, radio, search_bar, toast,
-    Avatar, Badge, Card, Checkbox, Chip, Radio,
+    error_overlay, fade_transition, grid, item_separator, modal, network_image, picker, radio,
+    search_bar, toast, Avatar, Badge, Card, Checkbox, Chip, Radio,
 };
 pub use container::{column, row, stack, Container, Stack};
 pub use controls::{segmented, slider, stepper, switch, Segmented, Slider, Stepper, Switch};
@@ -74,7 +74,10 @@ pub use view::{boxed, BoxedView, View, ViewSequence};
 
 // Re-export the style enums used by the builder API for convenience.
 pub use rax_core::{AlignItems, Dimension, EdgeInsets, FlexWrap, JustifyContent, Position};
-pub use rax_dom::{GesturePhase, KeyboardType, LinearGradient, ReturnKeyType, Role, TextAlign, Transform};
+pub use rax_dom::{
+    GesturePhase, KeyboardType, LayoutDirection, LinearGradient, ReturnKeyType, Role, TextAlign,
+    Transform,
+};
 
 use rax_dom::{Tree, WidgetId};
 

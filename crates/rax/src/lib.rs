@@ -86,8 +86,9 @@ pub mod prelude {
 
     // The app entry point and runtime, plus appearance controls.
     pub use rax_runtime::{
-        authenticate_biometric, cancel_notification, haptic, on_deep_link, schedule_notification,
-        set_backdrop, use_color_scheme, App, Backdrop, HapticStyle, KeyboardType, LocalNotification,
+        authenticate_biometric, cancel_notification, haptic, install_error_overlay, last_panic,
+        on_deep_link, schedule_notification, set_backdrop, use_color_scheme, App, Backdrop,
+        HapticStyle, KeyboardType, LocalNotification,
     };
 
     // High-frequency helpers from the satellite crates. Full surfaces live in
@@ -95,7 +96,10 @@ pub mod prelude {
     pub use rax_anim::{animate, decay, delayed, oscillate, parallel, sequence, spring, stagger, Easing, Spring};
     pub use rax_async::{create_resource, Resource};
     // HTTP client helpers — `get`/`post` return a `Resource<Response>`.
-    pub use rax_net::{connect_ws, get, post, send, Method, Request, Response, WsHandle, WsMessage};
+    pub use rax_net::{
+        connect_sse, connect_ws, get, invalidate_query, post, send, use_query, Method, Request,
+        Response, SseEvent, WsHandle, WsMessage,
+    };
     // Async resource state (needed to match on Loading/Ready/Failed).
     pub use rax_async::ResourceState;
     pub use rax_intl::{t, t_args, t_plural};

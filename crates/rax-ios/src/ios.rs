@@ -34,7 +34,7 @@ use block2::RcBlock;
 use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use rax_dom::{
     Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host,
-    KeyboardType, Mutation, TextSelection, WidgetId, WidgetKind,
+    KeyboardType, LayoutDirection, Mutation, TextSelection, WidgetId, WidgetKind,
 };
 use rax_runtime::App;
 use rax_view::View;
@@ -1372,6 +1372,30 @@ impl Backend for UiKitBackend {
                             unsafe { let _: () = msg_send![&*field, setKeyboardType: ktype]; }
                         } else if let Ok(tv) = view.clone().downcast::<UITextView>() {
                             unsafe { let _: () = msg_send![&*tv, setKeyboardType: ktype]; }
+                        }
+                    }
+                    Attribute::AccessibilityHint(hint) => {
+                        let ns = NSString::from_str(&hint);
+                        unsafe {
+                            let _: () = msg_send![&*view, setIsAccessibilityElement: true];
+                            let _: () = msg_send![&*view, setAccessibilityHint: &*ns];
+                        }
+                    }
+                    Attribute::AccessibilityHidden(hidden) => {
+                        unsafe {
+                            let _: () = msg_send![&*view, setAccessibilityElementsHidden: hidden];
+                        }
+                    }
+                    Attribute::Direction(dir) => {
+                        // UISemanticContentAttribute:
+                        //   UISemanticContentAttributeForceLeftToRight = 3
+                        //   UISemanticContentAttributeForceRightToLeft = 4
+                        let val: isize = match dir {
+                            LayoutDirection::Ltr => 3,
+                            LayoutDirection::Rtl => 4,
+                        };
+                        unsafe {
+                            let _: () = msg_send![&*view, setSemanticContentAttribute: val];
                         }
                     }
                 }

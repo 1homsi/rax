@@ -159,6 +159,18 @@ pub enum Role {
     Search,
 }
 
+/// Layout direction for a view and all of its descendants.
+///
+/// Maps to `UISemanticContentAttribute` on iOS so that `UIView` subviews,
+/// text, and gesture directions are automatically mirrored for RTL locales.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutDirection {
+    /// Left-to-right layout (the default on most locales).
+    Ltr,
+    /// Right-to-left layout (Arabic, Hebrew, Persian, …).
+    Rtl,
+}
+
 /// The style of haptic feedback to generate, mapping to iOS feedback generators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HapticStyle {
@@ -245,8 +257,16 @@ pub enum Attribute {
     },
     /// Accessibility label read by screen readers.
     AccessibilityLabel(String),
+    /// Accessibility hint — describes the result of activating this element
+    /// (e.g. "Opens the settings screen"). Read by VoiceOver after the label.
+    AccessibilityHint(String),
     /// Accessibility role / traits.
     AccessibilityRole(Role),
+    /// Whether this element is hidden from assistive technologies. Use `true`
+    /// for purely decorative elements that add no semantic value.
+    AccessibilityHidden(bool),
+    /// Layout direction for this view and its subtree.
+    Direction(LayoutDirection),
     /// Font weight (100–900, where 400 is regular and 700 is bold).
     FontWeight(f32),
     /// Italic style.

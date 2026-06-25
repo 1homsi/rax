@@ -87,18 +87,18 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Font weight / italic / align | ✓ | ✓ | ✅ |
 | Rich text / spans | ✓ | ✓ | ✅ (`rich_text().span(TextSpan)` — NSAttributedString font/color/underline) |
 | Custom fonts / dynamic type | ✓ | ✓ | ✅ custom font family (`font_family()`); ⬜ dynamic type |
-| RTL / bidi | ✓ | ✓ | ⬜ |
+| RTL / bidi | ✓ | ✓ | ✅ (`.direction(LayoutDirection::Rtl)` — UISemanticContentAttribute) |
 | i18n (catalog + interpolation) | community | ✓ (intl) | 🟡 (ICU/plurals later) |
-| Screen-reader labels + roles | ✓ | ✓ | 🟡 |
+| Screen-reader labels + roles | ✓ | ✓ | ✅ (`.accessibility_label/hint/role/hidden()` — UIAccessibilityTraits) |
 | A11y as release gate | — | — | ⬜ **(policy)** |
 
 ## Data, async, storage
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
 | HTTP / fetch | ✓ | ✓ | ✅ (ureq-backed `HttpClient`) |
-| WebSocket / SSE / GraphQL | community | community | 🟡 WebSocket ✅ (`connect_ws` — tungstenite-backed); SSE/GraphQL ⬜ |
+| WebSocket / SSE / GraphQL | community | community | 🟡 WebSocket ✅ + SSE ✅ (`connect_sse` — ureq streaming); GraphQL ⬜ |
 | Resource (async data + loading state) | community | community | ✅ |
-| Query cache (react-query-like) | community | community | ⬜ |
+| Query cache (react-query-like) | community | community | 🟡 `use_query(url)` dedup/cache ✅; staleness/revalidation/mutations ⬜ |
 | KV storage (+ persisted signals) | community | ✓ | ✅ |
 | SQLite + secure storage | community | ✓ | 🟡 SQLite ✅ (`rax-sqlite::Database` — rusqlite bundled); secure storage ⬜ |
 | Offline-first sync | community | community | ⬜ |
@@ -131,7 +131,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | CLI + project gen | ✓ | ✓ | ⬜ |
 | Hot reload / fast refresh | ✓ | ✓ | ⬜ |
 | DevTools / inspector | ✓ | ✓ | ⬜ |
-| Error overlay | ✓ | ✓ | ⬜ |
+| Error overlay | ✓ | ✓ | ✅ (`install_error_overlay()` panic hook + `error_overlay(signal)` composable) |
 | Testing framework | ✓ | ✓ | 🟡 |
 | OTA / code-push | ✓ (community) | partial | ⬜ |
 
