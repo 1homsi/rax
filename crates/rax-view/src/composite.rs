@@ -11,15 +11,15 @@
 //! `on_change`/`on_select` callback — the same value-in / event-out shape as the
 //! native [`switch`](crate::switch) and [`slider`](crate::slider).
 
-use rax_core::{AlignItems, Color};
+use rax_core::{AlignItems, Color, EdgeInsets};
 use rax_dom::{Tree, WidgetId};
 
-use crate::container::row;
+use crate::container::{column, row};
 use crate::dynamic::dynamic;
 use crate::image::icon;
 use crate::modifier::ViewExt;
 use crate::text::text;
-use crate::view::{boxed, BoxedView, View};
+use crate::view::{boxed, BoxedView, View, ViewSequence};
 
 /// The default accent used for a checked/selected glyph (iOS system blue).
 const DEFAULT_TINT: Color = Color::rgb(0, 122, 255);
@@ -188,5 +188,136 @@ where
             None => boxed(glyph),
         };
         content.on_tap(select).build(tree)
+    }
+}
+
+/// A surface that groups its children with padding, a background fill, and
+/// rounded corners. Build via [`card`].
+///
+/// Like [`column`](crate::column)/[`row`](crate::row), it takes a tuple of
+/// children; the styling defaults to a white, lightly-rounded panel and is
+/// tunable with the builder methods.
+pub struct Card<C> {
+    children: C,
+    padding: f32,
+    gap: f32,
+    background: Color,
+    radius: f32,
+}
+
+/// Creates a card grouping `children`.
+///
+/// ```
+/// use rax_view::{card, text};
+///
+/// let view = card((
+///     text("Title").font_size(18.0),
+///     text("Body copy goes here.").font_size(14.0),
+/// ))
+/// .gap(6.0);
+/// ```
+pub fn card<C: ViewSequence>(children: C) -> Card<C> {
+    Card {
+        children,
+        padding: 16.0,
+        gap: 8.0,
+        background: Color::rgb(255, 255, 255),
+        radius: 14.0,
+    }
+}
+
+impl<C> Card<C> {
+    /// Sets the inner padding (default `16`).
+    #[must_use]
+    pub fn padding(mut self, value: f32) -> Self {
+        self.padding = value;
+        self
+    }
+
+    /// Sets the gap between children (default `8`).
+    #[must_use]
+    pub fn gap(mut self, value: f32) -> Self {
+        self.gap = value;
+        self
+    }
+
+    /// Sets the background fill (default white).
+    #[must_use]
+    pub fn background(mut self, color: Color) -> Self {
+        self.background = color;
+        self
+    }
+
+    /// Sets the corner radius (default `14`).
+    #[must_use]
+    pub fn corner_radius(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
+}
+
+impl<C: ViewSequence> View for Card<C> {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        column(self.children)
+            .padding(self.padding)
+            .gap(self.gap)
+            .background(self.background)
+            .corner_radius(self.radius)
+            .build(tree)
+    }
+}
+
+/// A small rounded label for counts/status. Build via [`badge`].
+pub struct Badge {
+    label: String,
+    background: Color,
+    text_color: Color,
+}
+
+/// Creates a badge showing `label` (e.g. a count or short status).
+///
+/// ```
+/// use rax_view::badge;
+///
+/// let unread = badge("9+");
+/// ```
+pub fn badge(label: impl Into<String>) -> Badge {
+    Badge {
+        label: label.into(),
+        background: DEFAULT_TINT,
+        text_color: Color::rgb(255, 255, 255),
+    }
+}
+
+impl Badge {
+    /// Sets the pill background (default accent blue).
+    #[must_use]
+    pub fn background(mut self, color: Color) -> Self {
+        self.background = color;
+        self
+    }
+
+    /// Sets the text color (default white).
+    #[must_use]
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = color;
+        self
+    }
+}
+
+impl View for Badge {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        // A single-cell row gives us a padded, rounded pill that hugs its text.
+        row((text(self.label).font_size(12.0).color(self.text_color),))
+            .padding_insets(EdgeInsets {
+                top: 3.0,
+                right: 8.0,
+                bottom: 3.0,
+                left: 8.0,
+            })
+            .align(AlignItems::Center)
+            .background(self.background)
+            .corner_radius(10.0)
+            .build(tree)
     }
 }

@@ -48,9 +48,10 @@ impl View for BoxedView {
 /// A (possibly heterogeneous) sequence of child views, written as a tuple.
 ///
 /// This is the macro-free children syntax: `column((a, b, c))`. Implemented for
-/// the empty tuple and tuples up to arity 12 via the internal macro below — the
+/// the empty tuple and tuples up to arity 16 via the internal macro below — the
 /// same technique `std` uses for trait impls over tuples. A single child is
-/// written `(child,)`.
+/// written `(child,)`. For more children than that — or a dynamic count — pass a
+/// `Vec<BoxedView>` (see [`boxed`]) instead.
 pub trait ViewSequence {
     /// Builds every child into `parent`, in order.
     fn build_into(self, tree: &mut Tree, parent: WidgetId);
@@ -98,3 +99,7 @@ impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I);
 impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J);
 impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J, K);
 impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
+impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
+impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
+impl_view_sequence_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);

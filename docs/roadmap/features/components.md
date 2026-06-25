@@ -27,9 +27,9 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Icon` (vector icon set + custom)
 - 🟡 `Image` (source + tint; network/placeholder/fade-in/resize modes later)
 - ⬜ `Avatar`
-- ⬜ `Badge`
+- ✅ `Badge` (composed from public API)
 - ✅ `Divider` / `Separator`
-- ⬜ `Card` primitive
+- ✅ `Card` primitive (composed from public API)
 - ⬜ `Chip` / `Tag`
 - ⬜ `Tooltip`
 - ⬜ `Skeleton` / shimmer placeholder

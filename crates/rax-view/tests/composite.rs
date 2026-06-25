@@ -65,3 +65,19 @@ fn radio_group_single_selection() {
     assert!(has_image(&log.borrow(), "largecircle.fill.circle"));
     assert!(has_image(&log.borrow(), "circle"));
 }
+
+#[test]
+fn card_groups_children_and_badge_shows_label() {
+    use rax_view::{badge, card, text};
+    let (mut tree, log) = harness();
+    card((text("Title"), text("Body"))).build(&mut tree);
+    badge("9+").build(&mut tree);
+
+    let has_text = |s: &str| {
+        log.borrow().iter().any(
+            |m| matches!(m, Mutation::SetAttribute { attr: Attribute::Text(t), .. } if t == s),
+        )
+    };
+    assert!(has_text("Title") && has_text("Body"), "card rendered children");
+    assert!(has_text("9+"), "badge rendered its label");
+}
