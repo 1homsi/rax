@@ -263,6 +263,8 @@ fn measure_leaf(
         WidgetKind::Progress => (160.0, 4.0),
         // Joined titles + per-segment horizontal padding; standard control height.
         WidgetKind::Segmented => (glyphs * glyph_w + 48.0, line_h.max(32.0)),
+        // UIStepper standard intrinsic size.
+        WidgetKind::Stepper => (94.0, 29.0),
         WidgetKind::View | WidgetKind::Scroll => (0.0, 0.0),
     };
 

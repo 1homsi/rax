@@ -150,6 +150,11 @@ impl Tree {
         self.create(WidgetKind::Segmented)
     }
 
+    /// Creates a -/+ stepper.
+    pub fn create_stepper(&mut self) -> WidgetId {
+        self.create(WidgetKind::Stepper)
+    }
+
     /// Emits a content-size update for a scroll container.
     pub fn set_content_size(&mut self, id: WidgetId, size: rax_core::Size) {
         if self.nodes.get(id.0).is_some() {

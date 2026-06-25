@@ -62,6 +62,9 @@ pub enum WidgetKind {
     /// `MaterialButtonToggleGroup`); segment titles come from `Items` and the
     /// selected index from `FloatValue`.
     Segmented,
+    /// A -/+ stepper for a bounded numeric value (maps to `UIStepper`); the
+    /// current value comes from `FloatValue` and the bounds from `Range`.
+    Stepper,
 }
 
 /// Horizontal text alignment.
@@ -145,6 +148,16 @@ pub enum Attribute {
     Placeholder(String),
     /// An ordered list of string items (e.g. segmented-control titles).
     Items(Vec<String>),
+    /// A bounded numeric range with a step increment (e.g. for a stepper or a
+    /// ranged slider): `(min, max, step)`.
+    Range {
+        /// Minimum value.
+        min: f32,
+        /// Maximum value.
+        max: f32,
+        /// Increment per step.
+        step: f32,
+    },
     /// Accessibility label read by screen readers.
     AccessibilityLabel(String),
     /// Accessibility role / traits.

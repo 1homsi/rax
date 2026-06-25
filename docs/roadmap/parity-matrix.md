@@ -32,6 +32,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | TextInput (controlled + IME) | ✓ | ✓ | 🟡 (controlled; IME later) |
 | Switch / Slider | ✓ | ✓ | ✅ |
 | SegmentedControl | ✓ | ✓ | ✅ |
+| Stepper | ✓ | ✓ | ✅ |
 | Checkbox / Radio / Picker | ✓ | ✓ | ⬜ |
 | ActivityIndicator / Progress | ✓ | ✓ | ✅ |
 | Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ⬜ |

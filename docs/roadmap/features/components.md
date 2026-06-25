@@ -40,7 +40,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `Checkbox`
 - ⬜ `Radio` / `RadioGroup`
 - ✅ `Slider` (single + range)
-- ⬜ `Stepper`
+- ✅ `Stepper`
 - ✅ `SegmentedControl`
 - ⬜ `Picker` / `Select` / `Dropdown`
 - ⬜ `DatePicker` / `TimePicker` / `DateTimePicker`

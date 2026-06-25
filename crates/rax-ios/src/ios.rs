@@ -22,7 +22,7 @@ use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
-    UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider, UISwitch,
+    UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider, UIStepper, UISwitch,
     UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
 };
 
@@ -148,6 +148,8 @@ define_class!(
                 unsafe { sl.value() as f64 }
             } else if let Some(seg) = sender.downcast_ref::<UISegmentedControl>() {
                 unsafe { seg.selectedSegmentIndex() as f64 }
+            } else if let Some(st) = sender.downcast_ref::<UIStepper>() {
+                unsafe { st.value() }
             } else {
                 0.0
             };
@@ -429,6 +431,19 @@ impl Backend for UiKitBackend {
                         }
                         seg.into_super().into_super()
                     }
+                    WidgetKind::Stepper => {
+                        let st: Retained<UIStepper> =
+                            unsafe { UIStepper::initWithFrame(self.mtm.alloc(), zero) };
+                        unsafe {
+                            st.addTarget_action_forControlEvents(
+                                Some(&self.action_target),
+                                sel!(valueChanged:),
+                                UIControlEvents::ValueChanged,
+                            );
+                            st.setTag(id.to_u64() as isize);
+                        }
+                        st.into_super().into_super()
+                    }
                     WidgetKind::TextInput => {
                         let field: Retained<UITextField> =
                             unsafe { UITextField::initWithFrame(self.mtm.alloc(), zero) };
@@ -560,6 +575,17 @@ impl Backend for UiKitBackend {
                             unsafe { bar.setProgress(value) };
                         } else if let Ok(seg) = view.clone().downcast::<UISegmentedControl>() {
                             unsafe { seg.setSelectedSegmentIndex(value as isize) };
+                        } else if let Ok(st) = view.clone().downcast::<UIStepper>() {
+                            unsafe { st.setValue(value as f64) };
+                        }
+                    }
+                    Attribute::Range { min, max, step } => {
+                        if let Ok(st) = view.clone().downcast::<UIStepper>() {
+                            unsafe {
+                                st.setMinimumValue(min as f64);
+                                st.setMaximumValue(max as f64);
+                                st.setStepValue(step as f64);
+                            }
                         }
                     }
                     Attribute::Items(items) => {

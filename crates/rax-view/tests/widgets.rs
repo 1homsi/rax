@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use rax_dom::{Attribute, Event, Host, Mutation, RecordingBackend, TextSelection, Tree};
-use rax_view::{image, segmented, slider, switch, text_input, View};
+use rax_view::{image, segmented, slider, stepper, switch, text_input, View};
 
 fn harness() -> (Tree, Rc<std::cell::RefCell<Vec<Mutation>>>) {
     let backend = RecordingBackend::new();
@@ -71,6 +71,36 @@ fn segmented_emits_titles_and_selection_and_reports_picks() {
         value: 2.0,
     });
     assert_eq!(picked.get(), 2, "segmented reported the picked index");
+}
+
+#[test]
+fn stepper_emits_range_and_value_and_reports_changes() {
+    let (mut tree, log) = harness();
+    let last = Rc::new(Cell::new(0.0_f32));
+    let l2 = last.clone();
+    let id = stepper(2.0, move |v| l2.set(v))
+        .range(0.0, 10.0)
+        .step(2.0)
+        .build(&mut tree);
+
+    assert!(log.borrow().contains(&Mutation::SetAttribute {
+        id,
+        attr: Attribute::Range {
+            min: 0.0,
+            max: 10.0,
+            step: 2.0
+        }
+    }));
+    assert!(log.borrow().contains(&Mutation::SetAttribute {
+        id,
+        attr: Attribute::FloatValue(2.0)
+    }));
+
+    tree.dispatch(&Event::ValueChanged {
+        target: id,
+        value: 4.0,
+    });
+    assert!((last.get() - 4.0).abs() < 1e-6, "stepper reported new value");
 }
 
 #[test]

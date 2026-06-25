@@ -1,4 +1,4 @@
-//! Value controls: `switch`, `slider`, and `segmented`.
+//! Value controls: `switch`, `slider`, `segmented`, and `stepper`.
 
 use rax_dom::{Attribute, Event, EventKind, Tree, WidgetId};
 
@@ -90,6 +90,67 @@ impl<F: FnMut(usize) + 'static> View for Segmented<F> {
         tree.on(id, EventKind::ValueChanged, move |event| {
             if let Event::ValueChanged { value, .. } = event {
                 on_change(value.max(0.0) as usize);
+            }
+        });
+        id
+    }
+}
+
+/// A -/+ stepper over a bounded numeric range. Build via [`stepper`].
+pub struct Stepper<F> {
+    value: f32,
+    min: f32,
+    max: f32,
+    step: f32,
+    on_change: F,
+}
+
+/// Creates a stepper at `value`, reporting the new value via `on_change` when
+/// the user taps -/+. Defaults to a `0..=100` range with a step of `1`; tune
+/// with [`Stepper::range`] and [`Stepper::step`].
+pub fn stepper<F: FnMut(f32) + 'static>(value: f32, on_change: F) -> Stepper<F> {
+    Stepper {
+        value,
+        min: 0.0,
+        max: 100.0,
+        step: 1.0,
+        on_change,
+    }
+}
+
+impl<F> Stepper<F> {
+    /// Sets the inclusive `min..=max` bounds.
+    #[must_use]
+    pub fn range(mut self, min: f32, max: f32) -> Self {
+        self.min = min;
+        self.max = max;
+        self
+    }
+
+    /// Sets the increment applied per -/+ tap.
+    #[must_use]
+    pub fn step(mut self, step: f32) -> Self {
+        self.step = step;
+        self
+    }
+}
+
+impl<F: FnMut(f32) + 'static> View for Stepper<F> {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        let id = tree.create_stepper();
+        tree.set(
+            id,
+            Attribute::Range {
+                min: self.min,
+                max: self.max,
+                step: self.step,
+            },
+        );
+        tree.set(id, Attribute::FloatValue(self.value));
+        let mut on_change = self.on_change;
+        tree.on(id, EventKind::ValueChanged, move |event| {
+            if let Event::ValueChanged { value, .. } = event {
+                on_change(*value as f32);
             }
         });
         id
