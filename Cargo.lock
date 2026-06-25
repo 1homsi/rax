@@ -345,6 +345,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax"
+version = "0.0.1"
+dependencies = [
+ "rax-anim",
+ "rax-async",
+ "rax-core",
+ "rax-intl",
+ "rax-ios",
+ "rax-nav",
+ "rax-net",
+ "rax-reactive",
+ "rax-runtime",
+ "rax-store",
+ "rax-style",
+ "rax-test",
+ "rax-view",
+]
+
+[[package]]
 name = "rax-anim"
 version = "0.0.1"
 dependencies = [
