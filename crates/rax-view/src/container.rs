@@ -1,7 +1,7 @@
 //! Flex containers: `column` (vertical) and `row` (horizontal), with layout and
 //! paint modifiers. Children are a [`ViewSequence`] (a tuple).
 
-use rax_core::{Color, EdgeInsets, FlexDirection, LayoutStyle};
+use rax_core::{AlignItems, Color, EdgeInsets, FlexDirection, LayoutStyle};
 use rax_dom::{Attribute, Tree, WidgetId};
 
 use crate::view::{View, ViewSequence};
@@ -12,7 +12,10 @@ pub struct Container<C: ViewSequence> {
     children: C,
     padding: EdgeInsets,
     gap: f32,
+    flex_grow: f32,
+    align: AlignItems,
     background: Option<Color>,
+    corner_radius: Option<f32>,
 }
 
 fn container<C: ViewSequence>(direction: FlexDirection, children: C) -> Container<C> {
@@ -21,7 +24,10 @@ fn container<C: ViewSequence>(direction: FlexDirection, children: C) -> Containe
         children,
         padding: EdgeInsets::ZERO,
         gap: 0.0,
+        flex_grow: 0.0,
+        align: AlignItems::Stretch,
         background: None,
+        corner_radius: None,
     }
 }
 
@@ -57,10 +63,38 @@ impl<C: ViewSequence> Container<C> {
         self
     }
 
+    /// Makes this container expand to fill available space (flex-grow `1.0`).
+    #[must_use]
+    pub fn grow(mut self) -> Self {
+        self.flex_grow = 1.0;
+        self
+    }
+
+    /// Sets an explicit flex-grow factor.
+    #[must_use]
+    pub fn grow_by(mut self, factor: f32) -> Self {
+        self.flex_grow = factor;
+        self
+    }
+
+    /// Sets cross-axis alignment of children.
+    #[must_use]
+    pub fn align(mut self, align: AlignItems) -> Self {
+        self.align = align;
+        self
+    }
+
     /// Background fill color.
     #[must_use]
     pub fn background(mut self, color: Color) -> Self {
         self.background = Some(color);
+        self
+    }
+
+    /// Rounds the container's corners by `radius` points.
+    #[must_use]
+    pub fn corner_radius(mut self, radius: f32) -> Self {
+        self.corner_radius = Some(radius);
         self
     }
 }
@@ -72,13 +106,18 @@ impl<C: ViewSequence> View for Container<C> {
             id,
             LayoutStyle {
                 direction: self.direction,
+                align_items: self.align,
                 padding: self.padding,
                 gap: self.gap,
+                flex_grow: self.flex_grow,
                 ..LayoutStyle::default()
             },
         );
         if let Some(background) = self.background {
             tree.set(id, Attribute::BackgroundColor(background));
+        }
+        if let Some(radius) = self.corner_radius {
+            tree.set(id, Attribute::CornerRadius(radius));
         }
         self.children.build_into(tree, id);
         id

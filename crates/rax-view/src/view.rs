@@ -18,6 +18,33 @@ pub trait View {
     fn build(self, tree: &mut Tree) -> WidgetId;
 }
 
+/// Object-safe shim behind [`BoxedView`] (`View::build` takes `self` by value,
+/// which is not object-safe; this takes `Box<Self>`).
+trait AnyView {
+    fn build_boxed(self: Box<Self>, tree: &mut Tree) -> WidgetId;
+}
+
+impl<V: View> AnyView for V {
+    fn build_boxed(self: Box<Self>, tree: &mut Tree) -> WidgetId {
+        (*self).build(tree)
+    }
+}
+
+/// A type-erased view. Lets heterogeneous branches (e.g. different screens per
+/// tab) share one type, which dynamic views require.
+pub struct BoxedView(Box<dyn AnyView>);
+
+/// Erases a view's concrete type.
+pub fn boxed<V: View + 'static>(view: V) -> BoxedView {
+    BoxedView(Box::new(view))
+}
+
+impl View for BoxedView {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        self.0.build_boxed(tree)
+    }
+}
+
 /// A (possibly heterogeneous) sequence of child views, written as a tuple.
 ///
 /// This is the macro-free children syntax: `column((a, b, c))`. Implemented for
@@ -31,6 +58,17 @@ pub trait ViewSequence {
 
 impl ViewSequence for () {
     fn build_into(self, _tree: &mut Tree, _parent: WidgetId) {}
+}
+
+/// A runtime-sized list of children — the basis for rendering collections
+/// (`column(items.into_iter().map(boxed).collect::<Vec<_>>())`).
+impl ViewSequence for Vec<BoxedView> {
+    fn build_into(self, tree: &mut Tree, parent: WidgetId) {
+        for view in self {
+            let child = view.build(tree);
+            tree.append(parent, child);
+        }
+    }
 }
 
 macro_rules! impl_view_sequence_for_tuple {

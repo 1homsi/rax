@@ -39,6 +39,7 @@ impl App {
             viewport,
             frames: HashMap::new(),
         };
+        app.tree.run_dynamic(); // materialize dynamic subtrees before first layout
         app.relayout();
         app
     }
@@ -66,6 +67,7 @@ impl App {
     /// changed frames.
     pub fn tick(&mut self) {
         self.tree.drain_events();
+        self.tree.run_dynamic(); // events may have dirtied dynamic subtrees
         self.relayout();
     }
 

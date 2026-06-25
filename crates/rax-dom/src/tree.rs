@@ -6,6 +6,8 @@
 //! reactive-runtime "ownership" gap noted in `rax-reactive` is closed for the UI:
 //! effect lifetime is tied to element lifetime.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use rax_core::{Arena, LayoutStyle};
@@ -17,6 +19,11 @@ use crate::mutation::{Attribute, Mutation, WidgetId, WidgetKind};
 
 /// Default font size (logical points) used for text measurement until set.
 const DEFAULT_FONT_SIZE: f32 = 16.0;
+
+/// A one-shot builder that materializes one view subtree into the tree and
+/// returns its root. Produced by dynamic views (a higher layer) and stored,
+/// type-erased, so `rax-dom` need not know about the view layer.
+pub type BuildThunk = Box<dyn FnOnce(&mut Tree) -> WidgetId>;
 
 /// A registered event handler and the kind of event it responds to.
 struct Handler {
@@ -36,6 +43,9 @@ struct ElementNode {
     effects: Vec<Effect>,
     /// Event handlers, dropped when the node is removed.
     handlers: Vec<Handler>,
+    /// For dynamic nodes: the next subtree to build, set by the tracking effect
+    /// and consumed by [`Tree::run_dynamic`].
+    pending: Option<Rc<RefCell<Option<BuildThunk>>>>,
 }
 
 /// The retained element tree, paired with the backend it emits mutations to.
@@ -48,6 +58,9 @@ pub struct Tree {
     /// Inbound event queue, filled by [`EventSink`]s and drained on the UI thread.
     event_tx: Sender<Event>,
     event_rx: Receiver<Event>,
+    /// Dynamic nodes whose subtree needs rebuilding. Effects push here (no tree
+    /// borrow); [`run_dynamic`](Tree::run_dynamic) drains it with `&mut Tree`.
+    dirty: Rc<RefCell<Vec<WidgetId>>>,
 }
 
 impl Tree {
@@ -61,6 +74,7 @@ impl Tree {
             global_handlers: Vec::new(),
             event_tx,
             event_rx,
+            dirty: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -102,10 +116,73 @@ impl Tree {
             font_size: DEFAULT_FONT_SIZE,
             effects: Vec::new(),
             handlers: Vec::new(),
+            pending: None,
         });
         let id = WidgetId(index);
         self.host.emit(Mutation::Create { id, kind });
         id
+    }
+
+    /// Creates a **dynamic** container whose children are (re)built by `selector`
+    /// whenever a signal it reads changes.
+    ///
+    /// `selector` is run inside a tracking effect; each run produces a
+    /// [`BuildThunk`] for the new subtree and schedules a rebuild. The rebuild
+    /// itself happens later in [`run_dynamic`](Tree::run_dynamic) with exclusive
+    /// access — so the effect never re-enters the tree, sidestepping borrow
+    /// conflicts entirely.
+    pub fn create_dynamic(
+        &mut self,
+        mut selector: impl FnMut() -> BuildThunk + 'static,
+    ) -> WidgetId {
+        let id = self.create_view();
+        let pending = Rc::new(RefCell::new(None));
+        let pending_writer = pending.clone();
+        let dirty = self.dirty.clone();
+        let effect = create_effect(move || {
+            let thunk = selector();
+            *pending_writer.borrow_mut() = Some(thunk);
+            dirty.borrow_mut().push(id);
+        });
+        if let Some(node) = self.nodes.get_mut(id.0) {
+            node.effects.push(effect);
+            node.pending = Some(pending);
+        }
+        id
+    }
+
+    /// Applies all pending dynamic rebuilds, looping until none remain (a freshly
+    /// built subtree may itself contain dynamic nodes). Called once per frame by
+    /// the runtime, outside any event handler.
+    pub fn run_dynamic(&mut self) {
+        // Bounded to guard against pathological rebuild cycles.
+        for _ in 0..64 {
+            let batch: Vec<WidgetId> = {
+                let mut dirty = self.dirty.borrow_mut();
+                if dirty.is_empty() {
+                    return;
+                }
+                core::mem::take(&mut *dirty)
+            };
+            for id in batch {
+                self.rebuild_dynamic(id);
+            }
+        }
+    }
+
+    fn rebuild_dynamic(&mut self, id: WidgetId) {
+        let Some(pending) = self.nodes.get(id.0).and_then(|n| n.pending.clone()) else {
+            return;
+        };
+        let Some(thunk) = pending.borrow_mut().take() else {
+            return;
+        };
+        // Tear down the previous subtree (disposing its bindings), then build anew.
+        for child in self.children_of(id).to_vec() {
+            self.remove(child);
+        }
+        let child = thunk(self);
+        self.append(id, child);
     }
 
     /// Sets the retained layout style for a node (consumed by the layout pass,

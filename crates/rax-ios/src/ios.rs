@@ -308,6 +308,13 @@ impl Backend for UiKitBackend {
                         let c = to_ui_color(color);
                         unsafe { view.setBackgroundColor(Some(&c)) };
                     }
+                    Attribute::CornerRadius(radius) => {
+                        let layer = view.layer();
+                        unsafe {
+                            layer.setCornerRadius(radius as f64);
+                            layer.setMasksToBounds(true);
+                        }
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {

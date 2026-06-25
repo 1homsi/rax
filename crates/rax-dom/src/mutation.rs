@@ -62,6 +62,8 @@ pub enum Attribute {
     TextColor(Color),
     /// Background fill.
     BackgroundColor(Color),
+    /// Corner radius in logical points (rounds the view's layer).
+    CornerRadius(f32),
 }
 
 /// One atomic change to the native view tree.
