@@ -17,4 +17,5 @@ rax-dom = { path = "../rax-dom" }
 rax-layout = { path = "../rax-layout" }
 rax-reactive = { path = "../rax-reactive" }
 rax-async = { path = "../rax-async" }
+rax-anim = { path = "../rax-anim" }
 rax-view = { path = "../rax-view" }

@@ -345,6 +345,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax-anim"
+version = "0.0.1"
+dependencies = [
+ "rax-reactive",
+]
+
+[[package]]
 name = "rax-async"
 version = "0.0.1"
 dependencies = [
@@ -412,6 +419,7 @@ dependencies = [
 name = "rax-runtime"
 version = "0.0.1"
 dependencies = [
+ "rax-anim",
  "rax-async",
  "rax-core",
  "rax-dom",

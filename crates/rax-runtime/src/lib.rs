@@ -24,6 +24,8 @@ pub struct App {
     viewport: Size,
     /// Last frame emitted per widget, so re-layout only emits real changes.
     frames: HashMap<WidgetId, Rect>,
+    /// Wall-clock of the previous tick, for animation deltas.
+    last_tick: Option<std::time::Instant>,
 }
 
 impl App {
@@ -42,6 +44,7 @@ impl App {
             _scope: scope,
             viewport,
             frames: HashMap::new(),
+            last_tick: None,
         };
         app.tree.run_dynamic(); // materialize dynamic subtrees before first layout
         app.relayout();
@@ -71,8 +74,18 @@ impl App {
     /// changed frames.
     pub fn tick(&mut self) {
         rax_async::run_until_stalled(); // advance async tasks (may resolve resources)
+
+        // Advance animations by the wall-clock delta since the last frame.
+        let now = std::time::Instant::now();
+        let dt = self
+            .last_tick
+            .map(|prev| now.duration_since(prev).as_secs_f32())
+            .unwrap_or(0.0);
+        self.last_tick = Some(now);
+        rax_anim::tick(dt);
+
         self.tree.drain_events();
-        self.tree.run_dynamic(); // events/async may have dirtied dynamic subtrees
+        self.tree.run_dynamic(); // events/async/anim may have dirtied dynamic subtrees
         self.relayout();
     }
 
