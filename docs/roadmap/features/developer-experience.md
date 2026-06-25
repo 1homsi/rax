@@ -3,11 +3,11 @@
 Match Expo/RN CLI + Metro + Flutter CLI + DevTools + hot reload. ✅ · 🟡 · ⬜.
 
 ## CLI & project
-- ⬜ `rax new` (templates: app, package, plugin, monorepo)
-- ⬜ `rax run` (iOS sim / Android emulator / device / desktop / web)
-- ⬜ `rax build` (per-platform packaging, signing, notarization)
+- ✅ `rax new <name>` (scaffolds Cargo.toml + src/lib.rs + .gitignore)
+- ✅ `rax run [--target ios-sim|ios]` (prints cargo build command + xcodebuild invocation)
+- ✅ `rax build [--target ios-sim|ios|android|macos]` (prints cargo cross-compile command + Xcode link notes)
 - ⬜ `rax test`, `rax lint`, `rax fmt`
-- ⬜ `rax doctor` (environment diagnostics)
+- ✅ `rax doctor` (checks rustc, cargo, iOS/wasm targets, Xcode CLI tools)
 - ⬜ `rax add` (plugins/dependencies), `rax generate` (codegen/scaffold)
 - ⬜ project templates + starter kits
 

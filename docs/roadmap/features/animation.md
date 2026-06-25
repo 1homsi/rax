@@ -33,7 +33,7 @@ scheduler's frame loop. ⬜ planned.
 - ⬜ run on the native compositor / layer-backed where possible (Core Animation,
   Android animators) to stay smooth under main-thread load
 - ⬜ 120fps support, frame pacing
-- ⬜ reduced-motion accessibility setting respected
+- ✅ reduced-motion accessibility setting respected (`use_reduced_motion()` signal + `animate_unless_reduced()` helper; platform hook `set_reduced_motion(bool)`)
 - ⬜ animation on the GPU renderer path (custom-drawn)
 
 ## Customizability

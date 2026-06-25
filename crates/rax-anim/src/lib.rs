@@ -610,5 +610,106 @@ pub fn start_animation_thread() -> std::thread::JoinHandle<()> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// Accessibility: reduced-motion support
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    static REDUCED_MOTION: std::cell::Cell<Option<rax_reactive::Signal<bool>>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Returns a reactive [`Signal<bool>`] that is `true` when the user has
+/// enabled the "Reduce Motion" accessibility setting.
+///
+/// The signal starts as `false` and is updated by the platform backend via
+/// [`set_reduced_motion`]. Because it's a signal, any view that reads it will
+/// re-render automatically when the setting changes (e.g. if the user toggles
+/// it in Settings without restarting the app).
+///
+/// Use together with [`animate_unless_reduced`] to skip animations when the
+/// user prefers reduced motion.
+///
+/// # Example
+/// ```rust
+/// use rax_anim::use_reduced_motion;
+/// use rax_reactive::create_root;
+///
+/// let (reduced, scope) = create_root(|| use_reduced_motion());
+/// assert!(!reduced.get());
+/// scope.dispose();
+/// ```
+pub fn use_reduced_motion() -> rax_reactive::Signal<bool> {
+    if let Some(s) = REDUCED_MOTION.with(|c| c.get()) {
+        return s;
+    }
+    let s = rax_reactive::create_signal(false);
+    REDUCED_MOTION.with(|c| c.set(Some(s)));
+    s
+}
+
+/// Updates the reduced-motion signal.
+///
+/// Call this from the platform backend whenever the OS accessibility setting
+/// changes. On iOS this corresponds to `UIAccessibility.isReduceMotionEnabled`;
+/// on macOS to `NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`.
+///
+/// # Example (platform backend)
+/// ```rust
+/// use rax_anim::set_reduced_motion;
+///
+/// fn on_accessibility_changed(reduced: bool) {
+///     set_reduced_motion(reduced);
+/// }
+/// ```
+pub fn set_reduced_motion(enabled: bool) {
+    if let Some(s) = REDUCED_MOTION.with(|c| c.get()) {
+        s.set(enabled);
+    }
+}
+
+/// Runs an animation to `target` unless the user has enabled reduced motion,
+/// in which case the value is set immediately without any interpolation.
+///
+/// This is the recommended helper for all user-visible animations: wrapping
+/// every `animate` call with `animate_unless_reduced` makes the app
+/// automatically honour the accessibility preference with no extra logic at
+/// the call site.
+///
+/// # Parameters
+/// - `signal` — the signal whose value should change (typically created with
+///   [`animate`] on a previous frame, or with `rax_reactive::create_signal`).
+/// - `target` — the destination value.
+/// - `duration` — animation duration in seconds (passed to [`animate`]).
+/// - `easing` — the easing curve (passed to [`animate`]).
+///
+/// # Example
+/// ```rust
+/// use rax_anim::{animate_unless_reduced, use_reduced_motion, Easing};
+/// use rax_reactive::{create_root, create_signal};
+///
+/// let (sig, scope) = create_root(|| {
+///     let sig = create_signal(0.0f32);
+///     animate_unless_reduced(sig, 100.0, 0.3, Easing::EaseOut);
+///     sig
+/// });
+/// // With reduced motion disabled, the signal starts at 0 and animates.
+/// assert!(sig.get() <= 100.0);
+/// scope.dispose();
+/// ```
+pub fn animate_unless_reduced(
+    signal: rax_reactive::Signal<f32>,
+    target: f32,
+    duration: f32,
+    easing: Easing,
+) {
+    if use_reduced_motion().get() {
+        signal.set(target);
+    } else {
+        let anim = animate(signal.get(), target, duration, easing);
+        rax_reactive::create_effect(move || signal.set(anim.get()));
+    }
+}
+
 #[cfg(test)]
 mod tests;

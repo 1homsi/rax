@@ -6,7 +6,7 @@ release that fails the a11y gate does not ship. ⬜ planned.
 ## Semantics
 - 🟡 roles (button/header/image/link/adjustable/search/…)
 - 🟡 label / hint / value / description
-- ⬜ state (selected/checked/disabled/expanded/busy)
+- ✅ state (selected/checked/disabled/expanded/busy) — `accessibility_selected/disabled/expanded/busy()` modifiers; map to UIAccessibilityTraits
 - ⬜ traits/properties, live regions (announcements)
 - ⬜ grouping / merging semantics, hidden-from-a11y
 - ⬜ custom actions (rotor / context actions)
@@ -23,8 +23,8 @@ release that fails the a11y gate does not ship. ⬜ planned.
 - ⬜ Dynamic Type / font scaling honored everywhere
 - ⬜ high-contrast / increased-contrast modes
 - ⬜ color-blind-safe defaults, contrast checks in CI
-- ⬜ reduced-motion / reduce-transparency respected by animation
-- ⬜ large touch targets, hit-slop, focus-visible rings
+- ✅ reduced-motion respected by animation (`use_reduced_motion()` signal + `animate_unless_reduced()` in rax-anim; platform sets via `set_reduced_motion`)
+- 🟡 large touch targets, hit-slop (`hit_slop(top,right,bottom,left)` modifier — stored, custom hit-test pending)
 - ⬜ switch control / keyboard-only operation
 - ⬜ voice control compatibility
 

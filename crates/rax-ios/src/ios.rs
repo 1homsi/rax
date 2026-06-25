@@ -1848,6 +1848,61 @@ impl Backend for UiKitBackend {
                             let _ = annotation_id; // used as key for future update/remove
                         }
                     }
+                    Attribute::AccessibilitySelected(selected) => {
+                        unsafe {
+                            // UIAccessibilityTraitSelected = 0x0000000000000020
+                            let current_traits: u64 = msg_send![&*view, accessibilityTraits];
+                            let trait_selected: u64 = 0x0000000000000020;
+                            let new_traits = if selected {
+                                current_traits | trait_selected
+                            } else {
+                                current_traits & !trait_selected
+                            };
+                            let _: () = msg_send![&*view, setAccessibilityTraits: new_traits];
+                        }
+                    }
+                    Attribute::AccessibilityDisabled(disabled) => {
+                        unsafe {
+                            // UIAccessibilityTraitNotEnabled = 0x0000000000080000
+                            let current_traits: u64 = msg_send![&*view, accessibilityTraits];
+                            let trait_not_enabled: u64 = 0x0000000000080000;
+                            let new_traits = if disabled {
+                                current_traits | trait_not_enabled
+                            } else {
+                                current_traits & !trait_not_enabled
+                            };
+                            let _: () = msg_send![&*view, setAccessibilityTraits: new_traits];
+                        }
+                    }
+                    Attribute::AccessibilityExpanded(expanded) => {
+                        unsafe {
+                            // UIAccessibilityTraitUpdatesFrequently not appropriate for expanded;
+                            // set accessibilityValue to "expanded"/"collapsed" for VoiceOver
+                            let val = if expanded { "expanded" } else { "collapsed" };
+                            let ns = NSString::from_str(val);
+                            let _: () = msg_send![&*view, setAccessibilityValue: &*ns];
+                        }
+                    }
+                    Attribute::AccessibilityBusy(busy) => {
+                        unsafe {
+                            // UIAccessibilityTraitUpdatesFrequently = 0x0000000000040000
+                            let current_traits: u64 = msg_send![&*view, accessibilityTraits];
+                            let trait_busy: u64 = 0x0000000000040000;
+                            let new_traits = if busy {
+                                current_traits | trait_busy
+                            } else {
+                                current_traits & !trait_busy
+                            };
+                            let _: () = msg_send![&*view, setAccessibilityTraits: new_traits];
+                        }
+                    }
+                    Attribute::HitSlop { top, right, bottom, left } => {
+                        // UIView doesn't support hitSlop natively; we'd need a UIButton or a
+                        // custom hit-test override. Store the values as associated object for
+                        // subclasses to read via hitTest:withEvent:.
+                        // For now set as a no-op with doc reference.
+                        let _ = (top, right, bottom, left);
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {

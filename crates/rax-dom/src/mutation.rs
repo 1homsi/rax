@@ -328,6 +328,30 @@ pub enum Attribute {
         longitude: f64,
         title: String,
     },
+    /// Whether this element is currently selected (e.g. a list row, tab, or
+    /// toggle). Maps to `accessibilityTraits.selected` on iOS.
+    AccessibilitySelected(bool),
+    /// Whether this element is disabled. Maps to `accessibilityTraits.notEnabled`
+    /// on iOS / `ViewCompat.setEnabled(false)` on Android.
+    AccessibilityDisabled(bool),
+    /// Whether this element represents an expanded disclosure region.
+    /// Maps to `UIAccessibilityTraitNone` + custom state on iOS.
+    AccessibilityExpanded(bool),
+    /// Whether this element is currently loading or updating content.
+    /// Maps to `accessibilityTraits.updatesFrequently` on iOS.
+    AccessibilityBusy(bool),
+    /// Extra touch area beyond the view's bounds, in points.
+    /// Maps to `UIView` hit-test override on iOS / `TouchDelegate` on Android.
+    HitSlop {
+        /// Points added above the view.
+        top: f32,
+        /// Points added to the right of the view.
+        right: f32,
+        /// Points added below the view.
+        bottom: f32,
+        /// Points added to the left of the view.
+        left: f32,
+    },
 }
 
 /// A semantic text style that scales with the user's preferred reading size

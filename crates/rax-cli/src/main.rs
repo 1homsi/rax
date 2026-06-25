@@ -1,14 +1,19 @@
-//! rax CLI — project scaffolding tool.
+//! rax CLI — project scaffolding and development tool.
 //!
 //! Usage:
-//!   rax new <project-name>    Create a new rax iOS project
-//!   rax --version             Print the rax version
-//!   rax --help                Print help
+//!   rax new <project-name>                Create a new rax iOS project
+//!   rax doctor                            Print environment diagnostic info
+//!   rax build [--target <ios-sim|ios|android|macos>]
+//!                                         Print the cargo build command to run
+//!   rax run [--target <ios-sim|ios>]      Print the cargo build + Xcode run steps
+//!   rax --version                         Print the rax version
+//!   rax --help                            Print help
 
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process;
+use std::process::Command;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -24,6 +29,17 @@ fn main() {
                 }
             };
             create_project(&name);
+        }
+        Some("doctor") => {
+            run_doctor();
+        }
+        Some("build") => {
+            let target = parse_target_flag(&args, "ios-sim");
+            run_build(&target);
+        }
+        Some("run") => {
+            let target = parse_target_flag(&args, "ios-sim");
+            run_run(&target);
         }
         Some("--version") | Some("-V") => {
             println!("rax {}", VERSION);
@@ -46,15 +62,183 @@ fn print_help() {
     println!("    rax <COMMAND>");
     println!();
     println!("COMMANDS:");
-    println!("    new <name>    Create a new rax iOS project");
-    println!("    --version     Print the rax version");
-    println!("    --help        Print this help message");
+    println!("    new <name>                Create a new rax iOS project");
+    println!("    doctor                    Print environment diagnostic info");
+    println!("    build [--target <TARGET>] Print the build command for a target");
+    println!("    run   [--target <TARGET>] Print the run steps for a target");
+    println!("    --version                 Print the rax version");
+    println!("    --help                    Print this help message");
+    println!();
+    println!("TARGETS:");
+    println!("    ios-sim   (default)  aarch64-apple-ios-sim");
+    println!("    ios                  aarch64-apple-ios");
+    println!("    android              aarch64-linux-android");
+    println!("    macos                aarch64-apple-darwin");
     println!();
     println!("EXAMPLE:");
     println!("    rax new my-app");
     println!("    cd my-app");
-    println!("    cargo build --target aarch64-apple-ios-sim");
+    println!("    rax build --target ios-sim");
 }
+
+// ---------------------------------------------------------------------------
+// doctor
+// ---------------------------------------------------------------------------
+
+fn run_doctor() {
+    println!("rax doctor");
+    println!();
+
+    // rustc
+    match Command::new("rustc").arg("--version").output() {
+        Ok(out) if out.status.success() => {
+            let ver = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            println!("  ✓ rustc found: {}", ver);
+        }
+        _ => println!("  ✗ rustc not found — install Rust from https://rustup.rs"),
+    }
+
+    // cargo
+    match Command::new("cargo").arg("--version").output() {
+        Ok(out) if out.status.success() => {
+            println!("  ✓ cargo found");
+        }
+        _ => println!("  ✗ cargo not found"),
+    }
+
+    // rustup installed targets
+    let installed_targets: Vec<String> =
+        match Command::new("rustup").args(["target", "list", "--installed"]).output() {
+            Ok(out) if out.status.success() => {
+                String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .collect()
+            }
+            _ => Vec::new(),
+        };
+
+    let check_target = |triple: &str| {
+        if installed_targets.iter().any(|t| t == triple) {
+            println!("  ✓ {} target installed", triple);
+        } else {
+            println!(
+                "  ✗ {} target NOT installed — run: rustup target add {}",
+                triple, triple
+            );
+        }
+    };
+
+    check_target("aarch64-apple-ios-sim");
+    check_target("aarch64-apple-ios");
+    check_target("wasm32-unknown-unknown");
+
+    // Xcode Command Line Tools
+    match Command::new("xcode-select").arg("--print-path").output() {
+        Ok(out) if out.status.success() => {
+            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            println!("  info: Xcode Command Line Tools: {}", path);
+        }
+        _ => {
+            println!("  info: Xcode Command Line Tools: not found (run: xcode-select --install)");
+        }
+    }
+
+    println!("  info: rax version: {}", VERSION);
+}
+
+// ---------------------------------------------------------------------------
+// build
+// ---------------------------------------------------------------------------
+
+fn run_build(target: &str) {
+    let cargo_triple = target_to_triple(target);
+    if cargo_triple.is_empty() {
+        eprintln!("Unknown target: {}", target);
+        eprintln!("Valid targets: ios-sim, ios, android, macos");
+        process::exit(1);
+    }
+
+    println!("rax build --target {}", target);
+    println!();
+    println!("→ cargo build --target {} --release", cargo_triple);
+    println!();
+    println!("Run this command in your project directory.");
+
+    if target == "ios-sim" || target == "ios" {
+        println!();
+        println!("After the build succeeds, open your Xcode project and link the");
+        println!("generated `.a` static library from `target/{}/release/`.`", cargo_triple);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// run
+// ---------------------------------------------------------------------------
+
+fn run_run(target: &str) {
+    let cargo_triple = target_to_triple(target);
+    if cargo_triple.is_empty() || (target != "ios-sim" && target != "ios") {
+        if target == "android" || target == "macos" {
+            eprintln!("'rax run' currently supports ios-sim and ios targets only.");
+            eprintln!("For {} use 'rax build --target {}' and deploy manually.", target, target);
+            process::exit(1);
+        }
+        eprintln!("Unknown target: {}", target);
+        eprintln!("Valid targets for run: ios-sim, ios");
+        process::exit(1);
+    }
+
+    println!("rax run --target {}", target);
+    println!();
+    println!("Step 1 — build the library:");
+    println!("  cargo build --target {} --release", cargo_triple);
+    println!();
+
+    if target == "ios-sim" {
+        println!("Step 2 — open your Xcode project and choose an iOS Simulator destination,");
+        println!("         then press ▶ Run (or use xcodebuild):");
+        println!("  xcodebuild -scheme <YourScheme> -destination 'platform=iOS Simulator,name=iPhone 16' build");
+    } else {
+        println!("Step 2 — open your Xcode project, select a connected device, then press ▶ Run:");
+        println!("  xcodebuild -scheme <YourScheme> -destination 'platform=iOS,id=<DEVICE_UDID>' build");
+    }
+
+    println!();
+    println!("Run the cargo command first, then rebuild/run in Xcode to pick up the new library.");
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+/// Parse `--target <value>` from args, returning `default_target` if absent.
+fn parse_target_flag(args: &[String], default_target: &str) -> String {
+    let mut iter = args.iter().skip(2).peekable();
+    while let Some(arg) = iter.next() {
+        if arg == "--target" || arg == "-t" {
+            if let Some(val) = iter.next() {
+                return val.clone();
+            }
+        }
+    }
+    default_target.to_string()
+}
+
+/// Map a friendly target name to a Rust target triple.
+fn target_to_triple(target: &str) -> &'static str {
+    match target {
+        "ios-sim" => "aarch64-apple-ios-sim",
+        "ios" => "aarch64-apple-ios",
+        "android" => "aarch64-linux-android",
+        "macos" => "aarch64-apple-darwin",
+        _ => "",
+    }
+}
+
+// ---------------------------------------------------------------------------
+// create_project
+// ---------------------------------------------------------------------------
 
 fn create_project(name: &str) {
     let dir = Path::new(name);
@@ -124,7 +308,8 @@ pub extern "C" fn rax_main() {
     println!();
     println!("Next steps:");
     println!("  cd {}", name);
-    println!("  cargo check --target aarch64-apple-ios-sim");
+    println!("  rax doctor");
+    println!("  rax build --target ios-sim");
     println!();
     println!("To build and run on the iOS Simulator, use Xcode or xcodebuild.");
 }

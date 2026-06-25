@@ -42,6 +42,7 @@ mod dynamic;
 mod extras;
 mod image;
 mod indicators;
+pub mod layout;
 mod list;
 pub mod map;
 mod modifier;
@@ -83,6 +84,10 @@ pub use theme::{
     SpacingTokens, Theme, TypographyTokens,
 };
 pub use view::{boxed, BoxedView, View, ViewSequence};
+pub use layout::{
+    aspect_ratio, center, expanded, flexible, safe_area_bottom, safe_area_top, safe_area_view,
+    update_window_size, use_orientation, use_size_class, use_window_width, Orientation, SizeClass,
+};
 
 // Re-export the style enums used by the builder API for convenience.
 pub use rax_core::{AlignItems, Dimension, EdgeInsets, FlexWrap, JustifyContent, Position};

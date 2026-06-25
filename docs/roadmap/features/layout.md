@@ -19,7 +19,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 - ✅ min/max width & height
 - ✅ aspect-ratio
 - ⬜ intrinsic sizing from real text/content metrics
-- ⬜ `Expanded`/`Flexible`/`Spacer` helpers
+- ✅ `Expanded`/`Flexible` helpers (`expanded(child)` → flex_grow 1.0; `flexible(child, n)` → flex_grow n)
 - ⬜ fit modes (contain/cover/fill) for media
 
 ## Positioning
@@ -42,7 +42,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 ## Direction & adaptivity
 - ⬜ RTL-aware layout (logical start/end vs left/right)
 - ⬜ writing modes
-- ⬜ responsive layout by size-class / breakpoints / orientation
+- ✅ responsive layout by size-class / orientation (`use_orientation()`, `use_size_class()`, `use_window_width()` — reactive signals; `update_window_size(w,h)` platform hook)
 - ⬜ container queries
 - ⬜ adaptive split-view (tablet/desktop)
 

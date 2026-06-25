@@ -414,6 +414,54 @@ pub trait ViewExt: View + Sized {
         self.decorate(move |t, id| t.set(id, Attribute::AccessibilityHidden(hidden)))
     }
 
+    /// Reactively marks this element as selected (e.g. a selected list row,
+    /// tab, or chip). Re-applies whenever the signal changes.
+    fn accessibility_selected(
+        self,
+        signal: impl Fn() -> bool + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::AccessibilitySelected(signal())))
+    }
+
+    /// Reactively marks this element as disabled. Re-applies whenever the
+    /// signal changes.
+    fn accessibility_disabled(
+        self,
+        signal: impl Fn() -> bool + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::AccessibilityDisabled(signal())))
+    }
+
+    /// Reactively marks this element as expanded (e.g. an accordion header).
+    /// Re-applies whenever the signal changes.
+    fn accessibility_expanded(
+        self,
+        signal: impl Fn() -> bool + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::AccessibilityExpanded(signal())))
+    }
+
+    /// Reactively marks this element as busy / updating content. Re-applies
+    /// whenever the signal changes.
+    fn accessibility_busy(
+        self,
+        signal: impl Fn() -> bool + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::AccessibilityBusy(signal())))
+    }
+
+    /// Expands the touchable hit area beyond the view's visual bounds by the
+    /// given insets (in points). Useful for small tap targets.
+    fn hit_slop(
+        self,
+        top: f32,
+        right: f32,
+        bottom: f32,
+        left: f32,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::HitSlop { top, right, bottom, left }))
+    }
+
     /// Sets the layout direction for this view and all of its descendants.
     ///
     /// Use [`LayoutDirection::Rtl`] for right-to-left locales (Arabic, Hebrew,
