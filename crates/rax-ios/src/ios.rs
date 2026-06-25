@@ -19,11 +19,11 @@ use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSNotification, NSString};
 use objc2_quartz_core::CADisplayLink;
 use objc2_ui_kit::{
-    NSTextAlignment, UIApplication, UIApplicationDelegate, UIButton, UIButtonType, UIColor,
-    UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
+    NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
+    UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
-    UIScreen, UIScrollView, UISlider, UISwitch, UITapGestureRecognizer, UITextBorderStyle,
-    UITextField, UIView, UIViewController, UIWindow,
+    UIProgressView, UIScreen, UIScrollView, UISlider, UISwitch, UITapGestureRecognizer,
+    UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
 };
 
 use rax_core::{Color, Rect, Size};
@@ -402,6 +402,18 @@ impl Backend for UiKitBackend {
                             unsafe { UIScrollView::initWithFrame(self.mtm.alloc(), zero) };
                         sv.into_super()
                     }
+                    WidgetKind::ActivityIndicator => {
+                        let spinner: Retained<UIActivityIndicatorView> = unsafe {
+                            UIActivityIndicatorView::initWithFrame(self.mtm.alloc(), zero)
+                        };
+                        unsafe { spinner.startAnimating() };
+                        spinner.into_super()
+                    }
+                    WidgetKind::Progress => {
+                        let bar: Retained<UIProgressView> =
+                            unsafe { UIProgressView::initWithFrame(self.mtm.alloc(), zero) };
+                        bar.into_super()
+                    }
                     WidgetKind::TextInput => {
                         let field: Retained<UITextField> =
                             unsafe { UITextField::initWithFrame(self.mtm.alloc(), zero) };
@@ -529,6 +541,8 @@ impl Backend for UiKitBackend {
                     Attribute::FloatValue(value) => {
                         if let Ok(sl) = view.clone().downcast::<UISlider>() {
                             unsafe { sl.setValue(value) };
+                        } else if let Ok(bar) = view.clone().downcast::<UIProgressView>() {
+                            unsafe { bar.setProgress(value) };
                         }
                     }
                     Attribute::TintColor(color) => {

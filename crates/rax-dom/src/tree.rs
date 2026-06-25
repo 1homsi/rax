@@ -135,6 +135,16 @@ impl Tree {
         self.create(WidgetKind::Scroll)
     }
 
+    /// Creates a spinning activity indicator.
+    pub fn create_activity_indicator(&mut self) -> WidgetId {
+        self.create(WidgetKind::ActivityIndicator)
+    }
+
+    /// Creates a determinate progress bar.
+    pub fn create_progress(&mut self) -> WidgetId {
+        self.create(WidgetKind::Progress)
+    }
+
     /// Emits a content-size update for a scroll container.
     pub fn set_content_size(&mut self, id: WidgetId, size: rax_core::Size) {
         if self.nodes.get(id.0).is_some() {

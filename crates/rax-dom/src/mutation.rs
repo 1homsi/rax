@@ -54,6 +54,10 @@ pub enum WidgetKind {
     TextInput,
     /// A scroll container (maps to `UIScrollView` / `ScrollView`).
     Scroll,
+    /// A spinning activity indicator (maps to `UIActivityIndicatorView`).
+    ActivityIndicator,
+    /// A determinate progress bar (maps to `UIProgressView`); uses `FloatValue`.
+    Progress,
 }
 
 /// Horizontal text alignment.

@@ -259,6 +259,8 @@ fn measure_leaf(
         WidgetKind::Image => (44.0, 44.0),
         // Editable fields stretch horizontally; give a sensible row height.
         WidgetKind::TextInput => (180.0, line_h.max(36.0)),
+        WidgetKind::ActivityIndicator => (20.0, 20.0),
+        WidgetKind::Progress => (160.0, 4.0),
         WidgetKind::View | WidgetKind::Scroll => (0.0, 0.0),
     };
 

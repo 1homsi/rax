@@ -104,3 +104,25 @@ fn text_styling_emits_weight_italic_align() {
     assert!(has(Attribute::Italic(true)));
     assert!(has(Attribute::TextAlign(rax_dom::TextAlign::Center)));
 }
+
+#[test]
+fn indicators_create_and_progress_sets_value() {
+    use rax_dom::WidgetKind;
+    use rax_view::{activity_indicator, progress};
+    let (mut tree, log) = harness();
+    let spinner = activity_indicator().build(&mut tree);
+    let bar = progress(0.4).build(&mut tree);
+    let muts = log.borrow();
+    assert!(muts.contains(&Mutation::Create {
+        id: spinner,
+        kind: WidgetKind::ActivityIndicator
+    }));
+    assert!(muts.contains(&Mutation::Create {
+        id: bar,
+        kind: WidgetKind::Progress
+    }));
+    assert!(muts.contains(&Mutation::SetAttribute {
+        id: bar,
+        attr: Attribute::FloatValue(0.4)
+    }));
+}
