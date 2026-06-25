@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use rax_dom::{Attribute, Event, Host, Mutation, RecordingBackend, TextSelection, Tree};
-use rax_view::{image, slider, switch, text_input, View};
+use rax_view::{image, segmented, slider, switch, text_input, View};
 
 fn harness() -> (Tree, Rc<std::cell::RefCell<Vec<Mutation>>>) {
     let backend = RecordingBackend::new();
@@ -48,6 +48,29 @@ fn slider_reports_value() {
         value: 0.8,
     });
     assert!((last.get() - 0.8).abs() < 1e-6, "slider reported new value");
+}
+
+#[test]
+fn segmented_emits_titles_and_selection_and_reports_picks() {
+    let (mut tree, log) = harness();
+    let picked = Rc::new(Cell::new(usize::MAX));
+    let p2 = picked.clone();
+    let id = segmented(["Day", "Week", "Month"], 1, move |i| p2.set(i)).build(&mut tree);
+
+    assert!(log.borrow().contains(&Mutation::SetAttribute {
+        id,
+        attr: Attribute::Items(vec!["Day".into(), "Week".into(), "Month".into()])
+    }));
+    assert!(log.borrow().contains(&Mutation::SetAttribute {
+        id,
+        attr: Attribute::FloatValue(1.0)
+    }));
+
+    tree.dispatch(&Event::ValueChanged {
+        target: id,
+        value: 2.0,
+    });
+    assert_eq!(picked.get(), 2, "segmented reported the picked index");
 }
 
 #[test]

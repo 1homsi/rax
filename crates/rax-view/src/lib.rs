@@ -50,7 +50,7 @@ mod view;
 
 pub use button::{button, Button};
 pub use container::{column, row, Container};
-pub use controls::{slider, switch, Slider, Switch};
+pub use controls::{segmented, slider, switch, Segmented, Slider, Switch};
 pub use dynamic::{dynamic, Dynamic};
 pub use extras::{divider, vertical_divider};
 pub use image::{icon, image, Image};

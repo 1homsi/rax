@@ -145,6 +145,11 @@ impl Tree {
         self.create(WidgetKind::Progress)
     }
 
+    /// Creates a horizontal segmented control.
+    pub fn create_segmented(&mut self) -> WidgetId {
+        self.create(WidgetKind::Segmented)
+    }
+
     /// Emits a content-size update for a scroll container.
     pub fn set_content_size(&mut self, id: WidgetId, size: rax_core::Size) {
         if self.nodes.get(id.0).is_some() {
@@ -255,6 +260,10 @@ impl Tree {
         match &attr {
             Attribute::FontSize(size) => node.font_size = *size,
             Attribute::Text(text) => *node.measure_text.borrow_mut() = Some(text.clone()),
+            // Join segment titles so the layout heuristic can size the control.
+            Attribute::Items(items) => {
+                *node.measure_text.borrow_mut() = Some(items.join(" "));
+            }
             _ => {}
         }
         self.host.emit(Mutation::SetAttribute { id, attr });

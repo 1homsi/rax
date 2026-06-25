@@ -41,7 +41,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `Radio` / `RadioGroup`
 - ✅ `Slider` (single + range)
 - ⬜ `Stepper`
-- ⬜ `SegmentedControl`
+- ✅ `SegmentedControl`
 - ⬜ `Picker` / `Select` / `Dropdown`
 - ⬜ `DatePicker` / `TimePicker` / `DateTimePicker`
 - ⬜ `Pressable` / `Touchable` (with pressed/hover/focus states)

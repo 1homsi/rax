@@ -45,6 +45,7 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIImage",
     "UISwitch",
     "UISlider",
+    "UISegmentedControl",
     "UITextField",
     "UIGestureRecognizer",
     "UITapGestureRecognizer",

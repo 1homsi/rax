@@ -1,4 +1,4 @@
-//! Value controls: `switch` and `slider`.
+//! Value controls: `switch`, `slider`, and `segmented`.
 
 use rax_dom::{Attribute, Event, EventKind, Tree, WidgetId};
 
@@ -49,6 +49,47 @@ impl<F: FnMut(f32) + 'static> View for Slider<F> {
         tree.on(id, EventKind::ValueChanged, move |event| {
             if let Event::ValueChanged { value, .. } = event {
                 on_change(*value as f32);
+            }
+        });
+        id
+    }
+}
+
+/// A horizontal segmented control (pick one of N labelled options). Build via
+/// [`segmented`].
+pub struct Segmented<F> {
+    items: Vec<String>,
+    selected: usize,
+    on_change: F,
+}
+
+/// Creates a segmented control over `items`, with `selected` initially active,
+/// calling `on_change` with the newly selected index when the user picks a
+/// segment.
+pub fn segmented<F>(
+    items: impl IntoIterator<Item = impl Into<String>>,
+    selected: usize,
+    on_change: F,
+) -> Segmented<F>
+where
+    F: FnMut(usize) + 'static,
+{
+    Segmented {
+        items: items.into_iter().map(Into::into).collect(),
+        selected,
+        on_change,
+    }
+}
+
+impl<F: FnMut(usize) + 'static> View for Segmented<F> {
+    fn build(self, tree: &mut Tree) -> WidgetId {
+        let id = tree.create_segmented();
+        tree.set(id, Attribute::Items(self.items));
+        tree.set(id, Attribute::FloatValue(self.selected as f32));
+        let mut on_change = self.on_change;
+        tree.on(id, EventKind::ValueChanged, move |event| {
+            if let Event::ValueChanged { value, .. } = event {
+                on_change(value.max(0.0) as usize);
             }
         });
         id

@@ -22,8 +22,8 @@ use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
-    UIProgressView, UIScreen, UIScrollView, UISlider, UISwitch, UITapGestureRecognizer,
-    UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
+    UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider, UISwitch,
+    UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
 };
 
 use rax_core::{Color, Rect, Size};
@@ -146,6 +146,8 @@ define_class!(
                 }
             } else if let Some(sl) = sender.downcast_ref::<UISlider>() {
                 unsafe { sl.value() as f64 }
+            } else if let Some(seg) = sender.downcast_ref::<UISegmentedControl>() {
+                unsafe { seg.selectedSegmentIndex() as f64 }
             } else {
                 0.0
             };
@@ -414,6 +416,19 @@ impl Backend for UiKitBackend {
                             unsafe { UIProgressView::initWithFrame(self.mtm.alloc(), zero) };
                         bar.into_super()
                     }
+                    WidgetKind::Segmented => {
+                        let seg: Retained<UISegmentedControl> =
+                            unsafe { UISegmentedControl::initWithFrame(self.mtm.alloc(), zero) };
+                        unsafe {
+                            seg.addTarget_action_forControlEvents(
+                                Some(&self.action_target),
+                                sel!(valueChanged:),
+                                UIControlEvents::ValueChanged,
+                            );
+                            seg.setTag(id.to_u64() as isize);
+                        }
+                        seg.into_super().into_super()
+                    }
                     WidgetKind::TextInput => {
                         let field: Retained<UITextField> =
                             unsafe { UITextField::initWithFrame(self.mtm.alloc(), zero) };
@@ -543,6 +558,23 @@ impl Backend for UiKitBackend {
                             unsafe { sl.setValue(value) };
                         } else if let Ok(bar) = view.clone().downcast::<UIProgressView>() {
                             unsafe { bar.setProgress(value) };
+                        } else if let Ok(seg) = view.clone().downcast::<UISegmentedControl>() {
+                            unsafe { seg.setSelectedSegmentIndex(value as isize) };
+                        }
+                    }
+                    Attribute::Items(items) => {
+                        if let Ok(seg) = view.clone().downcast::<UISegmentedControl>() {
+                            unsafe { seg.removeAllSegments() };
+                            for (i, title) in items.iter().enumerate() {
+                                let ns = NSString::from_str(title);
+                                unsafe {
+                                    seg.insertSegmentWithTitle_atIndex_animated(
+                                        Some(&ns),
+                                        i,
+                                        false,
+                                    );
+                                }
+                            }
                         }
                     }
                     Attribute::TintColor(color) => {

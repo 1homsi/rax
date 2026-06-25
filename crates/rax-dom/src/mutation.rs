@@ -58,6 +58,10 @@ pub enum WidgetKind {
     ActivityIndicator,
     /// A determinate progress bar (maps to `UIProgressView`); uses `FloatValue`.
     Progress,
+    /// A horizontal segmented control (maps to `UISegmentedControl` /
+    /// `MaterialButtonToggleGroup`); segment titles come from `Items` and the
+    /// selected index from `FloatValue`.
+    Segmented,
 }
 
 /// Horizontal text alignment.
@@ -139,6 +143,8 @@ pub enum Attribute {
     TintColor(Color),
     /// Placeholder text (e.g. for a text field).
     Placeholder(String),
+    /// An ordered list of string items (e.g. segmented-control titles).
+    Items(Vec<String>),
     /// Accessibility label read by screen readers.
     AccessibilityLabel(String),
     /// Accessibility role / traits.

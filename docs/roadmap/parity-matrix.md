@@ -31,6 +31,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | SectionList / sticky headers | ✓ | ✓ (slivers) | ⬜ |
 | TextInput (controlled + IME) | ✓ | ✓ | 🟡 (controlled; IME later) |
 | Switch / Slider | ✓ | ✓ | ✅ |
+| SegmentedControl | ✓ | ✓ | ✅ |
 | Checkbox / Radio / Picker | ✓ | ✓ | ⬜ |
 | ActivityIndicator / Progress | ✓ | ✓ | ✅ |
 | Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ⬜ |
