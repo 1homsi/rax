@@ -1147,6 +1147,78 @@ pub fn dev_tools() -> BoxedView {
 }
 
 // ---------------------------------------------------------------------------
+// SectionList — scrollable list with section headers
+// ---------------------------------------------------------------------------
+
+/// A section descriptor for [`section_list`].
+pub struct Section {
+    /// The header label text for this section.
+    pub header: String,
+    /// The items belonging to this section.
+    pub items: Vec<BoxedView>,
+}
+
+impl Section {
+    /// Constructs a new section with the given header and items.
+    pub fn new(header: impl Into<String>, items: Vec<BoxedView>) -> Self {
+        Section {
+            header: header.into(),
+            items,
+        }
+    }
+}
+
+/// A scrollable list with section headers. Each section header is a styled
+/// label; items follow below it. On iOS the headers visually separate sections
+/// (true sticky header pinning requires UICollectionView — planned).
+///
+/// # Example
+/// ```rust
+/// use rax_view::{section_list, Section, text, boxed, row, spacer};
+/// use rax_core::Color;
+///
+/// section_list(
+///     vec![
+///         Section::new("Fruits", vec![boxed(row((text("Apple"), spacer())))]),
+///         Section::new("Vegetables", vec![boxed(row((text("Carrot"), spacer())))]),
+///     ],
+///     Color::rgba(0, 0, 0, 128),
+///     Color::rgba(0, 0, 0, 13),
+/// )
+/// # ;
+/// ```
+pub fn section_list(
+    sections: Vec<Section>,
+    header_text_color: Color,
+    header_bg_color: Color,
+) -> impl View {
+    use rax_core::EdgeInsets;
+    let mut all_rows: Vec<BoxedView> = Vec::new();
+    for section in sections {
+        // Section header
+        all_rows.push(boxed(
+            row((boxed(
+                text(section.header)
+                    .font_size(13.0)
+                    .color(header_text_color),
+            ),))
+            .padding_insets(EdgeInsets {
+                top: 4.0,
+                bottom: 4.0,
+                left: 16.0,
+                right: 16.0,
+            })
+            .background(header_bg_color),
+        ));
+        // Section items
+        for item in section.items {
+            all_rows.push(item);
+        }
+    }
+    scroll(column(all_rows))
+}
+
+// ---------------------------------------------------------------------------
 // LazyColumn / LazyRow — scrolling list with fine-grained reactivity
 // ---------------------------------------------------------------------------
 

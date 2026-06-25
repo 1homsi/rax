@@ -478,5 +478,137 @@ pub fn delayed(
     value
 }
 
+// ---------------------------------------------------------------------------
+// Off-main-thread animation infrastructure
+// ---------------------------------------------------------------------------
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// An animation value computed on the dedicated animation thread.
+///
+/// Write with [`animate_offthread`]; read with [`OffThreadValue::get`] from
+/// any thread (typically the main thread during layout/rendering).
+///
+/// Internally the value is stored as the IEEE 754 bit pattern of an `f32`
+/// inside an `AtomicU64`, so reads and writes are wait-free.
+#[derive(Clone)]
+pub struct OffThreadValue {
+    inner: Arc<AtomicU64>,
+}
+
+impl OffThreadValue {
+    /// Creates a new value initialized to `initial`.
+    pub fn new(initial: f32) -> Self {
+        OffThreadValue {
+            inner: Arc::new(AtomicU64::new(initial.to_bits() as u64)),
+        }
+    }
+
+    /// Reads the current animated value (safe to call from any thread).
+    pub fn get(&self) -> f32 {
+        f32::from_bits(self.inner.load(Ordering::Relaxed) as u32)
+    }
+
+    /// Writes the animated value (called by the animation thread).
+    pub fn set(&self, v: f32) {
+        self.inner.store(v.to_bits() as u64, Ordering::Relaxed);
+    }
+}
+
+trait OffThreadAnimatable: Send + Sync {
+    /// Advances the animation by one ~120 Hz tick (~8.333 ms). Returns `true`
+    /// when the animation has finished and should be removed.
+    fn tick(&mut self) -> bool;
+}
+
+/// Global list of active off-thread animations. Guarded by a `Mutex` so the
+/// animation thread and the main thread can both access it safely.
+fn offthread_animations() -> &'static Mutex<Vec<Box<dyn OffThreadAnimatable>>> {
+    static CELL: OnceLock<Mutex<Vec<Box<dyn OffThreadAnimatable>>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+struct OffThreadTimingAnim {
+    value: OffThreadValue,
+    from: f32,
+    target: f32,
+    elapsed_ms: f32,
+    duration_ms: f32,
+    easing: Easing,
+}
+
+impl OffThreadAnimatable for OffThreadTimingAnim {
+    fn tick(&mut self) -> bool {
+        // Each tick is ~8.333 ms at 120 Hz.
+        self.elapsed_ms += 8.333;
+        let t = (self.elapsed_ms / self.duration_ms).min(1.0);
+        let eased = self.easing.apply(t);
+        self.value.set(self.from + (self.target - self.from) * eased);
+        self.elapsed_ms >= self.duration_ms
+    }
+}
+
+/// Enqueue an animation of `value` from its current value to `target` over
+/// `duration_ms` milliseconds on the off-main-thread animation queue.
+///
+/// The animation is driven by the thread started by [`start_animation_thread`].
+/// Call `start_animation_thread` once at app startup before calling this.
+///
+/// # Example
+/// ```
+/// use rax_anim::{OffThreadValue, animate_offthread, Easing};
+///
+/// let v = OffThreadValue::new(0.0);
+/// animate_offthread(&v, 1.0, 300, Easing::EaseOut);
+/// assert!(v.get() <= 1.0);
+/// ```
+pub fn animate_offthread(value: &OffThreadValue, target: f32, duration_ms: u32, easing: Easing) {
+    let anim = OffThreadTimingAnim {
+        value: value.clone(),
+        from: value.get(),
+        target,
+        elapsed_ms: 0.0,
+        duration_ms: duration_ms as f32,
+        easing,
+    };
+    if let Ok(mut guard) = offthread_animations().lock() {
+        guard.push(Box::new(anim));
+    }
+}
+
+/// Spawns the dedicated animation background thread running at ~120 Hz.
+///
+/// Call **once** at app startup (before the first frame). The thread runs
+/// indefinitely — it evaluates all animations registered via
+/// [`animate_offthread`] and writes results into their [`OffThreadValue`]s.
+/// The main thread reads those values during layout/rendering without any
+/// locking overhead (atomic load).
+///
+/// # Example
+/// ```no_run
+/// use rax_anim::start_animation_thread;
+///
+/// let _handle = start_animation_thread();
+/// ```
+pub fn start_animation_thread() -> std::thread::JoinHandle<()> {
+    std::thread::spawn(|| {
+        let frame_duration = std::time::Duration::from_micros(8_333); // ~120 Hz
+        loop {
+            let start = std::time::Instant::now();
+
+            // Advance and prune all registered off-thread animations.
+            if let Ok(mut guard) = offthread_animations().lock() {
+                guard.retain_mut(|anim| !anim.tick());
+            }
+
+            let elapsed = start.elapsed();
+            if elapsed < frame_duration {
+                std::thread::sleep(frame_duration - elapsed);
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests;

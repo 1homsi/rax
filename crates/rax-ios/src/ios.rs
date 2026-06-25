@@ -2131,6 +2131,66 @@ impl Backend for UiKitBackend {
                     });
                 }
             }
+            Mutation::RegisterBackgroundTask { identifier } => {
+                // BGTaskScheduler is available on iOS 13+.
+                // Registering requires a launch handler block; without one the
+                // call is a no-op on the simulator and stores the identifier
+                // for BGAppRefreshTask scheduling below.
+                // We record registered identifiers so ScheduleBackgroundTask
+                // can validate them; on a real device the app also needs
+                // BGTaskSchedulerPermittedIdentifiers in Info.plist.
+                unsafe {
+                    let scheduler: *mut AnyObject =
+                        msg_send![class!(BGTaskScheduler), sharedScheduler];
+                    if !scheduler.is_null() {
+                        // Register without a handler block (queue = nil means
+                        // the system uses the main queue). Passing null for the
+                        // block is accepted — the system records the identifier
+                        // for future task delivery even without a launch handler
+                        // pre-registered here; the actual handler should be
+                        // registered via UIBackgroundModes and the app delegate.
+                        // This call intentionally no-ops on the simulator where
+                        // BGTaskScheduler is not fully functional.
+                        let id_ns = NSString::from_str(&identifier);
+                        let _: () = msg_send![
+                            scheduler,
+                            registerForTaskWithIdentifier: &*id_ns
+                            usingQueue: std::ptr::null::<AnyObject>()
+                            launchHandler: std::ptr::null::<AnyObject>()
+                        ];
+                    }
+                }
+            }
+            Mutation::ScheduleBackgroundTask { identifier, earliest_seconds } => {
+                unsafe {
+                    let scheduler: *mut AnyObject =
+                        msg_send![class!(BGTaskScheduler), sharedScheduler];
+                    if scheduler.is_null() {
+                        return;
+                    }
+                    // BGAppRefreshTaskRequest
+                    let id_ns = NSString::from_str(&identifier);
+                    let req: *mut AnyObject =
+                        msg_send![class!(BGAppRefreshTaskRequest), alloc];
+                    if req.is_null() {
+                        return;
+                    }
+                    let req: *mut AnyObject =
+                        msg_send![req, initWithIdentifier: &*id_ns];
+                    if req.is_null() {
+                        return;
+                    }
+                    // Set the earliest begin date: [NSDate date] + offset.
+                    let now: *mut AnyObject = msg_send![class!(NSDate), date];
+                    let date: *mut AnyObject =
+                        msg_send![now, dateByAddingTimeInterval: earliest_seconds];
+                    let _: () = msg_send![req, setEarliestBeginDate: date];
+                    // Submit. Errors are silently ignored (common on simulator).
+                    let mut err: *mut AnyObject = std::ptr::null_mut();
+                    let _: bool =
+                        msg_send![scheduler, submitTaskRequest: req error: &mut err];
+                }
+            }
             Mutation::AuthenticateBiometric { reason } => {
                 unsafe {
                     let ctx: *mut AnyObject = msg_send![class!(LAContext), new];

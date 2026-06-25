@@ -625,4 +625,19 @@ pub enum Mutation {
         /// Maximum number of items to select (1 for single-select).
         max_selection: usize,
     },
+    /// Register a background task identifier with BGTaskScheduler.
+    /// Must be called during app launch before the first background task fires.
+    /// The identifier must also appear in `BGTaskSchedulerPermittedIdentifiers` in Info.plist.
+    RegisterBackgroundTask {
+        /// The task identifier string.
+        identifier: String,
+    },
+    /// Schedule the next execution of a registered background task.
+    ScheduleBackgroundTask {
+        /// The task identifier string.
+        identifier: String,
+        /// Earliest begin date offset in seconds from now.
+        /// The system may run the task later than this; it is a minimum, not an exact time.
+        earliest_seconds: f64,
+    },
 }

@@ -28,7 +28,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Icon (vector / SF Symbols) | community | ✓ | ✅ |
 | ScrollView | ✓ | ✓ | ✅ |
 | Virtualized list + recycling | ✓ | ✓ | 🟡 `lazy_column`/`lazy_row`/`reactive_list` ✅; UITableView recycling ⬜ |
-| SectionList / sticky headers | ✓ | ✓ (slivers) | ⬜ |
+| SectionList / sticky headers | ✓ | ✓ (slivers) | ✅ (`section_list(sections, …)` — composed; UICollectionView sticky pinning ⬜) |
 | TextInput (controlled + IME) | ✓ | ✓ | ✅ (controlled, secure, return key, onSubmit; IME later) |
 | Switch / Slider | ✓ | ✓ | ✅ |
 | SegmentedControl | ✓ | ✓ | ✅ |
@@ -78,7 +78,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Gesture arena (pan/pinch/rotate) | ✓ | ✓ | ✅ (pan/pinch/rotate ✅; simultaneous recognition via delegate; exclusive arena ⬜) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ✅ (`pan_animation(spring_back)` → (x, y, handler); spring-back on release) |
 | Layout / shared-element animation | community | ✓ | 🟡 `.animate_layout()` (UIView beginAnimations/commitAnimations on frame changes) ✅; hero ⬜ |
-| Off-main-thread animation | ✓ | ✓ | ⬜ |
+| Off-main-thread animation | ✓ | ✓ | ✅ (`OffThreadValue` + `animate_offthread` — 120Hz background thread, atomic f32) |
 | 120fps | ✓ | ✓ | ✅ (CAFrameRateRange{60,120} + setPreferredFramesPerSecond fallback) |
 
 ## Text & i18n & a11y
@@ -98,7 +98,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | HTTP / fetch | ✓ | ✓ | ✅ (ureq-backed `HttpClient`) |
 | WebSocket / SSE / GraphQL | community | community | 🟡 WebSocket ✅ + SSE ✅ (`connect_sse` — ureq streaming); GraphQL ⬜ |
 | Resource (async data + loading state) | community | community | ✅ |
-| Query cache (react-query-like) | community | community | 🟡 `use_query(url)` dedup/cache ✅; staleness/revalidation/mutations ⬜ |
+| Query cache (react-query-like) | community | community | ✅ `use_query` + `use_query_stale(url, secs)` + `invalidate_query` + `gc_query_cache` |
 | KV storage (+ persisted signals) | community | ✓ | ✅ |
 | SQLite + secure storage | community | ✓ | ✅ SQLite (`rax-sqlite`) + Keychain (`rax-keychain` — SecItemAdd/Copy/Delete FFI) |
 | Offline-first sync | community | community | ⬜ |
@@ -113,7 +113,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | BLE / NFC | community | plugins | ⬜ |
 | Biometrics / secure auth | ✓ | ✓ | 🟡 biometrics ✅ (`authenticate_biometric`); OAuth/passkeys ⬜ |
 | In-app purchases | ✓ | ✓ | ⬜ |
-| Sensors / haptics / background tasks | ✓ | ✓ | 🟡 haptics ✅ + sensors ✅ (CMMotionManager accel/gyro → Event::MotionUpdated); background ⬜ |
+| Sensors / haptics / background tasks | ✓ | ✓ | ✅ haptics + sensors + background tasks (`register_background_task` + BGTaskScheduler) |
 | Plugin system / native modules | ✓ | ✓ | ✅ (`rax-plugin`: Plugin trait + PluginRegistry; on_start/tick/stop/event hooks) |
 
 ## Platforms

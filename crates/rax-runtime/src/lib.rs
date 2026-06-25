@@ -27,6 +27,14 @@ thread_local! {
     static PENDING_HAPTICS: std::cell::RefCell<Vec<rax_dom::HapticStyle>> =
         const { std::cell::RefCell::new(Vec::new()) };
 
+    /// Background task identifiers to register. Drained by [`App::tick`].
+    static PENDING_BG_REGISTRATIONS: RefCell<Vec<String>> =
+        const { RefCell::new(Vec::new()) };
+
+    /// Background task schedule requests: (identifier, earliest_seconds). Drained by [`App::tick`].
+    static PENDING_BG_SCHEDULES: RefCell<Vec<(String, f64)>> =
+        const { RefCell::new(Vec::new()) };
+
     /// Deep-link handler registered by [`on_deep_link`].
     static DEEP_LINK_HANDLER: RefCell<Option<Box<dyn Fn(String)>>> =
         const { RefCell::new(None) };
@@ -295,6 +303,35 @@ pub fn start_motion(accelerometer: bool, gyroscope: bool) {
 /// ```
 pub fn stop_motion() {
     PENDING_MOTION_STOPS.with(|q| *q.borrow_mut() = true);
+}
+
+/// Registers a background task identifier with BGTaskScheduler.
+///
+/// Call once during app startup, before the first background task fires.
+/// The identifier must also be listed in `BGTaskSchedulerPermittedIdentifiers`
+/// in your app's Info.plist.
+///
+/// ```no_run
+/// use rax_runtime::register_background_task;
+///
+/// register_background_task("com.example.app.refresh");
+/// ```
+pub fn register_background_task(identifier: impl Into<String>) {
+    PENDING_BG_REGISTRATIONS.with(|q| q.borrow_mut().push(identifier.into()));
+}
+
+/// Schedules the next execution of a registered background task.
+///
+/// `earliest_seconds` is the minimum number of seconds from now before the
+/// system will run the task. The system may run it later.
+///
+/// ```no_run
+/// use rax_runtime::schedule_background_task;
+///
+/// schedule_background_task("com.example.app.refresh", 3600.0);
+/// ```
+pub fn schedule_background_task(identifier: impl Into<String>, earliest_seconds: f64) {
+    PENDING_BG_SCHEDULES.with(|q| q.borrow_mut().push((identifier.into(), earliest_seconds)));
 }
 
 /// Saves a UI state value for the current session.
@@ -593,6 +630,22 @@ impl App {
         }
         if motion_stop {
             self.tree.stop_motion();
+        }
+
+        // Drain background task registrations.
+        let bg_regs: Vec<String> = PENDING_BG_REGISTRATIONS.with(|q| {
+            std::mem::take(&mut *q.borrow_mut())
+        });
+        for id in bg_regs {
+            self.tree.register_background_task(id);
+        }
+
+        // Drain background task schedule requests.
+        let bg_scheds: Vec<(String, f64)> = PENDING_BG_SCHEDULES.with(|q| {
+            std::mem::take(&mut *q.borrow_mut())
+        });
+        for (id, secs) in bg_scheds {
+            self.tree.schedule_background_task(id, secs);
         }
 
         self.tree.run_dynamic(); // events/async/anim may have dirtied dynamic subtrees

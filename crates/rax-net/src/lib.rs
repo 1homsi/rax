@@ -287,6 +287,10 @@ use std::collections::HashMap;
 thread_local! {
     static QUERY_CACHE: RefCell<HashMap<String, Resource<Response>>> =
         RefCell::new(HashMap::new());
+
+    /// Records the wall-clock time when each URL was last fetched and cached.
+    static QUERY_TIMESTAMPS: RefCell<HashMap<String, std::time::Instant>> =
+        RefCell::new(HashMap::new());
 }
 
 /// Returns a cached [`Resource<Response>`] for the given URL.
@@ -315,6 +319,8 @@ pub fn use_query(url: impl Into<String>) -> Resource<Response> {
         }
         // First caller — fire the request and cache the resource.
         let resource = get(url.clone());
+        // Record the timestamp of this fetch.
+        QUERY_TIMESTAMPS.with(|t| t.borrow_mut().insert(url.clone(), std::time::Instant::now()));
         cache.borrow_mut().insert(url, resource);
         resource
     })
@@ -323,9 +329,68 @@ pub fn use_query(url: impl Into<String>) -> Resource<Response> {
 /// Removes the cached entry for `url` so the next [`use_query`] call fires a
 /// fresh HTTP GET.
 pub fn invalidate_query(url: impl Into<String>) {
+    let url = url.into();
     QUERY_CACHE.with(|cache| {
-        cache.borrow_mut().remove(&url.into());
+        cache.borrow_mut().remove(&url);
     });
+    QUERY_TIMESTAMPS.with(|t| t.borrow_mut().remove(&url));
+}
+
+/// Returns a cached [`Resource<Response>`] for the given URL, refetching in
+/// the background when the cached entry is older than `stale_after_secs`.
+///
+/// Pass `0` to never auto-revalidate (always use the cache). Pass
+/// `u64::MAX` to always refetch.
+///
+/// # Example
+/// ```
+/// use rax_net::{use_query_stale, set_client, MockClient, Response};
+/// use rax_async::run_until_stalled;
+/// use rax_reactive::create_root;
+///
+/// set_client(MockClient::new(|_| Ok(Response::ok("[]"))));
+/// let (res, scope) = create_root(|| use_query_stale("https://api.example.com/items", 60));
+/// run_until_stalled();
+/// assert!(res.data().is_some());
+/// scope.dispose();
+/// ```
+pub fn use_query_stale(url: impl Into<String>, stale_after_secs: u64) -> Resource<Response> {
+    let url = url.into();
+
+    // A stale_after_secs of 0 means "never revalidate".
+    if stale_after_secs != 0 {
+        let is_stale = QUERY_TIMESTAMPS.with(|t| {
+            t.borrow()
+                .get(&url)
+                .map(|ts| ts.elapsed().as_secs() > stale_after_secs)
+                .unwrap_or(true) // no entry = treat as stale
+        });
+        if is_stale {
+            invalidate_query(url.clone());
+        }
+    }
+
+    use_query(url)
+}
+
+/// Evicts all cache entries that were fetched more than `max_age_secs` ago.
+///
+/// Call periodically (e.g. on `AppLifecycle::Resumed`) to prevent unbounded
+/// memory growth from long-running sessions.
+pub fn gc_query_cache(max_age_secs: u64) {
+    // Collect URLs that have expired.
+    let expired: Vec<String> = QUERY_TIMESTAMPS.with(|t| {
+        t.borrow()
+            .iter()
+            .filter(|(_, ts)| ts.elapsed().as_secs() > max_age_secs)
+            .map(|(url, _)| url.clone())
+            .collect()
+    });
+    // Remove both the timestamp and the resource cache entry.
+    for url in expired {
+        QUERY_CACHE.with(|c| { c.borrow_mut().remove(&url); });
+        QUERY_TIMESTAMPS.with(|t| { t.borrow_mut().remove(&url); });
+    }
 }
 
 // ---------------------------------------------------------------------------

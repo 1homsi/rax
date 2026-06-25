@@ -239,6 +239,17 @@ impl Tree {
         self.host.emit(Mutation::PresentMediaPicker { max_selection });
     }
 
+    /// Registers a background task identifier with BGTaskScheduler.
+    /// Must be called during app launch before the first background task fires.
+    pub fn register_background_task(&mut self, identifier: String) {
+        self.host.emit(Mutation::RegisterBackgroundTask { identifier });
+    }
+
+    /// Schedules the next execution of a registered background task.
+    pub fn schedule_background_task(&mut self, identifier: String, earliest_seconds: f64) {
+        self.host.emit(Mutation::ScheduleBackgroundTask { identifier, earliest_seconds });
+    }
+
     fn create(&mut self, kind: WidgetKind) -> WidgetId {
         let index = self.nodes.insert(ElementNode {
             kind,

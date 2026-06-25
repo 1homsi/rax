@@ -56,8 +56,8 @@ pub use camera::{camera_scanner, CameraScanner};
 pub use composite::{
     action_sheet, alert, app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, dev_tools,
     drawer, error_overlay, fade_transition, grid, item_separator, lazy_column, lazy_row, modal,
-    network_image, pan_animation, picker, radio, reactive_list, search_bar, swipe_actions, toast,
-    Avatar, Badge, Card, Checkbox, Chip, Radio,
+    network_image, pan_animation, picker, radio, reactive_list, search_bar, section_list,
+    swipe_actions, toast, Avatar, Badge, Card, Checkbox, Chip, Radio, Section,
 };
 pub use web_view::{web_view, web_view_html, WebView};
 pub use container::{column, row, stack, Container, Stack};

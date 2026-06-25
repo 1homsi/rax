@@ -235,6 +235,11 @@ pub enum Event {
     },
     /// The user cancelled the media picker without selecting anything.
     MediaPickerCancelled,
+    /// A background task was launched by the system (BGTaskScheduler).
+    BackgroundTaskStarted {
+        /// The identifier of the task that was launched.
+        identifier: String,
+    },
 }
 
 /// The lifecycle phase of a continuous gesture such as a pan.
@@ -306,6 +311,8 @@ pub enum EventKind {
     MediaPicked,
     /// [`Event::MediaPickerCancelled`].
     MediaPickerCancelled,
+    /// [`Event::BackgroundTaskStarted`].
+    BackgroundTaskStarted,
 }
 
 impl Event {
@@ -339,6 +346,7 @@ impl Event {
             Event::MotionUpdated { .. } => EventKind::MotionUpdated,
             Event::MediaPicked { .. } => EventKind::MediaPicked,
             Event::MediaPickerCancelled => EventKind::MediaPickerCancelled,
+            Event::BackgroundTaskStarted { .. } => EventKind::BackgroundTaskStarted,
         }
     }
 
@@ -371,7 +379,8 @@ impl Event {
             | Event::LocationDenied
             | Event::MotionUpdated { .. }
             | Event::MediaPicked { .. }
-            | Event::MediaPickerCancelled => None,
+            | Event::MediaPickerCancelled
+            | Event::BackgroundTaskStarted { .. } => None,
             Event::RotateChanged { target, .. } => Some(target),
         }
     }

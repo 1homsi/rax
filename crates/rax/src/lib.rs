@@ -96,20 +96,23 @@ pub mod prelude {
     // The app entry point and runtime, plus appearance controls.
     pub use rax_runtime::{
         authenticate_biometric, cancel_notification, clear_ui_state, haptic,
-        install_error_overlay, last_panic, on_deep_link, restore_ui_state, save_ui_state,
-        schedule_notification, set_backdrop, start_location, start_motion, stop_location,
-        stop_motion, use_color_scheme, App, Backdrop, HapticStyle, KeyboardType, LocalNotification,
-        TextStyle,
+        install_error_overlay, last_panic, on_deep_link, register_background_task,
+        restore_ui_state, save_ui_state, schedule_background_task, schedule_notification,
+        set_backdrop, start_location, start_motion, stop_location, stop_motion, use_color_scheme,
+        App, Backdrop, HapticStyle, KeyboardType, LocalNotification, TextStyle,
     };
 
     // High-frequency helpers from the satellite crates. Full surfaces live in
     // the namespaced modules (`rax::nav`, `rax::store`, …).
-    pub use rax_anim::{animate, decay, delayed, oscillate, parallel, sequence, spring, stagger, Easing, Spring};
+    pub use rax_anim::{
+        animate, animate_offthread, decay, delayed, oscillate, parallel, sequence, spring, stagger,
+        start_animation_thread, Easing, OffThreadValue, Spring,
+    };
     pub use rax_async::{create_resource, Resource};
     // HTTP client helpers — `get`/`post` return a `Resource<Response>`.
     pub use rax_net::{
-        connect_sse, connect_ws, get, invalidate_query, post, send, use_query, Method, Request,
-        Response, SseEvent, WsHandle, WsMessage,
+        connect_sse, connect_ws, gc_query_cache, get, invalidate_query, post, send, use_query,
+        use_query_stale, Method, Request, Response, SseEvent, WsHandle, WsMessage,
     };
     // Async resource state (needed to match on Loading/Ready/Failed).
     pub use rax_async::ResourceState;
