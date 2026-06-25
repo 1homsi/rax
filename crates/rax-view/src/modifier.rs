@@ -66,6 +66,13 @@ pub trait ViewExt: View + Sized {
         }
     }
 
+    /// Flex-grow factor: how much of the parent's free main-axis space this view
+    /// claims, relative to its siblings. Works on any view (text, input, image,
+    /// …), not just containers.
+    fn grow(self, factor: f32) -> Styled<Self, impl FnOnce(&mut LayoutStyle)> {
+        self.style_with(move |s| s.flex_grow = factor)
+    }
+
     /// Fixed width in points.
     fn width(self, w: f32) -> Styled<Self, impl FnOnce(&mut LayoutStyle)> {
         self.style_with(move |s| s.width = Dimension::Points(w))
