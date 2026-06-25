@@ -62,6 +62,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax-runtime"
+version = "0.0.1"
+dependencies = [
+ "rax-core",
+ "rax-dom",
+ "rax-layout",
+ "rax-reactive",
+ "rax-view",
+]
+
+[[package]]
 name = "rax-scheduler"
 version = "0.0.1"
 

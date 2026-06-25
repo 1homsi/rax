@@ -113,6 +113,13 @@ impl Tree {
         }
     }
 
+    /// Emits a frame (layout output) for `id` to the backend.
+    pub fn set_frame(&mut self, id: WidgetId, rect: rax_core::Rect) {
+        if self.nodes.get(id.0).is_some() {
+            self.host.emit(Mutation::SetFrame { id, rect });
+        }
+    }
+
     /// Sets a paint attribute, forwarding it to the backend. Font size is also
     /// captured for text measurement.
     pub fn set(&mut self, id: WidgetId, attr: Attribute) {
