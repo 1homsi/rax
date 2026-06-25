@@ -30,6 +30,17 @@ pub enum WidgetKind {
     View,
     /// A text label (maps to `UILabel` / `TextView`).
     Text,
+    /// A tappable button (maps to `UIButton` / `Button`).
+    Button,
+}
+
+/// Primary axis of a flex container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Axis {
+    /// Lay children out top-to-bottom (a column).
+    Vertical,
+    /// Lay children out left-to-right (a row).
+    Horizontal,
 }
 
 /// A single settable property on a widget.
@@ -49,6 +60,10 @@ pub enum Attribute {
     BackgroundColor(Color),
     /// Inner padding.
     Padding(EdgeInsets),
+    /// Primary layout axis of a container.
+    FlexDirection(Axis),
+    /// Spacing between children along the primary axis.
+    Gap(f32),
 }
 
 /// One atomic change to the native view tree.

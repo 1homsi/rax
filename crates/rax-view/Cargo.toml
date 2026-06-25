@@ -1,0 +1,17 @@
+[package]
+name = "rax-view"
+description = "Declarative, macro-free typed view builder for rax. Lowers to the rax-dom element tree."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[dependencies]
+rax-core = { path = "../rax-core" }
+rax-dom = { path = "../rax-dom" }
+rax-reactive = { path = "../rax-reactive" }

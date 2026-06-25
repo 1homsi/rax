@@ -24,3 +24,12 @@ dependencies = [
 [[package]]
 name = "rax-scheduler"
 version = "0.0.1"
+
+[[package]]
+name = "rax-view"
+version = "0.0.1"
+dependencies = [
+ "rax-core",
+ "rax-dom",
+ "rax-reactive",
+]

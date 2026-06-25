@@ -74,6 +74,16 @@ These are ranked. Each is a **STOP**: do not write more code on top of the curre
 
 **Recommendation:** Define the inbound dual of `Mutation` now: an `Event`/`HostMessage` enum (`Tap{id}`, `ScrollChanged{id, offset}`, `TextChanged{id, value, selection}`, `FocusChanged`, `KeyboardWillShow{rect}`, `Lifecycle(...)`, `BackPressed`) delivered through the Scheduler onto the UI thread, where it lands as signal writes. The `Backend` trait gains an outbound sink (`EventSink`) the platform calls. **Freeze the `Event` schema alongside `Mutation`.**
 
+> **R4 — IN PROGRESS (2026-06-25).** `rax-view` built: a macro-free typed
+> tuple-builder (`column`/`row`/`text`/`button` + modifiers) lowering to the
+> `Tree`. `View::build(self) -> WidgetId` (build-once; signals update values,
+> dedicated views will handle dynamic structure). The counter is proven
+> end-to-end in `tests/counter.rs` (build + reactive update + tap). **Decision:
+> the builder is the foundational API and is never required; an optional `rsx!`
+> macro (future `rax-macro` crate) will expand *into* these calls — JSX→builder,
+> Dioxus RSX→builder.** Remaining for R4: dynamic lists (keyed `For`) and
+> conditionals (`Show`); ergonomic review at scale before freezing.
+
 ### R4 — The public component (`View`) API does not exist — and it is the single most important thing to design.
 
 **What we have:** an *imperative* `Tree` (`create_view`, `bind`, `append`). That is the right *internal* lowering target, but it is **not** the API thousands of developers will write. The declarative component model — the thing that makes this "React-like" — is undesigned. Everything (DX, docs, tutorials, third-party components, the entire value proposition) hinges on it, and it is the API most expensive to change after release.

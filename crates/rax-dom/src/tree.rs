@@ -80,6 +80,11 @@ impl Tree {
         self.create(WidgetKind::Text)
     }
 
+    /// Creates a tappable button widget.
+    pub fn create_button(&mut self) -> WidgetId {
+        self.create(WidgetKind::Button)
+    }
+
     fn create(&mut self, kind: WidgetKind) -> WidgetId {
         let index = self.nodes.insert(ElementNode {
             kind,
