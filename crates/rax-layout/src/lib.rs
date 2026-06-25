@@ -20,6 +20,7 @@ use taffy::prelude::*;
 struct LeafContext {
     kind: WidgetKind,
     font_size: f32,
+    text: Option<String>,
 }
 
 /// Computes layout for the subtree rooted at `root`, filling `available`.
@@ -89,6 +90,7 @@ fn build_node(
         let context = LeafContext {
             kind: tree.kind_of(id).unwrap_or(WidgetKind::View),
             font_size: tree.font_size_of(id),
+            text: tree.measure_text_of(id),
         };
         taffy
             .new_leaf_with_context(style, context)
@@ -154,7 +156,12 @@ fn to_dim(d: rax_core::Dimension) -> Dimension {
     }
 }
 
-/// Heights for leaves; cross-axis width is left to the container's stretch.
+/// Intrinsic size for a leaf, estimated from its text and font size. A known
+/// (stretched) dimension always wins; otherwise we fall back to the content
+/// estimate — which is what makes rows and centered content lay out correctly.
+///
+/// This is a heuristic (average glyph advance ≈ 0.6em). Pixel-accurate text
+/// measurement needs a platform round-trip and lands with richer text support.
 fn measure_leaf(
     known: taffy::Size<Option<f32>>,
     context: Option<&mut LeafContext>,
@@ -162,14 +169,26 @@ fn measure_leaf(
     let Some(context) = context else {
         return taffy::Size::ZERO;
     };
-    let height = match context.kind {
-        WidgetKind::Button => 44.0,
-        WidgetKind::Text => (context.font_size * 1.4).ceil(),
-        WidgetKind::View => 0.0,
+    let glyphs = context
+        .text
+        .as_ref()
+        .map(|t| t.chars().count())
+        .unwrap_or(0) as f32;
+    // Generous average glyph advance so labels don't truncate; pixel-accurate
+    // measurement is a platform round-trip we defer.
+    let glyph_w = context.font_size * 0.62;
+    let line_h = (context.font_size * 1.35).ceil();
+
+    let (content_w, content_h) = match context.kind {
+        // Buttons add horizontal title padding and have a minimum tap height.
+        WidgetKind::Button => (glyphs * glyph_w + 36.0, line_h.max(44.0)),
+        WidgetKind::Text => (glyphs * glyph_w + 6.0, line_h),
+        WidgetKind::View => (0.0, 0.0),
     };
+
     taffy::Size {
-        width: known.width.unwrap_or(0.0),
-        height,
+        width: known.width.unwrap_or(content_w),
+        height: known.height.unwrap_or(content_h),
     }
 }
 

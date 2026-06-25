@@ -46,6 +46,9 @@ struct ElementNode {
     /// For dynamic nodes: the next subtree to build, set by the tracking effect
     /// and consumed by [`Tree::run_dynamic`].
     pending: Option<Rc<RefCell<Option<BuildThunk>>>>,
+    /// Latest text content (static or reactive), shared so the layout pass can
+    /// read it for intrinsic-width measurement without a tree borrow.
+    measure_text: Rc<RefCell<Option<String>>>,
 }
 
 /// The retained element tree, paired with the backend it emits mutations to.
@@ -117,6 +120,7 @@ impl Tree {
             effects: Vec::new(),
             handlers: Vec::new(),
             pending: None,
+            measure_text: Rc::new(RefCell::new(None)),
         });
         let id = WidgetId(index);
         self.host.emit(Mutation::Create { id, kind });
@@ -206,8 +210,10 @@ impl Tree {
         let Some(node) = self.nodes.get_mut(id.0) else {
             return;
         };
-        if let Attribute::FontSize(size) = attr {
-            node.font_size = size;
+        match &attr {
+            Attribute::FontSize(size) => node.font_size = *size,
+            Attribute::Text(text) => *node.measure_text.borrow_mut() = Some(text.clone()),
+            _ => {}
         }
         self.host.emit(Mutation::SetAttribute { id, attr });
     }
@@ -223,8 +229,13 @@ impl Tree {
             return;
         }
         let host = self.host.clone();
+        let measure_text = self.nodes.get(id.0).unwrap().measure_text.clone();
         let effect = create_effect(move || {
             let attr = f();
+            // Keep the measurable text current so re-layout reflects new content.
+            if let Attribute::Text(text) = &attr {
+                *measure_text.borrow_mut() = Some(text.clone());
+            }
             host.emit(Mutation::SetAttribute { id, attr });
         });
         // Safe: existence checked above, and ids are stable handles.
@@ -441,5 +452,13 @@ impl Tree {
             .get(id.0)
             .map(|n| n.font_size)
             .unwrap_or(DEFAULT_FONT_SIZE)
+    }
+
+    /// The current text content of `id`, used by the layout pass to estimate
+    /// intrinsic width. `None` if the node has no text.
+    pub fn measure_text_of(&self, id: WidgetId) -> Option<String> {
+        self.nodes
+            .get(id.0)
+            .and_then(|n| n.measure_text.borrow().clone())
     }
 }

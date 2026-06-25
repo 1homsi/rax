@@ -34,7 +34,7 @@ fn column_stacks_children_with_padding_and_gap() {
     // Root fills the available space.
     assert_eq!(frame_of(&frames, root), Rect::new(0.0, 0.0, 300.0, 600.0));
 
-    let text_h = (16.0_f32 * 1.4).ceil(); // default font size -> measured height
+    let text_h = (16.0_f32 * 1.35).ceil(); // default font size -> measured height
 
     // First child: offset by padding, stretched across the inner width.
     let fa = frame_of(&frames, a);
