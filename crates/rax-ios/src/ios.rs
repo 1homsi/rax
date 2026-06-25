@@ -8,7 +8,7 @@
 // The deprecated path works on current simulators and keeps the demo simple.
 #![allow(deprecated)]
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -54,16 +54,21 @@ struct IosState {
 thread_local! {
     static FACTORY: RefCell<Option<ViewFactory>> = const { RefCell::new(None) };
     static STATE: RefCell<Option<IosState>> = const { RefCell::new(None) };
+    // Keyboard height pending application. Set from the keyboard notifications
+    // (which can fire *synchronously while the app is mid-tick*), applied by the
+    // next frame tick — never borrows the app, avoiding re-entrant borrows.
+    static PENDING_KEYBOARD: Cell<Option<f32>> = const { Cell::new(None) };
 }
 
 fn handle_tap(tag_bits: u64) {
+    // Enqueue only. The CADisplayLink tick drains and rebuilds on the next
+    // frame — never synchronously inside this UIKit action, so a view (e.g. the
+    // tapped button) is never torn down while its action is still on the stack.
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
             state.event_sink.dispatch(Event::Tap {
                 target: WidgetId::from_u64(tag_bits),
             });
-            // Process immediately so the tap feels responsive.
-            state.app.borrow_mut().tick();
         }
     });
 }
@@ -91,19 +96,20 @@ fn handle_tick() {
                 bottom: insets.bottom as f32,
                 left: insets.left as f32,
             });
+            if let Some(height) = PENDING_KEYBOARD.with(|k| k.take()) {
+                app.set_keyboard_inset(height);
+            }
             app.tick();
         }
     });
 }
 
 fn handle_keyboard(height: f32) {
-    STATE.with(|s| {
-        if let Some(state) = s.borrow().as_ref() {
-            let mut app = state.app.borrow_mut();
-            app.set_keyboard_inset(height);
-            app.tick();
-        }
-    });
+    // Record only; the frame tick applies it. This callback can fire
+    // synchronously while the app is already borrowed (removing a focused text
+    // field resigns first responder, which posts the hide notification), so it
+    // must never borrow the app itself.
+    PENDING_KEYBOARD.with(|k| k.set(Some(height)));
 }
 
 fn handle_value_changed(tag_bits: u64, value: f64) {
@@ -113,18 +119,17 @@ fn handle_value_changed(tag_bits: u64, value: f64) {
                 target: WidgetId::from_u64(tag_bits),
                 value,
             });
-            state.app.borrow_mut().tick();
         }
     });
 }
 
 fn dispatch_target_event(make: impl FnOnce(WidgetId) -> Event, tag_bits: u64) {
+    // Enqueue only; the frame tick drains it (see `handle_tap`).
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
             state
                 .event_sink
                 .dispatch(make(WidgetId::from_u64(tag_bits)));
-            state.app.borrow_mut().tick();
         }
     });
 }
@@ -142,7 +147,6 @@ fn handle_text_changed(tag_bits: u64, value: String) {
                 value,
                 selection,
             });
-            state.app.borrow_mut().tick();
         }
     });
 }
