@@ -50,6 +50,11 @@ impl Catalog {
             .cloned()
             .unwrap_or_else(|| key.to_string())
     }
+
+    /// Whether `key` is present (no fallback).
+    pub fn contains(&self, key: &str) -> bool {
+        self.entries.contains_key(key)
+    }
 }
 
 impl<K: Into<String>, V: Into<String>, const N: usize> From<[(K, V); N]> for Catalog {
@@ -87,6 +92,44 @@ pub fn t_args(key: &str, args: &[(&str, &str)]) -> String {
         s = s.replace(&format!("{{{name}}}"), value);
     }
     s
+}
+
+/// Selects a pluralized message by `count` and substitutes `{count}`.
+///
+/// Looks up `"{key}.{category}"` where `category` follows the English cardinal
+/// rule (`one` for ±1, else `other`), falling back to `"{key}.other"` then
+/// `key`. (Per-locale ICU plural rules are a planned refinement.)
+///
+/// ```
+/// use rax_intl::{provide_locale, t_plural, Catalog};
+/// use rax_reactive::create_root;
+///
+/// let (_, scope) = create_root(|| {
+///     provide_locale(Catalog::from([
+///         ("items.one", "{count} item"),
+///         ("items.other", "{count} items"),
+///     ]));
+///     assert_eq!(t_plural("items", 1), "1 item");
+///     assert_eq!(t_plural("items", 5), "5 items");
+/// });
+/// scope.dispose();
+/// ```
+pub fn t_plural(key: &str, count: i64) -> String {
+    let category = if count.abs() == 1 { "one" } else { "other" };
+    let msg = use_locale().with(|c| {
+        let specific = format!("{key}.{category}");
+        if c.contains(&specific) {
+            c.get(&specific)
+        } else {
+            let other = format!("{key}.other");
+            if c.contains(&other) {
+                c.get(&other)
+            } else {
+                c.get(key)
+            }
+        }
+    });
+    msg.replace("{count}", &count.to_string())
 }
 
 #[cfg(test)]

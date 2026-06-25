@@ -42,3 +42,19 @@ fn switching_locale_reactively_updates_readers() {
     assert_eq!(*log.borrow().last().unwrap(), "Hola");
     scope.dispose();
 }
+
+#[test]
+fn plural_selects_one_vs_other_and_interpolates_count() {
+    use super::{provide_locale, t_plural, Catalog};
+    use rax_reactive::create_root;
+    let (_, scope) = create_root(|| {
+        provide_locale(Catalog::from([
+            ("items.one", "{count} item"),
+            ("items.other", "{count} items"),
+        ]));
+        assert_eq!(t_plural("items", 1), "1 item");
+        assert_eq!(t_plural("items", 0), "0 items");
+        assert_eq!(t_plural("items", 7), "7 items");
+    });
+    scope.dispose();
+}

@@ -91,7 +91,7 @@ pub mod prelude {
     // the namespaced modules (`rax::nav`, `rax::store`, …).
     pub use rax_anim::{animate, decay, spring, Easing, Spring};
     pub use rax_async::{create_resource, Resource};
-    pub use rax_intl::{t, t_args};
+    pub use rax_intl::{t, t_args, t_plural};
     pub use rax_nav::{create_navigator, routes, use_navigator, Navigator};
     pub use rax_store::{persisted, store_get, store_set};
     pub use rax_style::{theme, use_theme, Theme};
