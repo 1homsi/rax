@@ -26,3 +26,4 @@ Pods/
 .vscode/
 *.swp
 *~
+.claude/worktrees/
