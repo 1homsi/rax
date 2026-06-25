@@ -92,3 +92,14 @@ fn accessibility_label_and_role_emit_attributes() {
     assert!(has(Attribute::AccessibilityLabel("Save document".into())));
     assert!(has(Attribute::AccessibilityRole(rax_dom::Role::Button)));
 }
+
+#[test]
+fn transform_emits_affine_attribute() {
+    use rax_view::Transform;
+    let (_tree, log, id) = build(text("spin").transform(Transform::IDENTITY.rotate(1.0).scale(2.0)));
+    assert!(log.borrow().iter().any(|m| matches!(
+        m,
+        Mutation::SetAttribute { id: i, attr: Attribute::Transform(t) }
+            if *i == id && t.rotate == 1.0 && t.scale_x == 2.0 && t.scale_y == 2.0
+    )));
+}

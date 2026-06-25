@@ -26,7 +26,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 - 🟡 position: relative / absolute / sticky
 - 🟡 inset (top/right/bottom/left), z-index / z-order
 - ⬜ `Stack`/overlay layout
-- ⬜ transforms (translate/scale/rotate/skew, matrix), transform-origin
+- 🟡 transforms (translate/scale/rotate; reactive `transform_fn` for animation) — skew/origin pending
 
 ## Box model & spacing
 - ✅ margin (incl. auto-margins for centering)

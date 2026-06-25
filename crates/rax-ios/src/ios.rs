@@ -15,7 +15,7 @@ use std::rc::Rc;
 use objc2::rc::Retained;
 use objc2::runtime::{NSObject, NSObjectProtocol};
 use objc2::{define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
-use objc2_core_foundation::{CGPoint, CGRect, CGSize};
+use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSNotification, NSString};
 use objc2_quartz_core::CADisplayLink;
 use objc2_ui_kit::{
@@ -663,6 +663,20 @@ impl Backend for UiKitBackend {
                             layer.setShadowOpacity(shadow.color.a as f32 / 255.0);
                             layer.setMasksToBounds(false);
                         }
+                    }
+                    Attribute::Transform(t) => {
+                        // Compose scale → rotate → translate into one matrix.
+                        let (sin, cos) = (t.rotate.sin() as f64, t.rotate.cos() as f64);
+                        let (sx, sy) = (t.scale_x as f64, t.scale_y as f64);
+                        let m = CGAffineTransform {
+                            a: sx * cos,
+                            b: sx * sin,
+                            c: -sy * sin,
+                            d: sy * cos,
+                            tx: t.translate_x as f64,
+                            ty: t.translate_y as f64,
+                        };
+                        unsafe { view.setTransform(m) };
                     }
                 }
             }

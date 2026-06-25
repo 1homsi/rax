@@ -4,7 +4,7 @@
 //! customizability mechanism: layout control on *every* view, not just containers.
 
 use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Position};
-use rax_dom::{Attribute, EventKind, GestureKind, Role, Shadow, Tree, WidgetId};
+use rax_dom::{Attribute, EventKind, GestureKind, Role, Shadow, Transform, Tree, WidgetId};
 
 use crate::view::View;
 
@@ -176,6 +176,11 @@ pub trait ViewExt: View + Sized {
         })
     }
 
+    /// Applies a 2D affine [`Transform`] (scale/rotate/translate) to rendering.
+    fn transform(self, t: Transform) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |tree, id| tree.set(id, Attribute::Transform(t)))
+    }
+
     // --- reactive paint modifiers (re-emit when their signals change) ---
 
     /// Reactive background: re-applies whenever the signals `f` reads change.
@@ -184,6 +189,15 @@ pub trait ViewExt: View + Sized {
         mut f: impl FnMut() -> Color + 'static,
     ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |t, id| t.bind(id, move || Attribute::BackgroundColor(f())))
+    }
+
+    /// Reactive transform (great for rotate/scale animations driven by
+    /// `rax-anim` — e.g. a spinner or a press-to-scale effect).
+    fn transform_fn(
+        self,
+        mut f: impl FnMut() -> Transform + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, move || Attribute::Transform(f())))
     }
 
     /// Reactive opacity (great for fade animations driven by `rax-anim`).

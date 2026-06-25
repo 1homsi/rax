@@ -168,6 +168,73 @@ pub enum Attribute {
     Italic(bool),
     /// Horizontal text alignment.
     TextAlign(TextAlign),
+    /// A 2D affine transform (scale/rotate/translate) on the rendered view.
+    Transform(Transform),
+}
+
+/// A 2D affine transform applied to a widget's rendering: scale, then rotate,
+/// then translate (composed in that order). Build from [`Transform::IDENTITY`]
+/// with the chainable setters.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transform {
+    /// Horizontal translation in points.
+    pub translate_x: f32,
+    /// Vertical translation in points.
+    pub translate_y: f32,
+    /// Horizontal scale factor.
+    pub scale_x: f32,
+    /// Vertical scale factor.
+    pub scale_y: f32,
+    /// Rotation in radians (clockwise).
+    pub rotate: f32,
+}
+
+impl Transform {
+    /// The identity transform (no change).
+    pub const IDENTITY: Transform = Transform {
+        translate_x: 0.0,
+        translate_y: 0.0,
+        scale_x: 1.0,
+        scale_y: 1.0,
+        rotate: 0.0,
+    };
+
+    /// Sets uniform scale.
+    #[must_use]
+    pub const fn scale(mut self, factor: f32) -> Self {
+        self.scale_x = factor;
+        self.scale_y = factor;
+        self
+    }
+
+    /// Sets non-uniform scale.
+    #[must_use]
+    pub const fn scale_xy(mut self, x: f32, y: f32) -> Self {
+        self.scale_x = x;
+        self.scale_y = y;
+        self
+    }
+
+    /// Sets rotation in radians.
+    #[must_use]
+    pub const fn rotate(mut self, radians: f32) -> Self {
+        self.rotate = radians;
+        self
+    }
+
+    /// Sets translation in points.
+    #[must_use]
+    pub const fn translate(mut self, x: f32, y: f32) -> Self {
+        self.translate_x = x;
+        self.translate_y = y;
+        self
+    }
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Transform::IDENTITY
+    }
 }
 
 /// A drop shadow specification.
