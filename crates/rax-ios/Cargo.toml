@@ -51,6 +51,7 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIGestureRecognizer",
     "UITapGestureRecognizer",
     "UILongPressGestureRecognizer",
+    "UIPanGestureRecognizer",
     "UIScrollView",
     "UIActivityIndicatorView",
     "UIProgressView",

@@ -128,6 +128,17 @@ pub enum Event {
         /// New value.
         value: f64,
     },
+    /// A pan/drag gesture updated. Fires repeatedly through the drag.
+    PanChanged {
+        /// The dragged widget.
+        target: WidgetId,
+        /// Cumulative translation from the gesture start, in points.
+        translation: Point,
+        /// Current drag velocity, in points/second.
+        velocity: Point,
+        /// Lifecycle phase of the gesture.
+        phase: GesturePhase,
+    },
     /// Android system back / iOS interactive-pop intent. App-global.
     BackPressed,
     /// The soft keyboard is about to appear, occupying `frame`. App-global.
@@ -139,6 +150,17 @@ pub enum Event {
     KeyboardWillHide,
     /// An application lifecycle transition. App-global.
     AppLifecycle(Lifecycle),
+}
+
+/// The lifecycle phase of a continuous gesture such as a pan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GesturePhase {
+    /// The gesture has just started.
+    Began,
+    /// The gesture is in progress (translation updated).
+    Changed,
+    /// The gesture finished (finger lifted / recognizer ended or cancelled).
+    Ended,
 }
 
 /// The discriminant used to register and match handlers, independent of an
@@ -165,6 +187,8 @@ pub enum EventKind {
     FocusChanged,
     /// [`Event::ValueChanged`].
     ValueChanged,
+    /// [`Event::PanChanged`].
+    Pan,
     /// [`Event::BackPressed`].
     BackPressed,
     /// [`Event::KeyboardWillShow`].
@@ -189,6 +213,7 @@ impl Event {
             Event::TextChanged { .. } => EventKind::TextChanged,
             Event::FocusChanged { .. } => EventKind::FocusChanged,
             Event::ValueChanged { .. } => EventKind::ValueChanged,
+            Event::PanChanged { .. } => EventKind::Pan,
             Event::BackPressed => EventKind::BackPressed,
             Event::KeyboardWillShow { .. } => EventKind::KeyboardWillShow,
             Event::KeyboardWillHide => EventKind::KeyboardWillHide,
@@ -209,7 +234,8 @@ impl Event {
             | Event::ScrollChanged { target, .. }
             | Event::TextChanged { target, .. }
             | Event::FocusChanged { target, .. }
-            | Event::ValueChanged { target, .. } => Some(target),
+            | Event::ValueChanged { target, .. }
+            | Event::PanChanged { target, .. } => Some(target),
             Event::BackPressed
             | Event::KeyboardWillShow { .. }
             | Event::KeyboardWillHide

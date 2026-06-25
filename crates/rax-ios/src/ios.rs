@@ -22,15 +22,16 @@ use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
     UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
+    UIPanGestureRecognizer,
     UIProgressView, UIScreen, UIScrollView, UISegmentedControl, UISlider, UIStepper, UISwitch,
     UITapGestureRecognizer, UITextBorderStyle, UITextField, UITraitEnvironment,
     UIUserInterfaceStyle, UIView, UIViewController, UIWindow,
 };
 
-use rax_core::{Color, ColorScheme, EdgeInsets, Rect, Size};
+use rax_core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use rax_dom::{
-    Attribute, Backend, Event, EventSink, GestureKind, Host, Mutation, TextSelection, WidgetId,
-    WidgetKind,
+    Attribute, Backend, Event, EventSink, GesturePhase, GestureKind, Host, Mutation, TextSelection,
+    WidgetId, WidgetKind,
 };
 use rax_runtime::App;
 use rax_view::View;
@@ -240,6 +241,32 @@ define_class!(
                     dispatch_target_event(|target| Event::LongPress { target }, tag);
                 }
             }
+        }
+
+        #[unsafe(method(panRecognized:))]
+        fn pan_recognized(&self, recognizer: &UIPanGestureRecognizer) {
+            let Some(tag) = recognizer_tag(recognizer) else {
+                return;
+            };
+            let view = unsafe { recognizer.view() };
+            let t = unsafe { recognizer.translationInView(view.as_deref()) };
+            let v = unsafe { recognizer.velocityInView(view.as_deref()) };
+            let phase = match unsafe { recognizer.state() } {
+                UIGestureRecognizerState::Began => GesturePhase::Began,
+                UIGestureRecognizerState::Changed => GesturePhase::Changed,
+                _ => GesturePhase::Ended,
+            };
+            let translation = Point::new(t.x as f32, t.y as f32);
+            let velocity = Point::new(v.x as f32, v.y as f32);
+            dispatch_target_event(
+                move |target| Event::PanChanged {
+                    target,
+                    translation,
+                    velocity,
+                    phase,
+                },
+                tag,
+            );
         }
     }
 );
@@ -842,6 +869,16 @@ impl Backend for UiKitBackend {
                                 self.mtm.alloc(),
                                 Some(&self.action_target),
                                 Some(sel!(longPressRecognized:)),
+                            )
+                        };
+                        r.into_super()
+                    }
+                    GestureKind::Pan => {
+                        let r = unsafe {
+                            UIPanGestureRecognizer::initWithTarget_action(
+                                self.mtm.alloc(),
+                                Some(&self.action_target),
+                                Some(sel!(panRecognized:)),
                             )
                         };
                         r.into_super()

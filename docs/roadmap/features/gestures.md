@@ -12,7 +12,7 @@ competing recognizers. ✅ · 🟡 · ⬜.
 ## Recognizers
 - ✅ tap, double-tap, multi-tap
 - ✅ long-press (with duration, movement tolerance)
-- ⬜ pan / drag (with thresholds, axis lock)
+- 🟡 pan / drag (translation + velocity + phase; thresholds/axis-lock pending)
 - ⬜ pinch / zoom
 - ⬜ rotation
 - ⬜ fling / swipe (directional)
@@ -24,7 +24,7 @@ competing recognizers. ✅ · 🟡 · ⬜.
 - ⬜ gesture priority & cancellation
 - ⬜ native recognizer bridging (cooperate with platform scroll/back gestures)
 - ⬜ nested/overlapping gesture coordination
-- ⬜ gesture-driven animations (drag follows finger)
+- 🟡 gesture-driven animations (on_pan + reactive transform/signals; full arena pending)
 
 ## Desktop / hardware input
 - ⬜ mouse (click/right-click/middle, wheel/trackpad scroll, hover, cursor styles)

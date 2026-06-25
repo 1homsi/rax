@@ -32,7 +32,9 @@ mod mutation;
 mod tree;
 
 pub use backend::{Backend, Host, RecordingBackend};
-pub use event::{Event, EventKind, EventSink, Lifecycle, PointerId, TextSelection};
+pub use event::{
+    Event, EventKind, EventSink, GesturePhase, Lifecycle, PointerId, TextSelection,
+};
 pub use mutation::{
     Attribute, GestureKind, LinearGradient, Mutation, Role, Shadow, TextAlign, Transform, WidgetId,
     WidgetKind,

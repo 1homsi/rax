@@ -3,12 +3,24 @@
 //! specific [`LayoutStyle`] fields after the inner view builds. This is a core
 //! customizability mechanism: layout control on *every* view, not just containers.
 
-use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Position};
+use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Point, Position};
 use rax_dom::{
-    Attribute, EventKind, GestureKind, LinearGradient, Role, Shadow, Transform, Tree, WidgetId,
+    Attribute, EventKind, GesturePhase, GestureKind, LinearGradient, Role, Shadow, Transform, Tree,
+    WidgetId,
 };
 
 use crate::view::View;
+
+/// Payload delivered to [`ViewExt::on_pan`] on each pan-gesture update.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PanInfo {
+    /// Cumulative translation from the gesture start, in points.
+    pub translation: Point,
+    /// Current drag velocity, in points/second.
+    pub velocity: Point,
+    /// Lifecycle phase (began / changed / ended).
+    pub phase: GesturePhase,
+}
 
 /// A view whose layout style is post-processed by `apply` after it builds.
 pub struct Styled<V, F> {
@@ -244,6 +256,33 @@ pub trait ViewExt: View + Sized {
         self.decorate(move |t, id| {
             t.on(id, EventKind::DoubleTap, move |_| f());
             t.enable_gesture(id, GestureKind::DoubleTap);
+        })
+    }
+
+    /// Runs `f` on each update of a pan/drag gesture, passing the cumulative
+    /// translation, velocity, and phase. Enables drag-to-move, swipe-to-dismiss,
+    /// and gesture-driven animation.
+    fn on_pan(
+        self,
+        mut f: impl FnMut(PanInfo) + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            t.on(id, EventKind::Pan, move |event| {
+                if let rax_dom::Event::PanChanged {
+                    translation,
+                    velocity,
+                    phase,
+                    ..
+                } = event
+                {
+                    f(PanInfo {
+                        translation: *translation,
+                        velocity: *velocity,
+                        phase: *phase,
+                    });
+                }
+            });
+            t.enable_gesture(id, GestureKind::Pan);
         })
     }
 

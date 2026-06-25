@@ -75,7 +75,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Timing + easing animations | ✓ | ✓ | ✅ |
 | Spring / decay | ✓ | ✓ | ✅ |
 | Tap / long-press / double-tap | ✓ | ✓ | ✅ |
-| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | ⬜ |
+| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch/rotate pending) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ⬜ |
 | Layout / shared-element animation | community | ✓ | ⬜ |
 | Off-main-thread animation | ✓ | ✓ | ⬜ |

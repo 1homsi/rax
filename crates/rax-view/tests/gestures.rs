@@ -57,3 +57,29 @@ fn long_press_and_double_tap_route_to_their_handlers() {
     assert!(long.get());
     assert!(dbl.get());
 }
+
+#[test]
+fn on_pan_enables_recognizer_and_reports_translation() {
+    use rax_core::Point;
+    use rax_dom::GesturePhase;
+
+    let last = Rc::new(std::cell::RefCell::new(None));
+    let l2 = last.clone();
+    let (mut tree, log, id) = build(text("drag").on_pan(move |info| *l2.borrow_mut() = Some(info)));
+
+    assert!(log.borrow().contains(&Mutation::AddGesture {
+        id,
+        gesture: GestureKind::Pan
+    }));
+
+    tree.dispatch(&Event::PanChanged {
+        target: id,
+        translation: Point::new(12.0, -4.0),
+        velocity: Point::new(100.0, 0.0),
+        phase: GesturePhase::Changed,
+    });
+
+    let info = last.borrow().expect("pan handler fired");
+    assert_eq!(info.translation, Point::new(12.0, -4.0));
+    assert_eq!(info.phase, GesturePhase::Changed);
+}

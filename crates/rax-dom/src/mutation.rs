@@ -108,6 +108,8 @@ pub enum GestureKind {
     DoubleTap,
     /// Long press.
     LongPress,
+    /// Pan / drag (continuous; reports translation + velocity).
+    Pan,
 }
 
 /// A single settable **paint** property on a widget.
