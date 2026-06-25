@@ -103,3 +103,15 @@ fn transform_emits_affine_attribute() {
             if *i == id && t.rotate == 1.0 && t.scale_x == 2.0 && t.scale_y == 2.0
     )));
 }
+
+#[test]
+fn gradient_emits_linear_gradient_attribute() {
+    use rax_view::LinearGradient;
+    let g = LinearGradient::vertical([Color::rgb(255, 0, 0), Color::rgb(0, 0, 255)]);
+    let (_tree, log, id) = build(text("hdr").gradient(g));
+    assert!(log.borrow().iter().any(|m| matches!(
+        m,
+        Mutation::SetAttribute { id: i, attr: Attribute::Gradient(g) }
+            if *i == id && g.colors.len() == 2 && g.start == (0.5, 0.0) && g.end == (0.5, 1.0)
+    )));
+}

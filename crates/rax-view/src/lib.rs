@@ -69,7 +69,7 @@ pub use view::{boxed, BoxedView, View, ViewSequence};
 
 // Re-export the style enums used by the builder API for convenience.
 pub use rax_core::{AlignItems, Dimension, EdgeInsets, FlexWrap, JustifyContent, Position};
-pub use rax_dom::{Role, TextAlign, Transform};
+pub use rax_dom::{LinearGradient, Role, TextAlign, Transform};
 
 use rax_dom::{Tree, WidgetId};
 

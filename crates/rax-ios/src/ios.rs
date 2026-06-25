@@ -13,11 +13,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use objc2::rc::Retained;
-use objc2::runtime::{NSObject, NSObjectProtocol};
+use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
 use objc2::{define_class, msg_send, sel, ClassType, MainThreadMarker, MainThreadOnly};
 use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
-use objc2_foundation::{NSNotification, NSString};
-use objc2_quartz_core::CADisplayLink;
+use objc2_foundation::{NSMutableArray, NSNotification, NSString};
+use objc2_quartz_core::{CADisplayLink, CAGradientLayer};
 use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
@@ -268,6 +268,7 @@ fn setup(mtm: MainThreadMarker) {
         container: container.clone(),
         action_target: action_target.clone(),
         views: HashMap::new(),
+        gradient_layers: HashMap::new(),
     };
 
     let viewport = Size::new(bounds.size.width as f32, bounds.size.height as f32);
@@ -328,6 +329,9 @@ struct UiKitBackend {
     container: Retained<UIView>,
     action_target: Retained<ActionTarget>,
     views: HashMap<u64, Retained<UIView>>,
+    /// Gradient sublayers keyed by widget id, so we can resize them to match the
+    /// view's bounds whenever its frame changes.
+    gradient_layers: HashMap<u64, Retained<CAGradientLayer>>,
 }
 
 impl UiKitBackend {
@@ -678,11 +682,49 @@ impl Backend for UiKitBackend {
                         };
                         unsafe { view.setTransform(m) };
                     }
+                    Attribute::Gradient(g) => {
+                        // Reuse an existing gradient layer for this id, else make
+                        // one and insert it beneath the view's content.
+                        let key = id.to_u64();
+                        let layer = self.gradient_layers.entry(key).or_insert_with(|| {
+                            let gl = unsafe { CAGradientLayer::new() };
+                            view.layer().insertSublayer_atIndex(&gl, 0);
+                            gl
+                        });
+                        let colors = NSMutableArray::<AnyObject>::new();
+                        for c in &g.colors {
+                            let cg = unsafe { to_ui_color(*c).CGColor() };
+                            // A CGColorRef is a valid `id` for an NSArray.
+                            let obj: &AnyObject =
+                                unsafe { &*((&*cg as *const objc2_core_graphics::CGColor).cast()) };
+                            colors.addObject(obj);
+                        }
+                        unsafe { layer.setColors(Some(&colors)) };
+                        layer.setStartPoint(CGPoint {
+                            x: g.start.0 as f64,
+                            y: g.start.1 as f64,
+                        });
+                        layer.setEndPoint(CGPoint {
+                            x: g.end.0 as f64,
+                            y: g.end.1 as f64,
+                        });
+                        layer.setFrame(view.bounds());
+                    }
                 }
             }
             Mutation::SetFrame { id, rect } => {
                 if let Some(view) = self.view(id) {
                     unsafe { view.setFrame(to_cg_rect(rect)) };
+                }
+                // Keep any gradient sublayer filling the view's new bounds.
+                if let Some(layer) = self.gradient_layers.get(&id.to_u64()) {
+                    layer.setFrame(CGRect {
+                        origin: CGPoint { x: 0.0, y: 0.0 },
+                        size: CGSize {
+                            width: rect.size.width as f64,
+                            height: rect.size.height as f64,
+                        },
+                    });
                 }
             }
             Mutation::InsertChild { parent, child, .. } => {
@@ -698,6 +740,7 @@ impl Backend for UiKitBackend {
                 }
             }
             Mutation::Destroy { id } => {
+                self.gradient_layers.remove(&id.to_u64());
                 if let Some(view) = self.views.remove(&id.to_u64()) {
                     view.removeFromSuperview();
                 }

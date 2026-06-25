@@ -4,7 +4,9 @@
 //! customizability mechanism: layout control on *every* view, not just containers.
 
 use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Position};
-use rax_dom::{Attribute, EventKind, GestureKind, Role, Shadow, Transform, Tree, WidgetId};
+use rax_dom::{
+    Attribute, EventKind, GestureKind, LinearGradient, Role, Shadow, Transform, Tree, WidgetId,
+};
 
 use crate::view::View;
 
@@ -179,6 +181,11 @@ pub trait ViewExt: View + Sized {
     /// Applies a 2D affine [`Transform`] (scale/rotate/translate) to rendering.
     fn transform(self, t: Transform) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |tree, id| tree.set(id, Attribute::Transform(t)))
+    }
+
+    /// Fills the background with a [`LinearGradient`].
+    fn gradient(self, g: LinearGradient) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |tree, id| tree.set(id, Attribute::Gradient(g)))
     }
 
     // --- reactive paint modifiers (re-emit when their signals change) ---

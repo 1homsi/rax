@@ -170,6 +170,40 @@ pub enum Attribute {
     TextAlign(TextAlign),
     /// A 2D affine transform (scale/rotate/translate) on the rendered view.
     Transform(Transform),
+    /// A linear gradient background fill.
+    Gradient(LinearGradient),
+}
+
+/// A linear color gradient used as a background fill. `start` and `end` are in
+/// unit coordinates (`0,0` = top-left, `1,1` = bottom-right).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinearGradient {
+    /// Two or more color stops, evenly distributed.
+    pub colors: Vec<Color>,
+    /// Gradient start point in unit coordinates.
+    pub start: (f32, f32),
+    /// Gradient end point in unit coordinates.
+    pub end: (f32, f32),
+}
+
+impl LinearGradient {
+    /// A vertical (top-to-bottom) gradient through `colors`.
+    pub fn vertical(colors: impl IntoIterator<Item = Color>) -> Self {
+        LinearGradient {
+            colors: colors.into_iter().collect(),
+            start: (0.5, 0.0),
+            end: (0.5, 1.0),
+        }
+    }
+
+    /// A horizontal (leading-to-trailing) gradient through `colors`.
+    pub fn horizontal(colors: impl IntoIterator<Item = Color>) -> Self {
+        LinearGradient {
+            colors: colors.into_iter().collect(),
+            start: (0.0, 0.5),
+            end: (1.0, 0.5),
+        }
+    }
 }
 
 /// A 2D affine transform applied to a widget's rendering: scale, then rotate,
