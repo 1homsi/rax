@@ -50,6 +50,8 @@ pub enum WidgetKind {
     Switch,
     /// A value slider (maps to `UISlider` / `SeekBar`).
     Slider,
+    /// A single-line editable text field (maps to `UITextField` / `EditText`).
+    TextInput,
 }
 
 /// A single settable **paint** property on a widget.
@@ -86,6 +88,8 @@ pub enum Attribute {
     FloatValue(f32),
     /// Tint color (e.g. image tint, control accent).
     TintColor(Color),
+    /// Placeholder text (e.g. for a text field).
+    Placeholder(String),
 }
 
 /// A drop shadow specification.

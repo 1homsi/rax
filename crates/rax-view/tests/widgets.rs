@@ -1,10 +1,10 @@
 //! Switch / slider / image widgets via the recording backend.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rax_dom::{Attribute, Event, Host, Mutation, RecordingBackend, Tree};
-use rax_view::{image, slider, switch, View};
+use rax_dom::{Attribute, Event, Host, Mutation, RecordingBackend, TextSelection, Tree};
+use rax_view::{image, slider, switch, text_input, View};
 
 fn harness() -> (Tree, Rc<std::cell::RefCell<Vec<Mutation>>>) {
     let backend = RecordingBackend::new();
@@ -48,6 +48,35 @@ fn slider_reports_value() {
         value: 0.8,
     });
     assert!((last.get() - 0.8).abs() < 1e-6, "slider reported new value");
+}
+
+#[test]
+fn text_input_emits_initial_value_placeholder_and_reports_edits() {
+    let (mut tree, log) = harness();
+    let captured = Rc::new(RefCell::new(String::new()));
+    let c2 = captured.clone();
+    let id = text_input("hi", move |s| *c2.borrow_mut() = s)
+        .placeholder("Name")
+        .build(&mut tree);
+
+    {
+        let muts = log.borrow();
+        assert!(muts.contains(&Mutation::SetAttribute {
+            id,
+            attr: Attribute::Text("hi".into())
+        }));
+        assert!(muts.contains(&Mutation::SetAttribute {
+            id,
+            attr: Attribute::Placeholder("Name".into())
+        }));
+    }
+
+    tree.dispatch(&Event::TextChanged {
+        target: id,
+        value: "hello".into(),
+        selection: TextSelection::caret(5),
+    });
+    assert_eq!(&*captured.borrow(), "hello");
 }
 
 #[test]

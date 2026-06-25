@@ -21,11 +21,13 @@ use objc2_quartz_core::CADisplayLink;
 use objc2_ui_kit::{
     UIApplication, UIApplicationDelegate, UIButton, UIButtonType, UIColor, UIControl,
     UIControlEvents, UIControlState, UIFont, UIImage, UIImageView, UILabel, UIScreen, UISlider,
-    UISwitch, UIView, UIViewController, UIWindow,
+    UISwitch, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
 };
 
 use rax_core::{Color, Rect, Size};
-use rax_dom::{Attribute, Backend, Event, EventSink, Host, Mutation, WidgetId, WidgetKind};
+use rax_dom::{
+    Attribute, Backend, Event, EventSink, Host, Mutation, TextSelection, WidgetId, WidgetKind,
+};
 use rax_runtime::App;
 use rax_view::View;
 
@@ -82,6 +84,20 @@ fn handle_value_changed(tag_bits: u64, value: f64) {
     });
 }
 
+fn handle_text_changed(tag_bits: u64, value: String) {
+    STATE.with(|s| {
+        if let Some(state) = s.borrow().as_ref() {
+            let selection = TextSelection::caret(value.chars().count());
+            state.event_sink.dispatch(Event::TextChanged {
+                target: WidgetId::from_u64(tag_bits),
+                value,
+                selection,
+            });
+            state.app.borrow_mut().tick();
+        }
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Objective-C glue classes (no Rust ivars; they read the thread-local STATE).
 // ---------------------------------------------------------------------------
@@ -116,6 +132,13 @@ define_class!(
                 0.0
             };
             handle_value_changed(tag, value);
+        }
+
+        #[unsafe(method(textChanged:))]
+        fn text_changed(&self, sender: &UITextField) {
+            let tag = unsafe { sender.tag() } as u64;
+            let text = unsafe { sender.text() }.map(|s| s.to_string()).unwrap_or_default();
+            handle_text_changed(tag, text);
         }
     }
 );
@@ -333,6 +356,20 @@ impl Backend for UiKitBackend {
                         }
                         sl.into_super().into_super()
                     }
+                    WidgetKind::TextInput => {
+                        let field: Retained<UITextField> =
+                            unsafe { UITextField::initWithFrame(self.mtm.alloc(), zero) };
+                        unsafe {
+                            field.setBorderStyle(UITextBorderStyle::RoundedRect);
+                            field.addTarget_action_forControlEvents(
+                                Some(&self.action_target),
+                                sel!(textChanged:),
+                                UIControlEvents::EditingChanged,
+                            );
+                            field.setTag(id.to_u64() as isize);
+                        }
+                        field.into_super().into_super()
+                    }
                 };
                 self.views.insert(id.to_u64(), view);
             }
@@ -347,6 +384,18 @@ impl Backend for UiKitBackend {
                             unsafe { label.setText(Some(&ns)) };
                         } else if let Ok(button) = view.clone().downcast::<UIButton>() {
                             unsafe { button.setTitle_forState(Some(&ns), UIControlState::Normal) };
+                        } else if let Ok(field) = view.clone().downcast::<UITextField>() {
+                            // Avoid clobbering the field mid-edit while focused.
+                            let editing = unsafe { field.isFirstResponder() };
+                            if !editing {
+                                unsafe { field.setText(Some(&ns)) };
+                            }
+                        }
+                    }
+                    Attribute::Placeholder(text) => {
+                        if let Ok(field) = view.clone().downcast::<UITextField>() {
+                            let ns = NSString::from_str(&text);
+                            unsafe { field.setPlaceholder(Some(&ns)) };
                         }
                     }
                     Attribute::FontSize(size) => {

@@ -125,6 +125,11 @@ impl Tree {
         self.create(WidgetKind::Slider)
     }
 
+    /// Creates a single-line editable text field.
+    pub fn create_text_input(&mut self) -> WidgetId {
+        self.create(WidgetKind::TextInput)
+    }
+
     fn create(&mut self, kind: WidgetKind) -> WidgetId {
         let index = self.nodes.insert(ElementNode {
             kind,

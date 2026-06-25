@@ -42,6 +42,7 @@ mod image;
 mod modifier;
 mod spacer;
 mod text;
+mod text_input;
 mod view;
 
 pub use button::{button, Button};
@@ -53,6 +54,7 @@ pub use image::{image, Image};
 pub use modifier::{Decorated, Styled, ViewExt};
 pub use spacer::{spacer, Spacer};
 pub use text::{text, DynamicText, IntoText, StaticText, Text};
+pub use text_input::{text_input, TextInput};
 pub use view::{boxed, BoxedView, View, ViewSequence};
 
 // Re-export the style enums used by the builder API for convenience.
