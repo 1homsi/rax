@@ -24,23 +24,23 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | View / Text / Button | ✓ | ✓ | ✅ |
 | Flexbox layout | ✓ (Yoga) | ✓ | ✅ |
 | Grid layout | community | ✓ | ⬜ |
-| Image (cache/resize/placeholder) | ✓ | ✓ | 🟡 (source+tint; cache later) |
+| Image (cache/resize/placeholder) | ✓ | ✓ | 🟡 (source+tint+ImageData; network/cache later) |
 | Icon (vector / SF Symbols) | community | ✓ | ✅ |
 | ScrollView | ✓ | ✓ | ✅ |
 | Virtualized list + recycling | ✓ | ✓ | ⬜ |
 | SectionList / sticky headers | ✓ | ✓ (slivers) | ⬜ |
-| TextInput (controlled + IME) | ✓ | ✓ | 🟡 (controlled; IME later) |
+| TextInput (controlled + IME) | ✓ | ✓ | ✅ (controlled, secure, return key, onSubmit; IME later) |
 | Switch / Slider | ✓ | ✓ | ✅ |
 | SegmentedControl | ✓ | ✓ | ✅ |
 | Stepper | ✓ | ✓ | ✅ |
 | Checkbox / Radio | ✓ | ✓ | ✅ (composed in userland) |
-| Picker | ✓ | ✓ | ⬜ |
+| Picker | ✓ | ✓ | ✅ (inline, composed) |
 | ActivityIndicator / Progress | ✓ | ✓ | ✅ |
-| Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ⬜ |
-| Tabs / BottomNav | community | ✓ | 🟡 (tab nav + icon bar) |
+| Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ✅ (Modal + BottomSheet composed; Dialog/ActionSheet ⬜) |
+| Tabs / BottomNav | community | ✓ | ✅ |
 | Drawer | community | ✓ | ⬜ |
 | Divider / Spacer | ✓ | ✓ | ✅ |
-| Pull-to-refresh / swipe actions | ✓ | ✓ | ⬜ |
+| Pull-to-refresh / swipe actions | ✓ | ✓ | ✅ pull-to-refresh; ⬜ swipe actions |
 | WebView (escape hatch) | community | plugin | ⬜ |
 
 ## Styling & theming
@@ -75,7 +75,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Timing + easing animations | ✓ | ✓ | ✅ |
 | Spring / decay | ✓ | ✓ | ✅ |
 | Tap / long-press / double-tap | ✓ | ✓ | ✅ |
-| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch/rotate pending) |
+| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch/rotate ⬜; arena ⬜) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ⬜ |
 | Layout / shared-element animation | community | ✓ | ⬜ |
 | Off-main-thread animation | ✓ | ✓ | ⬜ |
@@ -86,7 +86,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 |---|---|---|---|
 | Font weight / italic / align | ✓ | ✓ | ✅ |
 | Rich text / spans | ✓ | ✓ | ⬜ |
-| Custom fonts / dynamic type | ✓ | ✓ | ⬜ |
+| Custom fonts / dynamic type | ✓ | ✓ | ✅ custom font family (`font_family()`); ⬜ dynamic type |
 | RTL / bidi | ✓ | ✓ | ⬜ |
 | i18n (catalog + interpolation) | community | ✓ (intl) | 🟡 (ICU/plurals later) |
 | Screen-reader labels + roles | ✓ | ✓ | 🟡 |
@@ -95,7 +95,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 ## Data, async, storage
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
-| HTTP / fetch | ✓ | ✓ | 🟡 (client trait + mock) |
+| HTTP / fetch | ✓ | ✓ | ✅ (ureq-backed `HttpClient`) |
 | WebSocket / SSE / GraphQL | community | community | ⬜ |
 | Resource (async data + loading state) | community | community | ✅ |
 | Query cache (react-query-like) | community | community | ⬜ |
@@ -107,7 +107,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 ## Device & platform APIs
 | Capability | RN | Flutter | rax |
 |---|---|---|---|
-| Camera / media picker | ✓ | ✓ | ⬜ |
+| Camera / media picker | ✓ | ✓ | ✅ camera + QR scanner (AVFoundation); ⬜ media picker |
 | Location / maps | ✓ | ✓ | ⬜ |
 | Push + local notifications | ✓ | ✓ | ⬜ |
 | BLE / NFC | community | plugins | ⬜ |

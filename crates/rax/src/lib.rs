@@ -89,7 +89,7 @@ pub mod prelude {
 
     // High-frequency helpers from the satellite crates. Full surfaces live in
     // the namespaced modules (`rax::nav`, `rax::store`, …).
-    pub use rax_anim::{animate, decay, spring, Easing, Spring};
+    pub use rax_anim::{animate, decay, delayed, oscillate, parallel, sequence, spring, stagger, Easing, Spring};
     pub use rax_async::{create_resource, Resource};
     // HTTP client helpers — `get`/`post` return a `Resource<Response>`.
     pub use rax_net::{get, post, send, Method, Request, Response};

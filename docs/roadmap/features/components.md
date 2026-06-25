@@ -12,20 +12,20 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Column` / `Row` (flex containers)
 - ✅ `Spacer`
 - ✅ `Dynamic` (reactive subtree)
-- ⬜ `Stack` / `ZStack` (overlapping, z-ordered children)
+- ✅ `Stack` / `ZStack` (overlapping, z-ordered children)
 - ⬜ `Wrap` (flow layout)
 - ⬜ `Grid` / `LazyGrid`
 - ⬜ `Expanded` / `Flexible` helpers
 - ⬜ `AspectRatio`, `Center`, `Align`, `Positioned` (absolute)
 - ⬜ `SafeArea`
-- ⬜ `ScrollView` (🟡 basic), `LazyColumn`/`LazyRow`
+- 🟡 `ScrollView` (✅ basic), `LazyColumn`/`LazyRow`
 - ⬜ `Fragment` / keyed `For` list helper
 
 ## Text & display
-- 🟡 `Text` with font family/weight/size/color/line-height/align/truncation
+- ✅ `Text` with font family/weight/size/color/line-height/align/truncation/multi-line (`lines(n)`) — font_family shipped
 - ⬜ Rich text / spans (inline styles, links, inline images)
 - ✅ `Icon` (vector icon set + custom)
-- 🟡 `Image` (source + tint; network/placeholder/fade-in/resize modes later)
+- 🟡 `Image` (source + tint + raw bytes/ImageData ✅; network/placeholder/fade-in/resize modes later)
 - ✅ `Avatar` (composed from public API)
 - ✅ `Badge` (composed from public API)
 - ✅ `Divider` / `Separator`
@@ -35,14 +35,14 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `Skeleton` / shimmer placeholder
 
 ## Input & controls
-- 🟡 `TextInput` / `TextField` (single + multi-line) — see [text-input](text-input-and-forms.md)
+- ✅ `TextInput` / `TextField` (single + multi-line) — see [text-input](text-input-and-forms.md)
 - ✅ `Switch` / `Toggle`
 - ✅ `Checkbox` (composed from public API — no engine support needed)
 - ✅ `Radio` / `RadioGroup` (composed from public API)
 - ✅ `Slider` (single + range)
 - ✅ `Stepper`
 - ✅ `SegmentedControl`
-- ⬜ `Picker` / `Select` / `Dropdown`
+- ✅ `Picker` / `Select` / `Dropdown` (inline, composed)
 - ⬜ `DatePicker` / `TimePicker` / `DateTimePicker`
 - ⬜ `Pressable` / `Touchable` (with pressed/hover/focus states)
 - ⬜ `RatingBar`
@@ -52,7 +52,7 @@ styleable, with a headless core, and replaceable via the theme registry
 ## Feedback & status
 - ✅ `ActivityIndicator` / `Spinner`
 - ✅ `ProgressBar` (linear) / `ProgressRing` (circular)
-- ⬜ `Toast` / `Snackbar`
+- ✅ `Toast` / `Snackbar` (composed)
 - ⬜ `Alert` / `Dialog`
 - ⬜ `ActionSheet`
 - ⬜ `Banner` / inline alert
@@ -60,8 +60,8 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `StatusBar` control (style/color/visibility)
 
 ## Overlays & surfaces
-- ⬜ `Modal`
-- ⬜ `BottomSheet` (draggable, snap points)
+- ✅ `Modal` (composed)
+- ✅ `BottomSheet` (composed)
 - ⬜ `Popover`
 - ⬜ `Menu` / `ContextMenu`
 - ⬜ `Drawer` / `SideMenu`
@@ -91,7 +91,7 @@ styleable, with a headless core, and replaceable via the theme registry
 ## Media
 - ⬜ `Image`, `AnimatedImage` (GIF/WebP), `SVG`
 - ⬜ `Video` player
-- ⬜ `Camera` preview view
+- ✅ `Camera` preview view / QR scanner (AVFoundation-backed)
 - ⬜ `Map` view
 - ⬜ `WebView` (escape hatch, not the rendering model)
 

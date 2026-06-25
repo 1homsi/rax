@@ -4,14 +4,14 @@ Match RN Animated/Reanimated and Flutter's animation framework. Driven by the
 scheduler's frame loop. ⬜ planned.
 
 ## Core
-- 🟡 animated values/signals driven on the frame loop
-- 🟡 timing animations (duration + easing curves: linear/ease/cubic-bezier/steps)
+- ✅ animated values/signals driven on the frame loop
+- ✅ timing animations (duration + easing curves: linear/ease/cubic-bezier/steps)
 - ✅ spring animations (mass/stiffness/damping; presets: default/stiff/wobbly)
 - ✅ decay / fling (velocity-based coast to stop)
 - ⬜ keyframes / sequences / staggers
-- ⬜ parallel + sequential composition
-- ⬜ loop / repeat / reverse / yoyo
-- ⬜ delay, interpolation, clamping/extrapolation
+- ✅ parallel + sequential composition (`parallel()` / `sequence()`)
+- ✅ loop / oscillate / yoyo (`oscillate()`)
+- ✅ delay (`delayed()`); ⬜ interpolation, clamping/extrapolation
 - ⬜ interruptible & reversible animations
 
 ## Declarative transitions

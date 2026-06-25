@@ -4,15 +4,15 @@ The hardest parity area (controlled input + IME). Goal: match RN `TextInput` and
 Flutter `TextField`/`Form` completely. ⬜ planned unless noted.
 
 ## TextInput / TextField
-- 🟡 controlled value (value ↔ signal, two-way, race-free)
+- ✅ controlled value (value ↔ signal, two-way, race-free)
 - ⬜ uncontrolled / defaultValue
-- ⬜ single-line + multi-line (auto-grow, max lines)
+- ✅ single-line + multi-line (`TextArea` via UITextView)
 - ⬜ placeholder, prefix/suffix, clear button
 - ⬜ selection + caret control (programmatic get/set)
 - ⬜ keyboard types (default/email/number/phone/url/decimal/search)
-- ⬜ return key types + onSubmit
+- ✅ return key types (`return_key()`) + onSubmit (`on_submit()`)
 - ⬜ autocapitalize, autocorrect, spellcheck, autocomplete/contentType
-- ⬜ secure entry (password), reveal toggle
+- ✅ secure entry (`secure()`, password)
 - ⬜ max length, input masks / formatters
 - ⬜ editable/read-only/disabled
 - ⬜ onFocus/onBlur/onChange/onKeyPress/onSelectionChange

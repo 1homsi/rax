@@ -51,6 +51,7 @@ pub struct Text<M, T: IntoText<M>> {
     italic: bool,
     align: Option<rax_dom::TextAlign>,
     number_of_lines: Option<u32>,
+    font_family: Option<String>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -64,6 +65,7 @@ pub fn text<M, T: IntoText<M>>(value: T) -> Text<M, T> {
         italic: false,
         align: None,
         number_of_lines: None,
+        font_family: None,
         _marker: PhantomData,
     }
 }
@@ -117,6 +119,14 @@ impl<M, T: IntoText<M>> Text<M, T> {
         self.number_of_lines = Some(n);
         self
     }
+
+    /// Sets a custom font family by PostScript name (e.g. `"Georgia-Bold"`).
+    /// Falls back to the system font if the name is not registered on device.
+    #[must_use]
+    pub fn font_family(mut self, name: impl Into<String>) -> Self {
+        self.font_family = Some(name.into());
+        self
+    }
 }
 
 impl<M, T: IntoText<M>> View for Text<M, T> {
@@ -140,6 +150,9 @@ impl<M, T: IntoText<M>> View for Text<M, T> {
         }
         if let Some(n) = self.number_of_lines {
             tree.set(id, Attribute::NumberOfLines(n));
+        }
+        if let Some(family) = self.font_family {
+            tree.set(id, Attribute::FontFamily(family));
         }
         self.value.apply(tree, id);
         id

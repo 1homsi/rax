@@ -8,7 +8,8 @@ Typed, predictable styling with a runtime-switchable theme system. The core of
 - ✅ text color, font size
 - 🟡 borders (per-edge width, color, style, per-corner radius)
 - 🟡 shadows (box + text), elevation
-- 🟡 gradients — linear (vertical/horizontal/custom points) shipped; radial/sweep + multiple backgrounds pending
+- ✅ linear gradient (vertical/horizontal/custom points); 🟡 radial/sweep + multiple backgrounds pending
+- ✅ custom font family (`font_family()`)
 - 🟡 opacity, blend modes
 - ⬜ background images / nine-patch
 - ⬜ blur / backdrop-filter (frosted glass)

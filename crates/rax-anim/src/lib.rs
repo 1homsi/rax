@@ -291,5 +291,192 @@ pub fn is_animating() -> bool {
     ACTIVE.with(|a| !a.borrow().is_empty())
 }
 
+// ── Composition helpers ───────────────────────────────────────────────────────
+
+/// Runs two animated values in parallel.
+///
+/// Because [`animate`] / [`spring`] / [`decay`] all start immediately upon
+/// call and return independent [`Signal`]s, running them in parallel is the
+/// default behaviour. This function is a *documentation helper*: it takes two
+/// already-started signals and returns them as a tuple, making intent explicit
+/// in code.
+///
+/// # Example
+/// ```rust
+/// use rax_anim::{animate, parallel, Easing};
+/// use rax_reactive::create_root;
+///
+/// let ((x, y), scope) = create_root(|| {
+///     parallel(
+///         animate(0.0, 100.0, 0.3, Easing::EaseOut),
+///         animate(0.0,  50.0, 0.3, Easing::EaseOut),
+///     )
+/// });
+/// scope.dispose();
+/// ```
+pub fn parallel<A: 'static, B: 'static>(a: Signal<A>, b: Signal<B>) -> (Signal<A>, Signal<B>) {
+    (a, b)
+}
+
+/// Runs a second animation after a first one completes.
+///
+/// Watches `first` until it reaches `to` (within 0.01 units), then calls
+/// `second` once. The check runs inside a reactive effect so it fires
+/// automatically on every signal update.
+///
+/// # Limitations
+/// This is a best-effort helper: it triggers `second` the first time `first`
+/// stabilises near `to`. If the animated value overshoots (e.g. a spring) or
+/// never exactly reaches `to`, the threshold (`0.01`) may need tuning. For
+/// frame-perfect sequencing, use a timer future via `rax_async::spawn_local`.
+///
+/// # Example
+/// ```rust
+/// use rax_anim::{animate, sequence, tick, Easing};
+/// use rax_reactive::{create_root, create_signal};
+///
+/// let (second_started, scope) = create_root(|| {
+///     let flag = create_signal(false);
+///     let first = animate(0.0, 100.0, 0.5, Easing::Linear);
+///     sequence(first, 100.0, move || flag.set(true));
+///     flag
+/// });
+/// for _ in 0..60 { tick(1.0 / 60.0); }
+/// assert!(second_started.get());
+/// scope.dispose();
+/// ```
+pub fn sequence(first: Signal<f32>, to: f32, second: impl FnOnce() + 'static) {
+    use std::cell::Cell;
+    let fired = std::rc::Rc::new(Cell::new(false));
+    let second = std::cell::RefCell::new(Some(second));
+    rax_reactive::create_effect(move || {
+        if fired.get() {
+            return;
+        }
+        if (first.get() - to).abs() < 0.01 {
+            fired.set(true);
+            if let Some(f) = second.borrow_mut().take() {
+                f();
+            }
+        }
+    });
+}
+
+/// Staggers `n` animations, calling `make_anim(i)` for each index.
+///
+/// **Timer support pending.** True staggering (starting animation `i` only
+/// after `delay_ms * i` milliseconds) requires wall-clock timer callbacks,
+/// which are not yet available in `rax_anim`. This function currently calls
+/// `make_anim` for every index **immediately**, so all animations start at the
+/// same time. The `delay_ms` parameter is accepted but ignored.
+///
+/// Once `rax_async` timer primitives are stable, this will be updated to
+/// honour the delay without breaking callers.
+///
+/// # Example
+/// ```rust
+/// use rax_anim::{stagger, animate, Easing};
+/// use rax_reactive::create_root;
+///
+/// let (signals, scope) = create_root(|| {
+///     stagger(3, 50, |i| animate(0.0, 100.0, 0.3, Easing::EaseOut))
+/// });
+/// scope.dispose();
+/// ```
+pub fn stagger<F>(n: usize, _delay_ms: u32, mut make_anim: F) -> Vec<Signal<f32>>
+where
+    F: FnMut(usize) -> Signal<f32>,
+{
+    (0..n).map(|i| make_anim(i)).collect()
+}
+
+/// Creates an oscillating animation that bounces between `from` and `to`.
+///
+/// The returned [`Signal`] carries the current animated position. Internally
+/// the function uses a direction flag and nested reactive effects:
+///
+/// 1. An outer effect watches `dir` (true = forward, false = reverse) and
+///    starts a new [`animate`] leg each time the direction flips.
+/// 2. An inner effect copies the current leg's value into the returned signal
+///    and flips `dir` when the leg nears its target, which re-triggers step 1.
+///
+/// This approach works entirely within the existing reactive/animation
+/// scheduler — no timers needed. Accuracy depends on frame rate; the
+/// completion threshold is `0.5` units.
+///
+/// # Example
+/// ```rust
+/// use rax_anim::{oscillate, tick, Easing};
+/// use rax_reactive::create_root;
+///
+/// let (v, scope) = create_root(|| oscillate(0.0, 100.0, 1.0, Easing::Linear));
+/// tick(0.6);          // approaching 60
+/// let mid = v.get();
+/// assert!(mid > 0.0 && mid < 100.0, "mid={mid}");
+/// scope.dispose();
+/// ```
+pub fn oscillate(from: f32, to: f32, duration: f32, easing: Easing) -> Signal<f32> {
+    let v = rax_reactive::create_signal(from);
+    let dir = rax_reactive::create_signal(true); // true = forward
+
+    rax_reactive::create_effect(move || {
+        let forward = dir.get();
+        let (a, b) = if forward { (from, to) } else { (to, from) };
+        let anim_val = animate(a, b, duration, easing);
+        // Inner effect: mirror value and flip direction when the leg ends.
+        rax_reactive::create_effect(move || {
+            let cur = anim_val.get();
+            v.set(cur);
+            let target = if forward { to } else { from };
+            if (cur - target).abs() < 0.5 {
+                dir.update(|d| *d = !*d);
+            }
+        });
+    });
+    v
+}
+
+/// Returns a signal that starts animating only after `start_trigger` becomes
+/// `true`.
+///
+/// Until the trigger fires the signal holds `from`. Once `start_trigger` is
+/// `true`, [`animate`] is started and the returned signal mirrors its value.
+///
+/// # Limitations
+/// For precise wall-clock delays, combine a timer future from
+/// `rax_async::spawn_local` with a simple `Signal<bool>` trigger instead.
+///
+/// # Example
+/// ```rust
+/// use rax_anim::{delayed, tick, Easing};
+/// use rax_reactive::{create_root, create_signal};
+///
+/// let (val, scope) = create_root(|| {
+///     let trigger = create_signal(false);
+///     let v = delayed(trigger, 0.0, 100.0, 0.5, Easing::Linear);
+///     trigger.set(true);   // fire the trigger
+///     v
+/// });
+/// tick(0.5);
+/// assert!((val.get() - 100.0).abs() < 0.5);
+/// scope.dispose();
+/// ```
+pub fn delayed(
+    start_trigger: Signal<bool>,
+    from: f32,
+    to: f32,
+    duration: f32,
+    easing: Easing,
+) -> Signal<f32> {
+    let value = rax_reactive::create_signal(from);
+    rax_reactive::create_effect(move || {
+        if start_trigger.get() {
+            let anim = animate(from, to, duration, easing);
+            rax_reactive::create_effect(move || value.set(anim.get()));
+        }
+    });
+    value
+}
+
 #[cfg(test)]
 mod tests;

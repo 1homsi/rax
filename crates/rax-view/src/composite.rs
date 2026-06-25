@@ -11,8 +11,9 @@
 //! `on_change`/`on_select` callback — the same value-in / event-out shape as the
 //! native [`switch`](crate::switch) and [`slider`](crate::slider).
 
-use rax_core::{AlignItems, Color, EdgeInsets};
+use rax_core::{AlignItems, Color, EdgeInsets, JustifyContent};
 use rax_dom::{Tree, WidgetId};
+use rax_reactive::Signal;
 
 use crate::container::{column, row};
 use crate::dynamic::dynamic;
@@ -423,4 +424,164 @@ impl<F: FnMut() + 'static> View for Chip<F> {
             .on_tap(self.on_tap)
             .build(tree)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Modal — full-screen dimmed overlay
+// ---------------------------------------------------------------------------
+
+/// Shows `content` as a centered modal overlay when `show` is `true`.
+///
+/// Tapping the dim background calls `on_dismiss`. The overlay sits in the
+/// normal layout flow at zero size when hidden, so it does not affect siblings;
+/// when shown it expands (flex-grow 1) and covers the parent container.
+///
+/// ```
+/// use rax_view::modal;
+/// use rax_reactive::create_signal;
+///
+/// let open = create_signal(false);
+/// let v = modal(open, move || open.set(false), || rax_view::text("Hello"));
+/// ```
+pub fn modal<V: View + 'static>(
+    show: Signal<bool>,
+    on_dismiss: impl Fn() + Clone + 'static,
+    content: impl Fn() -> V + 'static,
+) -> impl View {
+    dynamic(move || {
+        if !show.get() {
+            return boxed(column(()).size(0.0, 0.0));
+        }
+        let dismiss = on_dismiss.clone();
+        boxed(
+            column((boxed(
+                column((boxed(content()),))
+                    .align(AlignItems::Center)
+                    .justify(JustifyContent::Center),
+            ),))
+            .grow()
+            .align(AlignItems::Center)
+            .justify(JustifyContent::Center)
+            .background(Color::rgba(0, 0, 0, 180))
+            .on_tap(move || dismiss()),
+        )
+    })
+    .grow(0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Bottom sheet — slide-up panel
+// ---------------------------------------------------------------------------
+
+/// Shows `content` in a bottom sheet when `show` is `true`.
+///
+/// Tapping the translucent dim area above the panel calls `on_dismiss`.
+///
+/// ```
+/// use rax_view::bottom_sheet;
+/// use rax_reactive::create_signal;
+///
+/// let open = create_signal(false);
+/// let v = bottom_sheet(open, move || open.set(false), || rax_view::text("Sheet body"));
+/// ```
+pub fn bottom_sheet<V: View + 'static>(
+    show: Signal<bool>,
+    on_dismiss: impl Fn() + Clone + 'static,
+    content: impl Fn() -> V + 'static,
+) -> impl View {
+    dynamic(move || {
+        if !show.get() {
+            return boxed(column(()).size(0.0, 0.0));
+        }
+        let dismiss = on_dismiss.clone();
+        boxed(
+            column((
+                boxed(column(()).grow().on_tap(move || dismiss())),
+                boxed(
+                    column((boxed(content()),))
+                        .background(Color::WHITE)
+                        .corner_radius(16.0)
+                        .padding(20.0),
+                ),
+            ))
+            .grow()
+            .background(Color::rgba(0, 0, 0, 150)),
+        )
+    })
+    .grow(0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Toast / Snackbar
+// ---------------------------------------------------------------------------
+
+/// Renders a toast bar when `message` contains `Some(text)`, nothing when `None`.
+///
+/// Position and animation are the caller's responsibility (e.g. wrap in a
+/// `stack` overlay pinned to the bottom with margin).
+///
+/// ```
+/// use rax_view::toast;
+/// use rax_reactive::create_signal;
+///
+/// let msg: rax_reactive::Signal<Option<String>> = create_signal(None);
+/// let v = toast(msg);
+/// ```
+pub fn toast(message: Signal<Option<String>>) -> impl View {
+    dynamic(move || match message.get() {
+        None => boxed(column(()).size(0.0, 0.0)),
+        Some(msg) => boxed(
+            row((boxed(text(msg).font_size(14.0).color(Color::WHITE).grow(1.0)),))
+                .padding(14.0)
+                .background(Color::rgb(30, 30, 40))
+                .corner_radius(10.0),
+        ),
+    })
+    .grow(0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Picker
+// ---------------------------------------------------------------------------
+
+/// A vertical list of labelled rows where the currently-selected item is
+/// highlighted with a checkmark.
+///
+/// ```
+/// use rax_view::picker;
+///
+/// let view = picker(
+///     vec!["Apple".to_string(), "Banana".to_string()],
+///     0,
+///     |i| println!("picked {i}"),
+/// );
+/// ```
+pub fn picker(
+    options: Vec<String>,
+    selected: usize,
+    on_select: impl Fn(usize) + Clone + 'static,
+) -> impl View {
+    let rows: Vec<BoxedView> = options
+        .into_iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let on_select = on_select.clone();
+            let is_selected = i == selected;
+            let checkmark: BoxedView = if is_selected {
+                boxed(icon("checkmark").tint(DEFAULT_TINT).size(16.0, 16.0))
+            } else {
+                boxed(column(()).size(16.0, 16.0))
+            };
+            boxed(
+                row((
+                    boxed(text(label).font_size(16.0).grow(1.0)),
+                    checkmark,
+                ))
+                .padding(14.0)
+                .align(AlignItems::Center)
+                .on_tap(move || on_select(i)),
+            )
+        })
+        .collect();
+    column(rows).corner_radius(10.0).background(Color::WHITE)
 }

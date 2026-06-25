@@ -212,6 +212,9 @@ pub enum Attribute {
     Secure(bool),
     /// Enables QR code scanning on a Camera widget.
     QrScanning(bool),
+    /// Custom font family by PostScript name (e.g. `"Georgia-Bold"`). Falls
+    /// back to the system font if the name is not found on device.
+    FontFamily(String),
 }
 
 /// A linear color gradient used as a background fill. `start` and `end` are in

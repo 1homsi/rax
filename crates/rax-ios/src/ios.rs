@@ -929,6 +929,21 @@ impl Backend for UiKitBackend {
                             }
                         }
                     }
+                    Attribute::FontFamily(family) => {
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            let size = unsafe { label.font() }
+                                .map(|f| unsafe { f.pointSize() })
+                                .unwrap_or(17.0);
+                            let name = NSString::from_str(&family);
+                            // If the named font exists, use it; otherwise fall back to
+                            // the system font at the same size so text is never invisible.
+                            let font = unsafe { UIFont::fontWithName_size(&name, size) }
+                                .unwrap_or_else(|| unsafe {
+                                    UIFont::systemFontOfSize(size)
+                                });
+                            unsafe { label.setFont(Some(&font)) };
+                        }
+                    }
                     Attribute::TextAlign(align) => {
                         if let Ok(label) = view.clone().downcast::<UILabel>() {
                             let a = match align {

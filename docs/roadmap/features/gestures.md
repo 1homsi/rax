@@ -12,7 +12,7 @@ competing recognizers. ✅ · 🟡 · ⬜.
 ## Recognizers
 - ✅ tap, double-tap, multi-tap
 - ✅ long-press (with duration, movement tolerance)
-- 🟡 pan / drag (translation + velocity + phase; thresholds/axis-lock pending)
+- ✅ pan / drag (translation + velocity + phase); ⬜ thresholds/axis-lock
 - ⬜ pinch / zoom
 - ⬜ rotation
 - ⬜ fling / swipe (directional)

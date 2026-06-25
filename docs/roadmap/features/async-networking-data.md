@@ -11,7 +11,7 @@ Match `fetch`/axios/react-query (RN) and `http`/`dio`/`riverpod` (Flutter). ⬜.
 - ⬜ structured concurrency helpers
 
 ## Networking
-- 🟡 HTTP client behind a trait (GET/POST/etc., headers, query, body)
+- ✅ HTTP client behind a trait (GET/POST/etc., headers, query, body) — ureq-backed `HttpClient`
 - ⬜ TLS, cert pinning, cookies, redirects, timeouts, retries/backoff
 - ⬜ multipart upload, streaming download, progress
 - ⬜ JSON (serde) + form/urlencoded; typed request/response
@@ -26,7 +26,7 @@ Match `fetch`/axios/react-query (RN) and `http`/`dio`/`riverpod` (Flutter). ⬜.
 - ⬜ optimistic updates + rollback
 - ⬜ pagination / infinite queries
 - ⬜ background refetch, polling, focus refetch
-- 🟡 `Resource`/suspense integration with the reactive layer
+- ✅ `Resource`/suspense integration with the reactive layer
 - ⬜ offline-first sync primitives
 
 ## Serialization & data

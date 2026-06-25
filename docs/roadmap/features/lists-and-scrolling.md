@@ -5,7 +5,7 @@ Match RN `FlatList`/`SectionList`/`VirtualizedList` and Flutter
 
 ## Scrolling
 - ✅ `ScrollView` (vertical, basic)
-- ⬜ horizontal scroll, bidirectional
+- ✅ horizontal `ScrollView`; ⬜ bidirectional
 - ⬜ momentum / deceleration matching platform physics
 - ⬜ overscroll / bounce (iOS) / stretch (Android)
 - ⬜ paging / snap-to-interval / snap points
@@ -31,7 +31,7 @@ Match RN `FlatList`/`SectionList`/`VirtualizedList` and Flutter
 - ⬜ windowing tuning (overscan)
 
 ## Interactions & affordances
-- ⬜ pull-to-refresh (`RefreshControl`)
+- ✅ pull-to-refresh (`RefreshControl`)
 - ⬜ infinite scroll / onEndReached / pagination
 - ⬜ swipe actions (swipe-to-delete, leading/trailing)
 - ⬜ drag-to-reorder

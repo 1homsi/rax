@@ -25,7 +25,7 @@ the union of RN community modules + Flutter plugins + Expo SDK. ⬜ planned.
 - ⬜ nearby / multipeer
 
 ## Camera, media & files
-- ⬜ camera capture, image/video picker, media library
+- ✅ camera capture + QR scanner (AVFoundation-backed); ⬜ image/video picker, media library
 - ⬜ file system (read/write/stream), document picker
 - ⬜ share sheet, open-with, clipboard
 - ⬜ downloads / uploads (background)
