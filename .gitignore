@@ -1,0 +1,28 @@
+# Rust / Cargo build artifacts
+/target
+**/target
+Cargo.lock        # this is a library workspace; apps pin their own lockfile
+
+# Backtraces / profiling
+*.profraw
+perf.data*
+flamegraph.svg
+
+# Android backend (Phase 3)
+*.class
+.gradle/
+/android/.cxx/
+local.properties
+
+# iOS backend (Phase 4)
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+Pods/
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

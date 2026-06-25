@@ -1,0 +1,16 @@
+[package]
+name = "rax-core"
+description = "Core, dependency-free data structures for the rax UI framework: geometry, ids, and a generational arena."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[dependencies]
+# Intentionally none. rax-core is the leaf of the dependency DAG and must stay
+# trivially testable and `no_std`-portable.

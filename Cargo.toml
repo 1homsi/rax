@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/1homsi/rust-native"
+
+# Tunings shared by every crate. Optimizing for small, predictable runtime cost.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
