@@ -325,6 +325,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rax-test"
+version = "0.0.1"
+dependencies = [
+ "rax-core",
+ "rax-dom",
+ "rax-reactive",
+ "rax-runtime",
+ "rax-view",
+]
+
+[[package]]
 name = "rax-view"
 version = "0.0.1"
 dependencies = [
