@@ -36,9 +36,9 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Checkbox / Radio | ✓ | ✓ | ✅ (composed in userland) |
 | Picker | ✓ | ✓ | ✅ (inline, composed) |
 | ActivityIndicator / Progress | ✓ | ✓ | ✅ |
-| Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ✅ (Modal + BottomSheet composed; Dialog/ActionSheet ⬜) |
+| Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ✅ (Modal + BottomSheet + Alert/Dialog composed; ActionSheet ⬜) |
 | Tabs / BottomNav | community | ✓ | ✅ |
-| Drawer | community | ✓ | ⬜ |
+| Drawer | community | ✓ | ✅ (composed) |
 | Divider / Spacer | ✓ | ✓ | ✅ |
 | Pull-to-refresh / swipe actions | ✓ | ✓ | ✅ pull-to-refresh; ⬜ swipe actions |
 | WebView (escape hatch) | community | plugin | ⬜ |
@@ -62,9 +62,9 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 |---|---|---|---|
 | Stack navigator (push/pop/replace/reset) | ✓ | ✓ | ✅ |
 | Tab navigation | ✓ | ✓ | ✅ |
-| Modal / Drawer | ✓ | ✓ | ⬜ |
+| Modal / Drawer | ✓ | ✓ | ✅ (Modal ✅; Drawer ✅ composed) |
 | Typed routes | partial | partial | ✅ |
-| Deep / universal links | ✓ | ✓ | ⬜ |
+| Deep / universal links | ✓ | ✓ | ✅ (`on_deep_link` — openURL: bridged to `Event::DeepLink`) |
 | Shared-element transitions | community | ✓ (Hero) | ⬜ |
 | State restoration | ✓ | ✓ | ⬜ |
 | Custom transitions | ✓ | ✓ | ⬜ |

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use rax_core::{Color, ColorScheme, EdgeInsets, Rect, Size};
-use rax_dom::{EventSink, Host, Tree, WidgetId, WidgetKind};
+use rax_dom::{Event, EventKind, EventSink, Host, Tree, WidgetId, WidgetKind};
 use rax_reactive::{create_root, create_signal, provide_context, use_context, Scope, Signal};
 use rax_view::{mount, View};
 
@@ -25,6 +25,10 @@ thread_local! {
     /// [`App::tick`] after events are processed.
     static PENDING_HAPTICS: std::cell::RefCell<Vec<rax_dom::HapticStyle>> =
         const { std::cell::RefCell::new(Vec::new()) };
+
+    /// Deep-link handler registered by [`on_deep_link`].
+    static DEEP_LINK_HANDLER: RefCell<Option<Box<dyn Fn(String)>>> =
+        const { RefCell::new(None) };
 }
 
 /// Triggers a haptic feedback pulse. Call from event handlers (tap callbacks,
@@ -37,6 +41,18 @@ thread_local! {
 /// ```
 pub fn haptic(style: HapticStyle) {
     PENDING_HAPTICS.with(|q| q.borrow_mut().push(style));
+}
+
+/// Registers a handler for deep link URLs. The handler fires whenever the app
+/// opens via a URL scheme or universal link.
+///
+/// ```no_run
+/// use rax_runtime::on_deep_link;
+///
+/// on_deep_link(|url| println!("opened with: {url}"));
+/// ```
+pub fn on_deep_link(handler: impl Fn(String) + 'static) {
+    DEEP_LINK_HANDLER.with(|h| *h.borrow_mut() = Some(Box::new(handler)));
 }
 
 /// The fill shown behind the root — i.e. the safe-area region (notch, status
@@ -175,6 +191,17 @@ impl App {
             content_sizes: HashMap::new(),
             last_tick: None,
         };
+        // Register a global handler that routes DeepLink events to the
+        // thread-local DEEP_LINK_HANDLER set by on_deep_link().
+        app.tree.on_global(EventKind::DeepLink, |event| {
+            if let Event::DeepLink { url } = event {
+                DEEP_LINK_HANDLER.with(|h| {
+                    if let Some(handler) = h.borrow().as_ref() {
+                        handler(url.clone());
+                    }
+                });
+            }
+        });
         app.tree.run_dynamic(); // materialize dynamic subtrees before first layout
         app.refresh_backdrop();
         app.relayout();

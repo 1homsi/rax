@@ -46,14 +46,14 @@ styleable, with a headless core, and replaceable via the theme registry
 - ⬜ `DatePicker` / `TimePicker` / `DateTimePicker`
 - ⬜ `Pressable` / `Touchable` (with pressed/hover/focus states)
 - ⬜ `RatingBar`
-- ⬜ `SearchBar`
+- ✅ `SearchBar` (`search_bar(query, on_change, placeholder)` — composed)
 - ⬜ `ColorPicker`
 
 ## Feedback & status
 - ✅ `ActivityIndicator` / `Spinner`
 - ✅ `ProgressBar` (linear) / `ProgressRing` (circular)
 - ✅ `Toast` / `Snackbar` (composed)
-- ⬜ `Alert` / `Dialog`
+- ✅ `Alert` / `Dialog` (`alert(show, title, message, button_label)` — composed modal overlay)
 - ⬜ `ActionSheet`
 - ⬜ `Banner` / inline alert
 - ⬜ `RefreshControl` (pull-to-refresh)
@@ -64,7 +64,7 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `BottomSheet` (composed)
 - ⬜ `Popover`
 - ⬜ `Menu` / `ContextMenu`
-- ⬜ `Drawer` / `SideMenu`
+- ✅ `Drawer` / `SideMenu` (`drawer(show, on_dismiss, width, content)` — composed)
 - ⬜ `Backdrop` / scrim
 
 ## Navigation surfaces

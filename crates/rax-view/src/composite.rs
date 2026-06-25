@@ -20,6 +20,7 @@ use crate::dynamic::dynamic;
 use crate::image::{icon, image};
 use crate::modifier::ViewExt;
 use crate::text::text;
+use crate::text_input::text_input;
 use crate::view::{boxed, BoxedView, View, ViewSequence};
 
 /// The default accent used for a checked/selected glyph (iOS system blue).
@@ -427,6 +428,84 @@ impl<F: FnMut() + 'static> View for Chip<F> {
 }
 
 // ---------------------------------------------------------------------------
+// SearchBar — styled text input row with a search icon
+// ---------------------------------------------------------------------------
+
+/// A search bar composed from a styled text input row.
+/// `query` is the controlled signal; `on_change` fires on each keystroke;
+/// `placeholder` is the hint text.
+pub fn search_bar(
+    query: Signal<String>,
+    on_change: impl Fn(String) + Clone + 'static,
+    placeholder: impl Into<String>,
+) -> impl View {
+    let placeholder = placeholder.into();
+    dynamic(move || {
+        let current = query.get();
+        let on_change2 = on_change.clone();
+        let placeholder2 = placeholder.clone();
+        boxed(
+            row((
+                boxed(text("🔍").font_size(14.0).color(Color::rgba(0, 0, 0, 128))),
+                boxed(
+                    text_input(current, move |s| on_change2(s))
+                        .placeholder(placeholder2)
+                        .grow(1.0),
+                ),
+            ))
+            .gap(8.0)
+            .padding(8.0)
+            .background(Color::rgba(128, 128, 128, 26))
+            .corner_radius(10.0),
+        )
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Alert — centered dialog overlay
+// ---------------------------------------------------------------------------
+
+/// An alert overlay (composed from Modal + Card). Shows when `show` is `true`;
+/// tapping the button sets `show` to `false`.
+pub fn alert(
+    show: Signal<bool>,
+    title: impl Into<String>,
+    message: impl Into<String>,
+    button_label: impl Into<String>,
+) -> impl View {
+    use crate::button::button;
+    use rax_dom::TextAlign;
+
+    let title = title.into();
+    let message = message.into();
+    let button_label = button_label.into();
+    modal(show, move || show.set(false), move || {
+        let title2 = title.clone();
+        let message2 = message.clone();
+        let button_label2 = button_label.clone();
+        column((
+            boxed(
+                text(title2)
+                    .font_size(17.0)
+                    .color(Color::rgb(0, 0, 0))
+                    .align(TextAlign::Center),
+            ),
+            boxed(
+                text(message2)
+                    .font_size(13.0)
+                    .color(Color::rgba(0, 0, 0, 153))
+                    .align(TextAlign::Center),
+            ),
+            boxed(button(button_label2, move || show.set(false))),
+        ))
+        .gap(12.0)
+        .padding(20.0)
+        .background(Color::rgb(255, 255, 255))
+        .corner_radius(14.0)
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Modal — full-screen dimmed overlay
 // ---------------------------------------------------------------------------
 
@@ -681,4 +760,46 @@ pub fn app_bar(
     .align(AlignItems::Center)
     .padding(12.0)
     .background(bg_color)
+}
+
+// ---------------------------------------------------------------------------
+// Drawer / SideMenu — slides in from the left
+// ---------------------------------------------------------------------------
+
+/// A side drawer that slides in from the left. `show` controls visibility;
+/// `on_dismiss` is called when the scrim is tapped.
+/// `content` renders the drawer body; `width` is the drawer width in points.
+pub fn drawer<V: View + 'static>(
+    show: Signal<bool>,
+    on_dismiss: impl Fn() + Clone + 'static,
+    width: f32,
+    content: impl Fn() -> V + 'static,
+) -> impl View {
+    use crate::container::stack;
+    dynamic(move || {
+        if !show.get() {
+            return boxed(column(()).size(0.0, 0.0));
+        }
+        let on_dismiss2 = on_dismiss.clone();
+        boxed(
+            stack((
+                // Scrim — full-screen dim that closes the drawer on tap
+                boxed(
+                    column(())
+                        .grow()
+                        .background(Color::rgba(0, 0, 0, 102))
+                        .on_tap(move || on_dismiss2()),
+                ),
+                // Drawer panel — flush left, full height
+                boxed(
+                    column((boxed(content()),))
+                        .size(width, 0.0)
+                        .grow(1.0)
+                        .background(Color::rgb(255, 255, 255)),
+                ),
+            ))
+            .grow(),
+        )
+    })
+    .grow(0.0)
 }

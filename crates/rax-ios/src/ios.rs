@@ -63,6 +63,8 @@ thread_local! {
     // The delegate fires on the main queue; we drain these in handle_tick so we
     // never borrow the app reentrantly from inside a capture callback.
     static PENDING_QR: RefCell<Vec<(u64, String)>> = const { RefCell::new(Vec::new()) };
+    // Deep link URLs queued by application:openURL:options:. Drained in handle_tick.
+    static PENDING_DEEP_LINKS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 fn handle_tap(tag_bits: u64) {
@@ -82,6 +84,12 @@ fn handle_tick() {
     // Drain any QR detections collected since the last tick. We pull them out
     // *before* borrowing the app so we never hold two borrows simultaneously.
     let qr_events: Vec<(u64, String)> = PENDING_QR.with(|q| {
+        let mut v = q.borrow_mut();
+        std::mem::take(&mut *v)
+    });
+
+    // Drain any deep link URLs queued by application:openURL:options:.
+    let deep_links: Vec<String> = PENDING_DEEP_LINKS.with(|q| {
         let mut v = q.borrow_mut();
         std::mem::take(&mut *v)
     });
@@ -117,6 +125,10 @@ fn handle_tick() {
                     target: WidgetId::from_u64(tag),
                     value,
                 });
+            }
+            // Dispatch queued deep link URLs into the event system.
+            for url in deep_links {
+                state.event_sink.dispatch(Event::DeepLink { url });
             }
             app.tick();
         }
@@ -371,6 +383,21 @@ define_class!(
         fn did_finish_launching(&self, _notification: &NSNotification) {
             let mtm = MainThreadMarker::new().expect("delegate runs on the main thread");
             setup(mtm);
+        }
+
+        #[unsafe(method(application:openURL:options:))]
+        fn application_open_url(
+            &self,
+            _application: &AnyObject,
+            url: &AnyObject,
+            _options: &AnyObject,
+        ) -> bool {
+            unsafe {
+                let url_str: Retained<NSString> = msg_send![url, absoluteString];
+                let url_string = url_str.to_string();
+                PENDING_DEEP_LINKS.with(|q| q.borrow_mut().push(url_string));
+            }
+            true
         }
     }
 );

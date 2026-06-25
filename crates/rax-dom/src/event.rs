@@ -178,6 +178,11 @@ pub enum Event {
         /// Lifecycle phase of the gesture.
         phase: GesturePhase,
     },
+    /// The app received a deep link URL (from openURL: or continueUserActivity:).
+    DeepLink {
+        /// The full URL string.
+        url: String,
+    },
 }
 
 /// The lifecycle phase of a continuous gesture such as a pan.
@@ -233,6 +238,8 @@ pub enum EventKind {
     QrDetected,
     /// [`Event::PinchChanged`].
     Pinch,
+    /// [`Event::DeepLink`].
+    DeepLink,
 }
 
 impl Event {
@@ -258,6 +265,7 @@ impl Event {
             Event::AppLifecycle(_) => EventKind::AppLifecycle,
             Event::QrDetected { .. } => EventKind::QrDetected,
             Event::PinchChanged { .. } => EventKind::Pinch,
+            Event::DeepLink { .. } => EventKind::DeepLink,
         }
     }
 
@@ -283,7 +291,8 @@ impl Event {
             Event::BackPressed
             | Event::KeyboardWillShow { .. }
             | Event::KeyboardWillHide
-            | Event::AppLifecycle(_) => None,
+            | Event::AppLifecycle(_)
+            | Event::DeepLink { .. } => None,
         }
     }
 }

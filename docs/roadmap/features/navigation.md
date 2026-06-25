@@ -7,14 +7,14 @@ Rust-owned navigation state with native transition primitives. ⬜ planned.
 - ✅ stack navigator (push/pop/replace/popToTop/popToRoot)
 - ✅ tab navigator (bottom tabs + top tabs)
 - ⬜ modal / sheet presentation (full / page-sheet / form-sheet / sizes)
-- ⬜ drawer / side-menu navigator
+- ✅ drawer / side-menu navigator (`drawer(show, on_dismiss, width, content)` — composed)
 - ⬜ nested navigators (tabs containing stacks, etc.)
 - ⬜ split-view / master-detail (tablet/desktop adaptive)
 
 ## Routing
 - ✅ typed routes (compile-checked params)
 - ⬜ declarative URL routing (path patterns, params, query)
-- ⬜ deep links + universal/app links
+- ✅ deep links (`on_deep_link(handler)` — `application:openURL:options:` → `Event::DeepLink`)
 - ⬜ web-history integration (for the web target)
 - ⬜ redirects / guards / auth gating
 - ⬜ not-found / fallback routes

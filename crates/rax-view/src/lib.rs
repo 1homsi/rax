@@ -53,8 +53,8 @@ mod view;
 pub use button::{button, Button};
 pub use camera::{camera_scanner, CameraScanner};
 pub use composite::{
-    app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, modal, network_image, picker,
-    radio, toast, Avatar, Badge, Card, Checkbox, Chip, Radio,
+    alert, app_bar, avatar, badge, bottom_sheet, card, checkbox, chip, drawer, modal,
+    network_image, picker, radio, search_bar, toast, Avatar, Badge, Card, Checkbox, Chip, Radio,
 };
 pub use container::{column, row, stack, Container, Stack};
 pub use controls::{segmented, slider, stepper, switch, Segmented, Slider, Stepper, Switch};
