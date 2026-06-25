@@ -1609,7 +1609,7 @@ where
     dynamic(move || {
         let current = items.get();
         let views: Vec<BoxedView> = current.into_iter().map(|item| boxed(item_fn(item))).collect();
-        boxed(scroll(row(views).gap(gap)).horizontal())
+        boxed(scroll(row(views).gap(gap)).horizontal().paging())
     })
     .grow(0.0)
 }
@@ -1715,4 +1715,96 @@ where
 pub fn status_bar_spacer() -> impl View {
     // 44 pt is the standard notch/Dynamic-Island safe-area top inset.
     column(()).height(44.0)
+}
+
+// ---------------------------------------------------------------------------
+// list_with_header — header / footer / empty-state wrapper
+// ---------------------------------------------------------------------------
+
+/// A list with a header, footer, and empty-state view.
+///
+/// When `items_empty()` returns `true`, `empty_fn` is rendered in place of
+/// `content_fn`. The `header_fn` and `footer_fn` are always rendered.
+/// All four layout factories are closures so the views can be rebuilt
+/// reactively inside a [`dynamic`] context without needing `Clone` on the
+/// views themselves.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{list_with_header, text, boxed};
+/// use rax_reactive::create_signal;
+///
+/// let items: rax_reactive::Signal<Vec<String>> = create_signal(vec![]);
+/// let v = list_with_header(
+///     || boxed(text("My List")),
+///     || boxed(text("End of list")),
+///     move || items.get().is_empty(),
+///     || boxed(text("No items yet")),
+///     || boxed(text("Item list goes here")),
+/// );
+/// ```
+pub fn list_with_header(
+    header_fn: impl Fn() -> BoxedView + 'static,
+    footer_fn: impl Fn() -> BoxedView + 'static,
+    items_empty: impl Fn() -> bool + 'static + Clone,
+    empty_fn: impl Fn() -> BoxedView + 'static,
+    content_fn: impl Fn() -> BoxedView + 'static,
+) -> impl View {
+    let items_empty2 = items_empty.clone();
+    column((
+        boxed(dynamic(move || header_fn())),
+        boxed(show(move || !items_empty(), content_fn)),
+        boxed(show(move || items_empty2(), empty_fn)),
+        boxed(dynamic(move || footer_fn())),
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// empty_state — placeholder for an empty list or section
+// ---------------------------------------------------------------------------
+
+/// A simple empty-state placeholder that displays `message` centered in its
+/// container with muted styling.
+///
+/// # Example
+/// ```rust
+/// use rax_view::empty_state;
+///
+/// let v = empty_state("No results found");
+/// ```
+pub fn empty_state(message: &'static str) -> impl View {
+    use rax_dom::TextAlign;
+    column((
+        text(message)
+            .color(Color::hex(0x9E9E9Eff))
+            .align(TextAlign::Center),
+    ))
+    .padding(32.0)
+    .align(AlignItems::Center)
+    .justify(JustifyContent::Center)
+}
+
+// ---------------------------------------------------------------------------
+// sticky_header — section-header wrapper
+// ---------------------------------------------------------------------------
+
+/// A sticky section-header wrapper. Visually equivalent to a UITableView
+/// section header: light-grey background with standard vertical padding and
+/// horizontal insets.
+///
+/// # Example
+/// ```rust
+/// use rax_view::{sticky_header, text};
+///
+/// let v = sticky_header(text("SECTION A"));
+/// ```
+pub fn sticky_header<V: View + 'static>(content: V) -> impl View {
+    column((boxed(content),))
+        .padding_insets(EdgeInsets {
+            top: 8.0,
+            bottom: 8.0,
+            left: 16.0,
+            right: 16.0,
+        })
+        .background(Color::hex(0xF5F5F5ff))
 }

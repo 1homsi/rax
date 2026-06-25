@@ -48,6 +48,8 @@ mod control;
 mod effect;
 mod handle;
 mod history;
+mod middleware;
+mod persisted;
 mod runtime;
 mod store;
 
@@ -56,5 +58,7 @@ pub use control::{batch, untrack};
 pub use effect::{create_effect, Effect};
 pub use handle::{create_memo, create_signal, Memo, Signal};
 pub use history::{use_history, History};
+pub use middleware::{add_signal_middleware, clear_signal_middlewares};
+pub use persisted::{kv_get, kv_set, persisted_bool, persisted_f64, persisted_i64, persisted_signal};
 pub use runtime::{create_root, Runtime, Scope};
 pub use store::Store;

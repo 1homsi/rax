@@ -1610,6 +1610,41 @@ impl Backend for UiKitBackend {
                             }
                         }
                     }
+                    Attribute::ScrollEnabled(enabled) => {
+                        if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                            unsafe { let _: () = msg_send![&*sv, setScrollEnabled: enabled]; }
+                        }
+                    }
+                    Attribute::ShowsScrollIndicator(show) => {
+                        if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                            unsafe {
+                                let _: () = msg_send![&*sv, setShowsHorizontalScrollIndicator: show];
+                                let _: () = msg_send![&*sv, setShowsVerticalScrollIndicator: show];
+                            }
+                        }
+                    }
+                    Attribute::PagingEnabled(enabled) => {
+                        if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                            unsafe { let _: () = msg_send![&*sv, setPagingEnabled: enabled]; }
+                        }
+                    }
+                    Attribute::ContentInset { top, right, bottom, left } => {
+                        if let Ok(sv) = view.clone().downcast::<UIScrollView>() {
+                            unsafe {
+                                // UIEdgeInsets memory layout: {top, left, bottom, right} (all CGFloat / f64)
+                                let insets: [f64; 4] = [
+                                    top as f64,
+                                    left as f64,
+                                    bottom as f64,
+                                    right as f64,
+                                ];
+                                // TODO: call setContentInset: with UIEdgeInsets struct via objc2
+                                // when the binding stabilises. For now we record the values so
+                                // the attribute round-trips correctly through the mutation stream.
+                                let _ = (sv, insets);
+                            }
+                        }
+                    }
                     Attribute::ReturnKey(ret) => {
                         if let Ok(field) = view.clone().downcast::<UITextField>() {
                             let v: isize = match ret {

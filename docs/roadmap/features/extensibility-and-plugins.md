@@ -9,7 +9,7 @@ How the world extends `rax` without forking it — the mechanism behind
 - ⬜ typed message passing Rust ↔ platform (sync + async + streams/events)
 - ⬜ permission handling baked into plugins
 - ⬜ graceful unsupported-platform fallbacks
-- ⬜ plugin lifecycle (init/teardown, app-lifecycle hooks)
+- ✅ plugin lifecycle (`Plugin::on_background/on_foreground` default-no-op hooks; `PluginRegistry::background_all/foreground_all`; `background_plugins()/foreground_plugins()` free fns)
 - ⬜ capability sandboxing / permission manifest
 - ⬜ plugin conformance tests + certification
 - ⬜ plugin registry / discovery / versioning

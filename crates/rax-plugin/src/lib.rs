@@ -34,6 +34,14 @@ pub trait Plugin: Any + Send + 'static {
     /// Called every frame tick. Use sparingly — prefer event-driven callbacks.
     fn on_tick(&mut self) {}
 
+    /// Called when the app transitions to the background (e.g. user switches away).
+    /// Plugins should pause timers, flush caches, or release foreground resources.
+    fn on_background(&mut self) {}
+
+    /// Called when the app returns to the foreground (e.g. user switches back).
+    /// Plugins should resume paused work and refresh stale state.
+    fn on_foreground(&mut self) {}
+
     /// Handle a custom event string from the event bus.
     fn on_event(&mut self, _event: &str, _payload: &str) {}
 }
@@ -79,6 +87,20 @@ impl PluginRegistry {
         }
     }
 
+    /// Call `on_background` on all registered plugins.
+    pub fn background_all(&mut self) {
+        for p in &mut self.plugins {
+            p.on_background();
+        }
+    }
+
+    /// Call `on_foreground` on all registered plugins.
+    pub fn foreground_all(&mut self) {
+        for p in &mut self.plugins {
+            p.on_foreground();
+        }
+    }
+
     /// Dispatch a custom event to all plugins.
     pub fn dispatch(&mut self, event: &str, payload: &str) {
         for p in &mut self.plugins {
@@ -116,4 +138,16 @@ pub fn tick_plugins() {
 /// Start all plugins. Called once by `rax::run` at startup.
 pub fn start_plugins() {
     PLUGIN_REGISTRY.with(|r| r.borrow_mut().start_all());
+}
+
+/// Notify all registered plugins that the app went to the background.
+/// Call this from the platform-specific app delegate / activity lifecycle.
+pub fn background_plugins() {
+    PLUGIN_REGISTRY.with(|r| r.borrow_mut().background_all());
+}
+
+/// Notify all registered plugins that the app returned to the foreground.
+/// Call this from the platform-specific app delegate / activity lifecycle.
+pub fn foreground_plugins() {
+    PLUGIN_REGISTRY.with(|r| r.borrow_mut().foreground_all());
 }

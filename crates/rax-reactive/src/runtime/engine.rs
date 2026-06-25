@@ -10,6 +10,7 @@ use rax_core::Index;
 
 use super::node::{Compute, NodeState};
 use super::{with_rt, RuntimeId};
+use crate::middleware::notify_middlewares;
 
 fn state_of(rt: RuntimeId, key: Index) -> Option<NodeState> {
     with_rt(rt, |r| r.state_of(key)).flatten()
@@ -167,6 +168,7 @@ pub(crate) fn set_value<T: PartialEq + 'static>(rt: RuntimeId, key: Index, value
     if !changed {
         return;
     }
+    notify_middlewares(std::any::type_name::<T>(), "<updated>");
     propagate_write(rt, key, Box::new(value));
 }
 
@@ -177,6 +179,7 @@ pub(crate) fn update_value<T: 'static>(rt: RuntimeId, key: Index, f: impl FnOnce
     if let Some(v) = boxed.downcast_mut::<T>() {
         f(v);
     }
+    notify_middlewares(std::any::type_name::<T>(), "<updated>");
     propagate_write(rt, key, boxed);
 }
 

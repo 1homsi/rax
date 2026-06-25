@@ -6,7 +6,7 @@ scheduler's frame loop. ⬜ planned.
 ## Core
 - ✅ animated values/signals driven on the frame loop
 - ✅ timing animations (duration + easing curves: linear/ease/cubic-bezier/steps)
-- ✅ spring animations (mass/stiffness/damping; presets: default/stiff/wobbly)
+- ✅ spring animations (mass/stiffness/damping; presets: GENTLE/BOUNCY/SNAPPY/SLOW + default/stiff/wobbly)
 - ✅ decay / fling (velocity-based coast to stop)
 - ⬜ keyframes / sequences / staggers
 - ✅ parallel + sequential composition (`parallel()` / `sequence()`)
@@ -20,13 +20,13 @@ scheduler's frame loop. ⬜ planned.
 - ⬜ layout animations (auto-animate position/size changes)
 - ⬜ list item add/remove/reorder animations
 - ⬜ shared-element / hero transitions
-- ⬜ `AnimatedSwitcher` / crossfade
+- ✅ `AnimatedSwitcher` / crossfade (`use_transition(key_fn, duration_ms) -> Signal<f32>` — fades out/in on key change via `sequence()`)
 
 ## Gesture-driven & advanced
 - ⬜ gesture-linked animations (drag follows finger)
 - ⬜ scroll-linked animations (parallax, collapsing headers)
 - ⬜ worklet-style off-main-thread animation (evaluate Reanimated approach)
-- ⬜ physics-based interactions (rubber-banding, snapping)
+- ✅ physics-based interactions (`rubber_band(value, min, max)` — iOS overscroll resistance; `lerp`, `smooth_step`, `remap` interpolation helpers)
 - ⬜ haptic-synced animation
 
 ## Performance & platform
@@ -37,6 +37,6 @@ scheduler's frame loop. ⬜ planned.
 - ⬜ animation on the GPU renderer path (custom-drawn)
 
 ## Customizability
-- ⬜ pluggable easing/curve functions
+- ✅ pluggable easing/curve functions (`Easing` enum extended: EaseInBack/OutBack/InOutBack, EaseInElastic/OutElastic, EaseOutBounce)
 - ⬜ custom transition definitions (used by navigation, modals, etc.)
 - ⬜ motion design tokens (durations/curves) in the theme

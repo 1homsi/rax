@@ -370,6 +370,27 @@ pub enum Attribute {
         /// Blur radius in points.
         blur: f32,
     },
+    /// Enable or disable scrolling on a scroll view (`UIScrollView.isScrollEnabled`).
+    ScrollEnabled(bool),
+    /// Show or hide both horizontal and vertical scroll indicators
+    /// (`UIScrollView.showsHorizontalScrollIndicator` /
+    /// `UIScrollView.showsVerticalScrollIndicator`).
+    ShowsScrollIndicator(bool),
+    /// Enable paged scrolling so the scroll view snaps to page boundaries
+    /// (`UIScrollView.isPagingEnabled`). Used by carousel-style layouts.
+    PagingEnabled(bool),
+    /// Inset the scrollable content area from each edge, in points
+    /// (`UIScrollView.contentInset`).
+    ContentInset {
+        /// Inset from the top edge.
+        top: f32,
+        /// Inset from the right edge.
+        right: f32,
+        /// Inset from the bottom edge.
+        bottom: f32,
+        /// Inset from the left edge.
+        left: f32,
+    },
 }
 
 /// Text decoration applied to a label or span.

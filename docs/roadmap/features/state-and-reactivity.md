@@ -18,7 +18,7 @@ surgical. ✅ · 🟡 · ⬜.
 ## App-state patterns
 - ✅ global stores + scoped stores (`Store<S>` is `Copy` — pass it anywhere; `provide_context(store)` for scoped)
 - ⬜ actions/reducers pattern (opt-in, Elm/Redux-style) on top of signals
-- ⬜ middleware / interceptors (logging, persistence, devtools)
+- ✅ middleware / interceptors (`add_signal_middleware(fn(type_name, value))` — `notify_middlewares` called on set/update; `clear_signal_middlewares`)
 - ✅ selectors with memoization (`store.select(fn) -> Memo<U>` — glitch-free derived memos)
 - ⬜ transactions / batched commits
 - ⬜ optimistic updates + rollback
@@ -30,7 +30,7 @@ surgical. ✅ · 🟡 · ⬜.
 - ⬜ cancellation tied to ownership scopes
 
 ## Persistence & time-travel
-- ⬜ persisted signals/stores (auto-save/restore)
+- ✅ persisted signals/stores (`persisted_signal/bool/i64/f64(key, default)` — in-memory KV + `create_effect` write-through; bridge to UserDefaults via `kv_set/kv_get`)
 - ⬜ hydration (SSR/web), state restoration (mobile)
 - ⬜ time-travel debugging via devtools
 - ✅ undo/redo helpers (`History<T>` — `use_history(init)`, `.push(val)`, `.undo()`, `.redo()`, `.can_undo/can_redo()`, `.signal()`)

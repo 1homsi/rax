@@ -14,6 +14,10 @@ pub struct Scroll<V> {
     horizontal: bool,
     refreshing: Option<bool>,
     on_refresh: Option<Box<dyn FnMut()>>,
+    scroll_enabled: Option<bool>,
+    shows_indicator: Option<bool>,
+    paging: bool,
+    content_inset: Option<(f32, f32, f32, f32)>,
 }
 
 /// Wraps `child` in a vertically-scrolling container that fills its parent.
@@ -24,6 +28,10 @@ pub fn scroll<V: View>(child: V) -> Scroll<V> {
         horizontal: false,
         refreshing: None,
         on_refresh: None,
+        scroll_enabled: None,
+        shows_indicator: None,
+        paging: false,
+        content_inset: None,
     }
 }
 
@@ -48,6 +56,35 @@ impl<V: View> Scroll<V> {
     pub fn refreshable(mut self, is_refreshing: bool, on_refresh: impl FnMut() + 'static) -> Self {
         self.refreshing = Some(is_refreshing);
         self.on_refresh = Some(Box::new(on_refresh));
+        self
+    }
+
+    /// Enable or disable scrolling (`UIScrollView.isScrollEnabled`).
+    #[must_use]
+    pub fn scroll_enabled(mut self, enabled: bool) -> Self {
+        self.scroll_enabled = Some(enabled);
+        self
+    }
+
+    /// Show or hide the scroll indicator (`UIScrollView.shows{Horizontal,Vertical}ScrollIndicator`).
+    #[must_use]
+    pub fn shows_indicator(mut self, show: bool) -> Self {
+        self.shows_indicator = Some(show);
+        self
+    }
+
+    /// Enable paged scrolling — the scroll view snaps to page boundaries
+    /// (`UIScrollView.isPagingEnabled`). Ideal for carousel layouts.
+    #[must_use]
+    pub fn paging(mut self) -> Self {
+        self.paging = true;
+        self
+    }
+
+    /// Set the content inset (padding inside the scroll area, in points).
+    #[must_use]
+    pub fn content_inset(mut self, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        self.content_inset = Some((top, right, bottom, left));
         self
     }
 }
@@ -80,6 +117,18 @@ impl<V: View> View for Scroll<V> {
                     }
                 });
             }
+        }
+        if let Some(enabled) = self.scroll_enabled {
+            tree.set(id, Attribute::ScrollEnabled(enabled));
+        }
+        if let Some(show) = self.shows_indicator {
+            tree.set(id, Attribute::ShowsScrollIndicator(show));
+        }
+        if self.paging {
+            tree.set(id, Attribute::PagingEnabled(true));
+        }
+        if let Some((top, right, bottom, left)) = self.content_inset {
+            tree.set(id, Attribute::ContentInset { top, right, bottom, left });
         }
         let child = self.child.build(tree);
         tree.append(id, child);

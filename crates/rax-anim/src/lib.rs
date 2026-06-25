@@ -40,6 +40,18 @@ pub enum Easing {
     EaseOut,
     /// Accelerate then decelerate.
     EaseInOut,
+    /// Overshoot backward at start, then accelerate forward.
+    EaseInBack,
+    /// Overshoot past the target, then settle back.
+    EaseOutBack,
+    /// Overshoot on both ends (back in, back out).
+    EaseInOutBack,
+    /// Elastic snap at the beginning, oscillating before taking off.
+    EaseInElastic,
+    /// Elastic snap at the end, oscillating before settling.
+    EaseOutElastic,
+    /// Bounce at the end like a dropped ball.
+    EaseOutBounce,
 }
 
 impl Easing {
@@ -55,6 +67,65 @@ impl Easing {
                     2.0 * t * t
                 } else {
                     1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+                }
+            }
+            Easing::EaseInBack => {
+                // c1 = 1.70158 (standard overshoot constant)
+                const C1: f32 = 1.701_58;
+                const C3: f32 = C1 + 1.0;
+                C3 * t * t * t - C1 * t * t
+            }
+            Easing::EaseOutBack => {
+                const C1: f32 = 1.701_58;
+                const C3: f32 = C1 + 1.0;
+                1.0 + C3 * (t - 1.0).powi(3) + C1 * (t - 1.0).powi(2)
+            }
+            Easing::EaseInOutBack => {
+                const C1: f32 = 1.701_58;
+                const C2: f32 = C1 * 1.525;
+                if t < 0.5 {
+                    ((2.0 * t).powi(2) * ((C2 + 1.0) * 2.0 * t - C2)) / 2.0
+                } else {
+                    ((2.0 * t - 2.0).powi(2) * ((C2 + 1.0) * (2.0 * t - 2.0) + C2) + 2.0) / 2.0
+                }
+            }
+            Easing::EaseInElastic => {
+                if t == 0.0 {
+                    return 0.0;
+                }
+                if t == 1.0 {
+                    return 1.0;
+                }
+                // C4 sets the oscillation period (2π/3 ≈ one full bounce).
+                const C4: f32 = std::f32::consts::TAU / 3.0;
+                let pow = 10.0 * t - 10.0;
+                -(2.0_f32.powf(pow)) * ((pow - C4) / C4).sin()
+            }
+            Easing::EaseOutElastic => {
+                if t == 0.0 {
+                    return 0.0;
+                }
+                if t == 1.0 {
+                    return 1.0;
+                }
+                const C4: f32 = std::f32::consts::TAU / 3.0;
+                let pow = -10.0 * t;
+                2.0_f32.powf(pow) * ((pow - C4) / C4).sin() + 1.0
+            }
+            Easing::EaseOutBounce => {
+                const N1: f32 = 7.5625;
+                const D1: f32 = 2.75;
+                if t < 1.0 / D1 {
+                    N1 * t * t
+                } else if t < 2.0 / D1 {
+                    let t = t - 1.5 / D1;
+                    N1 * t * t + 0.75
+                } else if t < 2.5 / D1 {
+                    let t = t - 2.25 / D1;
+                    N1 * t * t + 0.9375
+                } else {
+                    let t = t - 2.625 / D1;
+                    N1 * t * t + 0.984_375
                 }
             }
         }
@@ -95,6 +166,34 @@ impl Spring {
     pub const WOBBLY: Spring = Spring {
         stiffness: 180.0,
         damping: 12.0,
+        mass: 1.0,
+    };
+
+    /// A gentle, natural-feeling spring — smooth deceleration with no bounce.
+    pub const GENTLE: Spring = Spring {
+        stiffness: 100.0,
+        damping: 15.0,
+        mass: 1.0,
+    };
+
+    /// A bouncy, playful spring with noticeable overshoot.
+    pub const BOUNCY: Spring = Spring {
+        stiffness: 300.0,
+        damping: 10.0,
+        mass: 1.0,
+    };
+
+    /// A snappy spring that arrives fast with minimal oscillation.
+    pub const SNAPPY: Spring = Spring {
+        stiffness: 500.0,
+        damping: 30.0,
+        mass: 1.0,
+    };
+
+    /// A slow, dramatic spring for emphasis.
+    pub const SLOW: Spring = Spring {
+        stiffness: 50.0,
+        damping: 20.0,
         mass: 1.0,
     };
 }
@@ -709,6 +808,159 @@ pub fn animate_unless_reduced(
         let anim = animate(signal.get(), target, duration, easing);
         rax_reactive::create_effect(move || signal.set(anim.get()));
     }
+}
+
+// ---------------------------------------------------------------------------
+// Interpolation helpers
+// ---------------------------------------------------------------------------
+
+/// Linear interpolation between `a` and `b`, clamped to `t` in `0.0..=1.0`.
+///
+/// # Example
+/// ```
+/// use rax_anim::lerp;
+/// assert!((lerp(0.0, 100.0, 0.5) - 50.0).abs() < 0.001);
+/// assert_eq!(lerp(0.0, 100.0, 0.0), 0.0);
+/// assert_eq!(lerp(0.0, 100.0, 1.0), 100.0);
+/// ```
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t.clamp(0.0, 1.0)
+}
+
+/// Smooth-step interpolation (3t²−2t³), clamped to `t` in `0.0..=1.0`.
+///
+/// Produces a gentle S-curve with zero first derivatives at `t=0` and `t=1`,
+/// making transitions look more natural than a raw linear blend.
+///
+/// # Example
+/// ```
+/// use rax_anim::smooth_step;
+/// assert_eq!(smooth_step(0.0), 0.0);
+/// assert_eq!(smooth_step(1.0), 1.0);
+/// assert!((smooth_step(0.5) - 0.5).abs() < 0.001); // midpoint is symmetric
+/// ```
+pub fn smooth_step(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Maps `value` from `[in_min, in_max]` to `[out_min, out_max]`.
+///
+/// Values outside the input range are extrapolated linearly (no clamping). To
+/// clamp the output, call `.clamp(out_min, out_max)` on the result, or pass
+/// the output through [`lerp`].
+///
+/// # Example
+/// ```
+/// use rax_anim::remap;
+/// // Map scroll offset 0–200 → opacity 0.0–1.0
+/// assert!((remap(100.0, 0.0, 200.0, 0.0, 1.0) - 0.5).abs() < 0.001);
+/// ```
+pub fn remap(value: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
+    let t = (value - in_min) / (in_max - in_min);
+    lerp(out_min, out_max, t)
+}
+
+// ---------------------------------------------------------------------------
+// Rubber-band / overscroll
+// ---------------------------------------------------------------------------
+
+/// Applies iOS-style rubber-band resistance to a value outside `[min, max]`.
+///
+/// Inside the range the value is returned unchanged. Outside, resistance grows
+/// with distance so the content slows but never fully stops — matching the feel
+/// of `UIScrollView` overscroll.
+///
+/// Formula: `rubber = excess × (1 − 1 / (excess / range + 1))`
+///
+/// # Example
+/// ```
+/// use rax_anim::rubber_band;
+/// // Inside range — no effect.
+/// assert_eq!(rubber_band(50.0, 0.0, 100.0), 50.0);
+/// // Below min — value is pulled back toward min with resistance.
+/// let rb = rubber_band(-20.0, 0.0, 100.0);
+/// assert!(rb > -20.0 && rb < 0.0);
+/// // Above max — value is pushed back toward max with resistance.
+/// let rb = rubber_band(120.0, 0.0, 100.0);
+/// assert!(rb > 100.0 && rb < 120.0);
+/// ```
+pub fn rubber_band(value: f32, min: f32, max: f32) -> f32 {
+    let range = (max - min).max(f32::EPSILON); // avoid division by zero
+    if value < min {
+        let excess = min - value;
+        min - excess * (1.0 - 1.0 / (excess / range + 1.0))
+    } else if value > max {
+        let excess = value - max;
+        max + excess * (1.0 - 1.0 / (excess / range + 1.0))
+    } else {
+        value
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transition helper
+// ---------------------------------------------------------------------------
+
+/// Returns a `Signal<f32>` (opacity, `0.0..=1.0`) that fades out then back in
+/// whenever `key_fn` produces a new value.
+///
+/// The transition is split equally: the first half of `duration_ms` fades
+/// **out** (`1→0`, `EaseOut`) and the second half fades **in** (`0→1`,
+/// `EaseIn`). When the key is first observed no transition plays — the signal
+/// starts at `1.0`.
+///
+/// Use alongside [`crate::animate`] and `dynamic` from `rax-view` to crossfade
+/// between screens or content regions:
+///
+/// # Example
+/// ```no_run
+/// use rax_anim::use_transition;
+/// use rax_reactive::{create_root, create_signal};
+///
+/// let (fade, scope) = create_root(|| {
+///     let current_screen = create_signal(0u32);
+///     use_transition(move || current_screen.get(), 300)
+///     // Then in the view layer: dynamic(move || my_view().opacity(fade.get()))
+/// });
+/// scope.dispose();
+/// ```
+pub fn use_transition<K>(key_fn: impl Fn() -> K + 'static, duration_ms: u64) -> Signal<f32>
+where
+    K: Clone + PartialEq + 'static,
+{
+    let opacity = rax_reactive::create_signal(1.0_f32);
+    let last_key: Signal<Option<K>> = rax_reactive::create_signal(None);
+
+    rax_reactive::create_effect(move || {
+        let k = key_fn();
+        let prev = last_key.get();
+        if prev.as_ref() == Some(&k) {
+            return;
+        }
+        last_key.set(Some(k));
+
+        let half_secs = (duration_ms / 2) as f32 / 1000.0;
+
+        // Kick off the fade-out leg. Once it settles at 0.0 the `sequence`
+        // callback starts the fade-in leg.
+        let fade_out = animate(opacity.get(), 0.0, half_secs, Easing::EaseOut);
+
+        // Mirror the fade-out into `opacity` while it runs, and chain fade-in.
+        rax_reactive::create_effect(move || {
+            let v = fade_out.get();
+            opacity.set(v);
+        });
+
+        sequence(fade_out, 0.0, move || {
+            let fade_in = animate(0.0, 1.0, half_secs, Easing::EaseIn);
+            rax_reactive::create_effect(move || {
+                opacity.set(fade_in.get());
+            });
+        });
+    });
+
+    opacity
 }
 
 #[cfg(test)]
