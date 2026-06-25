@@ -37,8 +37,8 @@ styleable, with a headless core, and replaceable via the theme registry
 ## Input & controls
 - 🟡 `TextInput` / `TextField` (single + multi-line) — see [text-input](text-input-and-forms.md)
 - ✅ `Switch` / `Toggle`
-- ⬜ `Checkbox`
-- ⬜ `Radio` / `RadioGroup`
+- ✅ `Checkbox` (composed from public API — no engine support needed)
+- ✅ `Radio` / `RadioGroup` (composed from public API)
 - ✅ `Slider` (single + range)
 - ✅ `Stepper`
 - ✅ `SegmentedControl`

@@ -33,7 +33,8 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Switch / Slider | ✓ | ✓ | ✅ |
 | SegmentedControl | ✓ | ✓ | ✅ |
 | Stepper | ✓ | ✓ | ✅ |
-| Checkbox / Radio / Picker | ✓ | ✓ | ⬜ |
+| Checkbox / Radio | ✓ | ✓ | ✅ (composed in userland) |
+| Picker | ✓ | ✓ | ⬜ |
 | ActivityIndicator / Progress | ✓ | ✓ | ✅ |
 | Modal/Sheet/Dialog/ActionSheet | ✓ | ✓ | ⬜ |
 | Tabs / BottomNav | community | ✓ | 🟡 (tab nav + icon bar) |

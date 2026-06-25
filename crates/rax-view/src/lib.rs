@@ -34,6 +34,7 @@
 #![forbid(unsafe_code)]
 
 mod button;
+mod composite;
 mod container;
 mod controls;
 mod dynamic;
@@ -49,6 +50,7 @@ mod text_input;
 mod view;
 
 pub use button::{button, Button};
+pub use composite::{checkbox, radio, Checkbox, Radio};
 pub use container::{column, row, Container};
 pub use controls::{segmented, slider, stepper, switch, Segmented, Slider, Stepper, Switch};
 pub use dynamic::{dynamic, Dynamic};
