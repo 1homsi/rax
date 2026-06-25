@@ -16,6 +16,7 @@ rax-core = { path = "../rax-core" }
 rax-dom = { path = "../rax-dom" }
 rax-runtime = { path = "../rax-runtime" }
 rax-view = { path = "../rax-view" }
+rax-store = { path = "../rax-store" }
 
 # UIKit is only present on Apple mobile targets; gate the bindings so the rest
 # of the workspace still builds on the host.
@@ -27,6 +28,7 @@ objc2-foundation = { version = "0.3", features = [
     "NSNotification",
     "NSThread",
     "NSRunLoop",
+    "NSUserDefaults",
 ] }
 objc2-ui-kit = { version = "0.3", features = [
     "UIResponder",

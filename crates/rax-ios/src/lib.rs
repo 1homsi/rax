@@ -16,6 +16,9 @@
 mod ios;
 
 #[cfg(target_os = "ios")]
+mod storage;
+
+#[cfg(target_os = "ios")]
 pub use ios::run;
 
 /// Entry point: hands control to UIKit and mounts the view produced by

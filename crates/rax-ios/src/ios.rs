@@ -312,6 +312,9 @@ fn new_instance<T: ClassType>() -> Retained<T> {
 // ---------------------------------------------------------------------------
 
 fn setup(mtm: MainThreadMarker) {
+    // Persist rax-store keys to NSUserDefaults across launches.
+    rax_store::set_storage(crate::storage::UiKitStorage);
+
     let screen = UIScreen::mainScreen(mtm);
     let bounds = screen.bounds();
 

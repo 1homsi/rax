@@ -410,6 +410,7 @@ dependencies = [
  "rax-core",
  "rax-dom",
  "rax-runtime",
+ "rax-store",
  "rax-view",
 ]
 
