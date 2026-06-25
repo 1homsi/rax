@@ -8,6 +8,33 @@
 >
 > Status legend used throughout: ✅ shipped · 🟡 in progress · ⬜ planned.
 
+## Implemented so far
+
+Shipped and tested (host-side + running on the iOS Simulator), by crate:
+
+- **rax-core** — geometry, generational arena, color, full `LayoutStyle`.
+- **rax-reactive** — signals/memos/effects, `Runtime`/ownership, **context/providers**.
+- **rax-scheduler** — frame phases, priority tasks, cross-thread marshaling.
+- **rax-dom** — element tree, mutation **+ event** seam, **dynamic structure**.
+- **rax-layout** — full flexbox via taffy (justify/wrap/shrink/min-max/absolute/aspect/%).
+- **rax-style** — typed design tokens + runtime-switchable light/dark **theme**.
+- **rax-view** — declarative builder: `column/row/text/button/spacer/dynamic`,
+  **image/switch/slider/divider/text_input**, and universal `ViewExt` layout +
+  paint modifiers (size/grow/margin/align/absolute · background/border/shadow/
+  opacity/corner-radius).
+- **rax-anim** — tweened animated signals + easing, advanced by the frame loop.
+- **rax-async** — UI-thread executor + async-aware `Resource`.
+- **rax-nav** — stack navigator + `routes` view (typed routes, context-provided).
+- **rax-runtime** — the `App` driver (mount + layout + events + async + anim + frames).
+- **rax-ios** — UIKit backend (pure Rust via objc2): View/Label/Button/Image/
+  Switch/Slider/TextField, taps + value/text changes, layout frames, paint.
+- **rax-test** — headless harness + finder/query API for host-side UI tests.
+
+~106 tests green; the showcase app (counter · dynamic to-do list · native
+controls · about) runs on the iOS Simulator. Remaining roadmap items (scroll/
+recycled lists, gestures, accessibility, i18n, native modules, desktop/web,
+CLI, devtools) are tracked below.
+
 ## Principles & pillars
 
 | File | What it covers |
