@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use rax_core::{Rect, Size};
+use rax_core::{EdgeInsets, Rect, Size};
 use rax_dom::{EventSink, Host, Tree, WidgetId, WidgetKind};
 use rax_reactive::{create_root, Scope};
 use rax_view::{mount, View};
@@ -22,6 +22,10 @@ pub struct App {
     /// Owns all reactivity created while mounting; disposed when the app drops.
     _scope: Scope,
     viewport: Size,
+    /// Safe-area insets (notch, status bar, home indicator) reported by the
+    /// platform. The root is laid out within the safe region and offset by the
+    /// top-left inset, so apps never hardcode notch/home-indicator padding.
+    safe_area: EdgeInsets,
     /// Last frame emitted per widget, so re-layout only emits real changes.
     frames: HashMap<WidgetId, Rect>,
     /// Last content size emitted per scroll widget.
@@ -45,6 +49,7 @@ impl App {
             root,
             _scope: scope,
             viewport,
+            safe_area: EdgeInsets::ZERO,
             frames: HashMap::new(),
             content_sizes: HashMap::new(),
             last_tick: None,
@@ -72,6 +77,15 @@ impl App {
         }
     }
 
+    /// Updates the platform safe-area insets (notch, status bar, home
+    /// indicator) and re-lays-out so content stays clear of them.
+    pub fn set_safe_area(&mut self, insets: EdgeInsets) {
+        if insets != self.safe_area {
+            self.safe_area = insets;
+            self.relayout();
+        }
+    }
+
     /// Advances one frame: deliver queued events (which may write signals and
     /// emit paint mutations synchronously), then re-run layout and emit any
     /// changed frames.
@@ -95,8 +109,16 @@ impl App {
     /// Recomputes layout and emits only the frames (and scroll content sizes)
     /// that actually changed.
     fn relayout(&mut self) {
-        let computed = rax_layout::compute(&self.tree, self.root, self.viewport);
-        for (id, layout) in computed {
+        // Lay the tree out within the safe region, then shift the root by the
+        // top-left inset. Children are positioned relative to the root, so they
+        // ride along — only the root frame needs the offset.
+        let avail = self.viewport.deflate(self.safe_area);
+        let computed = rax_layout::compute(&self.tree, self.root, avail);
+        for (id, mut layout) in computed {
+            if id == self.root {
+                layout.frame.origin.x += self.safe_area.left;
+                layout.frame.origin.y += self.safe_area.top;
+            }
             if self.frames.get(&id) != Some(&layout.frame) {
                 self.tree.set_frame(id, layout.frame);
                 self.frames.insert(id, layout.frame);

@@ -32,7 +32,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 - ✅ margin (incl. auto-margins for centering)
 - ✅ padding
 - ⬜ border width per-edge (paint side: color/style/radius)
-- ⬜ safe-area insets + display cutout / notch handling
+- ✅ safe-area insets (auto root inset from the platform safe area; notch + home indicator)
 - ⬜ keyboard insets (avoidance)
 
 ## Grid

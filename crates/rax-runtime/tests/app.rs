@@ -92,3 +92,36 @@ fn relayout_emits_no_redundant_frames_when_nothing_changes() {
         .count();
     assert_eq!(frame_mutations, 0, "stable layout emits no frames");
 }
+
+#[test]
+fn safe_area_insets_offset_and_shrink_the_root() {
+    use rax_core::{EdgeInsets, Rect};
+
+    let backend = RecordingBackend::new();
+    let log = backend.log();
+    let count = create_signal(0);
+    let mut app = App::new(Host::new(backend), Size::new(320.0, 640.0), move || {
+        counter(count)
+    });
+
+    log.borrow_mut().clear();
+    // A notch on top (47) and a home indicator at the bottom (34).
+    app.set_safe_area(EdgeInsets {
+        top: 47.0,
+        right: 0.0,
+        bottom: 34.0,
+        left: 0.0,
+    });
+
+    let muts = log.borrow();
+    // Root is offset by the top inset and shrunk by top+bottom.
+    assert!(
+        muts.iter().any(|m| matches!(
+            m,
+            Mutation::SetFrame { id, rect }
+                if *id == app.root()
+                    && *rect == Rect::new(0.0, 47.0, 320.0, 640.0 - 47.0 - 34.0)
+        )),
+        "root sits inside the safe area"
+    );
+}

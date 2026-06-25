@@ -26,7 +26,7 @@ use objc2_ui_kit::{
     UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController, UIWindow,
 };
 
-use rax_core::{Color, Rect, Size};
+use rax_core::{Color, EdgeInsets, Rect, Size};
 use rax_dom::{
     Attribute, Backend, Event, EventSink, GestureKind, Host, Mutation, TextSelection, WidgetId,
     WidgetKind,
@@ -70,7 +70,17 @@ fn handle_tap(tag_bits: u64) {
 fn handle_tick() {
     STATE.with(|s| {
         if let Some(state) = s.borrow().as_ref() {
-            state.app.borrow_mut().tick();
+            // Feed the platform safe-area insets to the runtime each frame; it
+            // only re-lays-out when they actually change.
+            let insets = state._window.safeAreaInsets();
+            let mut app = state.app.borrow_mut();
+            app.set_safe_area(EdgeInsets {
+                top: insets.top as f32,
+                right: insets.right as f32,
+                bottom: insets.bottom as f32,
+                left: insets.left as f32,
+            });
+            app.tick();
         }
     });
 }
