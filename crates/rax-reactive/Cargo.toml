@@ -1,0 +1,15 @@
+[package]
+name = "rax-reactive"
+description = "Fine-grained reactive runtime (signals, memos, effects) for the rax UI framework."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[dependencies]
+rax-core = { path = "../rax-core" }
