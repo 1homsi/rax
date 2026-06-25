@@ -18,6 +18,7 @@ rax-runtime = { path = "../rax-runtime" }
 rax-view = { path = "../rax-view" }
 rax-store = { path = "../rax-store" }
 rax-net = { path = "../rax-net" }
+rax-plugin = { path = "../rax-plugin" }
 
 # UIKit is only present on Apple mobile targets; gate the bindings so the rest
 # of the workspace still builds on the host.

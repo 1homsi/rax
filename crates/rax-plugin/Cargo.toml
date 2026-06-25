@@ -1,0 +1,10 @@
+[package]
+name = "rax-plugin"
+description = "Plugin system for rax native modules."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

@@ -59,6 +59,12 @@ pub use rax_intl as intl;
 /// Theming: palettes, spacing, typography, and the `Theme` context.
 pub use rax_style as style;
 
+/// Plugin system for registering native modules with the rax runtime.
+pub use rax_plugin as plugin;
+
+/// Secure key-value storage (iOS Keychain on device, in-memory elsewhere).
+pub use rax_keychain as keychain;
+
 /// Host-side testing harness (enable the `testing` feature).
 #[cfg(feature = "testing")]
 pub use rax_test as test;
@@ -106,6 +112,8 @@ pub mod prelude {
     pub use rax_nav::{create_navigator, routes, use_navigator, Navigator};
     pub use rax_store::{persisted, store_get, store_set};
     pub use rax_style::{theme, use_theme, Theme};
+    pub use rax_plugin::{dispatch_plugin_event, register_plugin, Plugin};
+    pub use rax_keychain::{delete_secret, get_secret, set_secret};
 
     // The iOS launcher, so `run(app)` is in scope on device/simulator.
     #[cfg(target_os = "ios")]

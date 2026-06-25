@@ -75,11 +75,11 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Timing + easing animations | ✓ | ✓ | ✅ |
 | Spring / decay | ✓ | ✓ | ✅ |
 | Tap / long-press / double-tap | ✓ | ✓ | ✅ |
-| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | 🟡 (pan ✅; pinch ✅; rotate ✅; arena ⬜) |
+| Gesture arena (pan/pinch/rotate) | ✓ | ✓ | ✅ (pan/pinch/rotate ✅; simultaneous recognition via delegate; exclusive arena ⬜) |
 | Gesture-driven animation | ✓ (Reanimated) | ✓ | ✅ (`pan_animation(spring_back)` → (x, y, handler); spring-back on release) |
 | Layout / shared-element animation | community | ✓ | ⬜ |
 | Off-main-thread animation | ✓ | ✓ | ⬜ |
-| 120fps | ✓ | ✓ | ⬜ |
+| 120fps | ✓ | ✓ | ✅ (CAFrameRateRange{60,120} + setPreferredFramesPerSecond fallback) |
 
 ## Text & i18n & a11y
 | Capability | RN | Flutter | rax |
@@ -100,7 +100,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Resource (async data + loading state) | community | community | ✅ |
 | Query cache (react-query-like) | community | community | 🟡 `use_query(url)` dedup/cache ✅; staleness/revalidation/mutations ⬜ |
 | KV storage (+ persisted signals) | community | ✓ | ✅ |
-| SQLite + secure storage | community | ✓ | 🟡 SQLite ✅ (`rax-sqlite::Database` — rusqlite bundled); secure storage ⬜ |
+| SQLite + secure storage | community | ✓ | ✅ SQLite (`rax-sqlite`) + Keychain (`rax-keychain` — SecItemAdd/Copy/Delete FFI) |
 | Offline-first sync | community | community | ⬜ |
 | Async runtime (no GC pauses) | JS event loop | Dart isolates | ✅ **(Rust async)** |
 
@@ -114,7 +114,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Biometrics / secure auth | ✓ | ✓ | 🟡 biometrics ✅ (`authenticate_biometric`); OAuth/passkeys ⬜ |
 | In-app purchases | ✓ | ✓ | ⬜ |
 | Sensors / haptics / background tasks | ✓ | ✓ | 🟡 haptics ✅ (`haptic(HapticStyle)`); sensors/background ⬜ |
-| Plugin system / native modules | ✓ | ✓ | ⬜ |
+| Plugin system / native modules | ✓ | ✓ | ✅ (`rax-plugin`: Plugin trait + PluginRegistry; on_start/tick/stop/event hooks) |
 
 ## Platforms
 | Capability | RN | Flutter | rax |

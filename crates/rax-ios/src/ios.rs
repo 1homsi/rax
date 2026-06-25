@@ -175,6 +175,7 @@ fn handle_tick() {
                 state.event_sink.dispatch(Event::LocationDenied);
             }
             app.tick();
+            rax_plugin::tick_plugins();
         }
     });
 }
@@ -417,6 +418,17 @@ define_class!(
                 },
                 tag,
             );
+        }
+
+        /// UIGestureRecognizerDelegate: allow all recognizers to fire simultaneously.
+        /// This enables pan + pinch + rotate on the same view at the same time.
+        #[unsafe(method(gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:))]
+        fn should_recognize_simultaneously(
+            &self,
+            _gesture: &UIGestureRecognizer,
+            _other: &UIGestureRecognizer,
+        ) -> bool {
+            true
         }
     }
 );
@@ -808,6 +820,7 @@ fn setup(mtm: MainThreadMarker) {
     let factory = FACTORY
         .with(|f| f.borrow_mut().take())
         .expect("run() set the factory");
+    rax_plugin::start_plugins();
     let app = factory(Host::new(backend), viewport);
     let event_sink = app.event_sink();
     let app = Rc::new(RefCell::new(app));
@@ -818,6 +831,40 @@ fn setup(mtm: MainThreadMarker) {
     let ticker: Retained<Ticker> = new_instance();
     let display_link =
         unsafe { CADisplayLink::displayLinkWithTarget_selector(&ticker, sel!(tick:)) };
+
+    // Request 120fps on ProMotion displays. Falls back to 60fps on non-ProMotion.
+    // preferredFrameRateRange is available on iOS 15+.
+    unsafe {
+        // CAFrameRateRange { minimum: f32, maximum: f32, preferred: f32 }
+        // We call objc_msgSend directly to pass the struct by value without needing
+        // to implement objc2::Encode for a local type. This matches the ABI for
+        // arm64 (three f32 fields in a struct, passed as a single struct argument).
+        #[repr(C)]
+        struct CAFrameRateRange {
+            minimum: f32,
+            maximum: f32,
+            preferred: f32,
+        }
+        extern "C" {
+            fn objc_msgSend();
+        }
+        // SAFETY: this is a best-effort ProMotion request; if the selector doesn't
+        // exist on the running OS version it will no-op at the ObjC runtime level.
+        let sel_set_preferred_frame_rate_range = objc2::sel!(setPreferredFrameRateRange:);
+        let range = CAFrameRateRange { minimum: 60.0, maximum: 120.0, preferred: 120.0 };
+        let fn_ptr: unsafe extern "C" fn(*const AnyObject, objc2::runtime::Sel, CAFrameRateRange) =
+            std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        fn_ptr(
+            &*display_link as *const _ as *const AnyObject,
+            sel_set_preferred_frame_rate_range,
+            range,
+        );
+    }
+    // Fallback: request 120fps via the older API (ignored on iOS 15+ in favor of range)
+    unsafe {
+        let _: () = msg_send![&*display_link, setPreferredFramesPerSecond: 120i64];
+    }
+
     let run_loop = unsafe { objc2_foundation::NSRunLoop::mainRunLoop() };
     unsafe {
         display_link.addToRunLoop_forMode(&run_loop, objc2_foundation::NSDefaultRunLoopMode);
@@ -1603,6 +1650,7 @@ impl Backend for UiKitBackend {
                                 Some(sel!(tapRecognized:)),
                             )
                         };
+                        unsafe { let _: () = msg_send![&*r, setDelegate: &*self.action_target]; }
                         r.into_super()
                     }
                     GestureKind::DoubleTap => {
@@ -1614,6 +1662,7 @@ impl Backend for UiKitBackend {
                             )
                         };
                         unsafe { r.setNumberOfTapsRequired(2) };
+                        unsafe { let _: () = msg_send![&*r, setDelegate: &*self.action_target]; }
                         r.into_super()
                     }
                     GestureKind::LongPress => {
@@ -1624,6 +1673,7 @@ impl Backend for UiKitBackend {
                                 Some(sel!(longPressRecognized:)),
                             )
                         };
+                        unsafe { let _: () = msg_send![&*r, setDelegate: &*self.action_target]; }
                         r.into_super()
                     }
                     GestureKind::Pan => {
@@ -1634,6 +1684,7 @@ impl Backend for UiKitBackend {
                                 Some(sel!(panRecognized:)),
                             )
                         };
+                        unsafe { let _: () = msg_send![&*r, setDelegate: &*self.action_target]; }
                         r.into_super()
                     }
                     GestureKind::Pinch => {
@@ -1644,6 +1695,7 @@ impl Backend for UiKitBackend {
                                 Some(sel!(pinchRecognized:)),
                             )
                         };
+                        unsafe { let _: () = msg_send![&*r, setDelegate: &*self.action_target]; }
                         r.into_super()
                     }
                     GestureKind::Rotate => {
@@ -1654,6 +1706,7 @@ impl Backend for UiKitBackend {
                                 Some(sel!(rotateRecognized:)),
                             )
                         };
+                        unsafe { let _: () = msg_send![&*r, setDelegate: &*self.action_target]; }
                         r.into_super()
                     }
                 };

@@ -769,8 +769,10 @@ dependencies = [
  "rax-core",
  "rax-intl",
  "rax-ios",
+ "rax-keychain",
  "rax-nav",
  "rax-net",
+ "rax-plugin",
  "rax-reactive",
  "rax-runtime",
  "rax-store",
@@ -828,11 +830,16 @@ dependencies = [
  "rax-core",
  "rax-dom",
  "rax-net",
+ "rax-plugin",
  "rax-runtime",
  "rax-store",
  "rax-view",
  "ureq",
 ]
+
+[[package]]
+name = "rax-keychain"
+version = "0.0.1"
 
 [[package]]
 name = "rax-layout"
@@ -864,6 +871,10 @@ dependencies = [
  "tungstenite",
  "ureq",
 ]
+
+[[package]]
+name = "rax-plugin"
+version = "0.0.1"
 
 [[package]]
 name = "rax-reactive"

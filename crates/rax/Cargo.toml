@@ -27,6 +27,8 @@ rax-anim = { path = "../rax-anim" }
 rax-async = { path = "../rax-async" }
 rax-intl = { path = "../rax-intl" }
 rax-style = { path = "../rax-style" }
+rax-plugin = { path = "../rax-plugin" }
+rax-keychain = { path = "../rax-keychain" }
 rax-test = { path = "../rax-test", optional = true }
 
 # The iOS backend only exists on Apple mobile targets; gate it so `rax` builds
