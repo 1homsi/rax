@@ -1,0 +1,58 @@
+# Developer Experience & Tooling
+
+Match Expo/RN CLI + Metro + Flutter CLI + DevTools + hot reload. ✅ · 🟡 · ⬜.
+
+## CLI & project
+- ⬜ `rax new` (templates: app, package, plugin, monorepo)
+- ⬜ `rax run` (iOS sim / Android emulator / device / desktop / web)
+- ⬜ `rax build` (per-platform packaging, signing, notarization)
+- ⬜ `rax test`, `rax lint`, `rax fmt`
+- ⬜ `rax doctor` (environment diagnostics)
+- ⬜ `rax add` (plugins/dependencies), `rax generate` (codegen/scaffold)
+- ⬜ project templates + starter kits
+
+## Build & toolchain
+- ⬜ cross-compile orchestration (cargo-ndk, xcframework, wasm)
+- ⬜ incremental build caching, fast rebuilds
+- ⬜ asset pipeline (density variants, fonts, bundling, tree-shaking)
+- ⬜ app-size analyzer, dependency graph
+- ⬜ environment/config + secrets management, build flavors/variants
+- ⬜ monorepo support, CI presets
+
+## Hot reload / fast refresh
+- ⬜ **fast refresh**: rebuild + reload with **state preserved**
+- ⬜ error-recovery reload, retry-last-action
+- ⬜ true hot-reload via binary patching (Subsecond-style) if feasible
+- ⬜ live theme/asset reload
+
+## DevTools & inspector
+- ⬜ element-tree inspector (select on device → highlight)
+- ⬜ props + computed style viewer; layout overlay (margins/padding/frames)
+- ⬜ **signal-graph inspector** (deps, recompute counts, time-travel)
+- ⬜ network panel, log/console panel, storage panel
+- ⬜ performance flame charts, frame-time/jank view, memory view
+- ⬜ accessibility inspector
+- ⬜ standalone devtools app + VS Code / JetBrains extensions
+- ⬜ remote debugging (device ↔ desktop)
+
+## Error handling & diagnostics
+- ⬜ red-box error overlay (panics + `Result` surfaces) with source mapping
+- ⬜ structured logging via `tracing` → platform log (logcat/oslog/console)
+- ⬜ great compiler-error ergonomics for the view API (type-erasure boundaries)
+- ⬜ crash reporting / symbolication SDK hooks
+- ⬜ analytics/observability hooks
+
+## Testing
+- ✅ recording backend; host-side pipeline tests
+- ⬜ headless host + finder/query API (find-by-text/role/testID)
+- ⬜ widget interaction tests (tap/type/scroll/gesture)
+- ⬜ snapshot tests (mutation stream + golden images per platform)
+- ⬜ the cross-platform **conformance suite** (release gate)
+- ⬜ property/fuzz tests (layout, reconciler, reactivity)
+- ⬜ device-farm integration, coverage gates, flaky-test management
+- ⬜ e2e/integration test driver
+
+## Docs & learning
+- ⬜ the book (guide), full API docs, runnable examples gallery
+- ⬜ interactive playground (web target), cookbook, migration-from-RN guide
+- ⬜ codemod/assistant for RN→rax
