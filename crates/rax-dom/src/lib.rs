@@ -33,5 +33,7 @@ mod tree;
 
 pub use backend::{Backend, Host, RecordingBackend};
 pub use event::{Event, EventKind, EventSink, Lifecycle, PointerId, TextSelection};
-pub use mutation::{Attribute, GestureKind, Mutation, Role, Shadow, WidgetId, WidgetKind};
+pub use mutation::{
+    Attribute, GestureKind, Mutation, Role, Shadow, TextAlign, WidgetId, WidgetKind,
+};
 pub use tree::{BuildThunk, Tree};

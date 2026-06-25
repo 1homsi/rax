@@ -19,11 +19,11 @@ use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSNotification, NSString};
 use objc2_quartz_core::CADisplayLink;
 use objc2_ui_kit::{
-    UIApplication, UIApplicationDelegate, UIButton, UIButtonType, UIColor, UIControl,
-    UIControlEvents, UIControlState, UIFont, UIGestureRecognizer, UIGestureRecognizerState,
-    UIImage, UIImageView, UILabel, UILongPressGestureRecognizer, UIScreen, UIScrollView, UISlider,
-    UISwitch, UITapGestureRecognizer, UITextBorderStyle, UITextField, UIView, UIViewController,
-    UIWindow,
+    NSTextAlignment, UIApplication, UIApplicationDelegate, UIButton, UIButtonType, UIColor,
+    UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
+    UIGestureRecognizerState, UIImage, UIImageView, UILabel, UILongPressGestureRecognizer,
+    UIScreen, UIScrollView, UISlider, UISwitch, UITapGestureRecognizer, UITextBorderStyle,
+    UITextField, UIView, UIViewController, UIWindow,
 };
 
 use rax_core::{Color, Rect, Size};
@@ -448,6 +448,38 @@ impl Backend for UiKitBackend {
                         let font = unsafe { UIFont::systemFontOfSize(size as f64) };
                         if let Ok(label) = view.clone().downcast::<UILabel>() {
                             unsafe { label.setFont(Some(&font)) };
+                        }
+                    }
+                    Attribute::FontWeight(weight) => {
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            let size = unsafe { label.font() }
+                                .map(|f| unsafe { f.pointSize() })
+                                .unwrap_or(17.0);
+                            // Map 100..900 onto UIFontWeight (-0.8..0.62).
+                            let w = ((weight - 400.0) / 300.0) as f64 * 0.4;
+                            let font = unsafe { UIFont::systemFontOfSize_weight(size, w) };
+                            unsafe { label.setFont(Some(&font)) };
+                        }
+                    }
+                    Attribute::Italic(italic) => {
+                        if italic {
+                            if let Ok(label) = view.clone().downcast::<UILabel>() {
+                                let size = unsafe { label.font() }
+                                    .map(|f| unsafe { f.pointSize() })
+                                    .unwrap_or(17.0);
+                                let font = unsafe { UIFont::italicSystemFontOfSize(size) };
+                                unsafe { label.setFont(Some(&font)) };
+                            }
+                        }
+                    }
+                    Attribute::TextAlign(align) => {
+                        if let Ok(label) = view.clone().downcast::<UILabel>() {
+                            let a = match align {
+                                rax_dom::TextAlign::Start => NSTextAlignment::Natural,
+                                rax_dom::TextAlign::Center => NSTextAlignment::Center,
+                                rax_dom::TextAlign::End => NSTextAlignment::Right,
+                            };
+                            unsafe { label.setTextAlignment(a) };
                         }
                     }
                     Attribute::TextColor(color) => {

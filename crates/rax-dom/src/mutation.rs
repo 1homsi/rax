@@ -56,6 +56,18 @@ pub enum WidgetKind {
     Scroll,
 }
 
+/// Horizontal text alignment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextAlign {
+    /// Leading edge (left in LTR).
+    #[default]
+    Start,
+    /// Centered.
+    Center,
+    /// Trailing edge (right in LTR).
+    End,
+}
+
 /// Accessibility role, mapped to platform a11y traits (VoiceOver/TalkBack).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Role {
@@ -127,6 +139,12 @@ pub enum Attribute {
     AccessibilityLabel(String),
     /// Accessibility role / traits.
     AccessibilityRole(Role),
+    /// Font weight (100–900, where 400 is regular and 700 is bold).
+    FontWeight(f32),
+    /// Italic style.
+    Italic(bool),
+    /// Horizontal text alignment.
+    TextAlign(TextAlign),
 }
 
 /// A drop shadow specification.

@@ -88,3 +88,19 @@ fn image_sets_source() {
         attr: Attribute::ImageSource("star.fill".into())
     }));
 }
+
+#[test]
+fn text_styling_emits_weight_italic_align() {
+    use rax_view::{text, TextAlign};
+    let (mut tree, log) = harness();
+    let id = text("Title")
+        .bold()
+        .italic()
+        .align(TextAlign::Center)
+        .build(&mut tree);
+    let muts = log.borrow();
+    let has = |a: Attribute| muts.contains(&Mutation::SetAttribute { id, attr: a });
+    assert!(has(Attribute::FontWeight(700.0)));
+    assert!(has(Attribute::Italic(true)));
+    assert!(has(Attribute::TextAlign(rax_dom::TextAlign::Center)));
+}

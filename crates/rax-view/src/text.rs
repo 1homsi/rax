@@ -47,6 +47,9 @@ pub struct Text<M, T: IntoText<M>> {
     value: T,
     font_size: Option<f32>,
     color: Option<Color>,
+    weight: Option<f32>,
+    italic: bool,
+    align: Option<rax_dom::TextAlign>,
     _marker: PhantomData<fn() -> M>,
 }
 
@@ -56,6 +59,9 @@ pub fn text<M, T: IntoText<M>>(value: T) -> Text<M, T> {
         value,
         font_size: None,
         color: None,
+        weight: None,
+        italic: false,
+        align: None,
         _marker: PhantomData,
     }
 }
@@ -74,16 +80,54 @@ impl<M, T: IntoText<M>> Text<M, T> {
         self.color = Some(color);
         self
     }
+
+    /// Sets a font weight (100–900).
+    #[must_use]
+    pub fn weight(mut self, weight: f32) -> Self {
+        self.weight = Some(weight);
+        self
+    }
+
+    /// Bold (weight 700).
+    #[must_use]
+    pub fn bold(mut self) -> Self {
+        self.weight = Some(700.0);
+        self
+    }
+
+    /// Italic style.
+    #[must_use]
+    pub fn italic(mut self) -> Self {
+        self.italic = true;
+        self
+    }
+
+    /// Horizontal text alignment.
+    #[must_use]
+    pub fn align(mut self, align: rax_dom::TextAlign) -> Self {
+        self.align = Some(align);
+        self
+    }
 }
 
 impl<M, T: IntoText<M>> View for Text<M, T> {
     fn build(self, tree: &mut Tree) -> WidgetId {
         let id = tree.create_text();
+        // Size first, so the backend can compose weight/italic onto it.
         if let Some(size) = self.font_size {
             tree.set(id, Attribute::FontSize(size));
         }
+        if let Some(weight) = self.weight {
+            tree.set(id, Attribute::FontWeight(weight));
+        }
+        if self.italic {
+            tree.set(id, Attribute::Italic(true));
+        }
         if let Some(color) = self.color {
             tree.set(id, Attribute::TextColor(color));
+        }
+        if let Some(align) = self.align {
+            tree.set(id, Attribute::TextAlign(align));
         }
         self.value.apply(tree, id);
         id
