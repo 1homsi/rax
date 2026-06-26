@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-store"
 description = "Pluggable key-value storage and reactive persisted signals for rax."
 version.workspace = true
@@ -13,4 +12,4 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [dependencies]
-raxon-reactive = { path = "../raxon-reactive" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }

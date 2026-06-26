@@ -1,6 +1,6 @@
 [package]
-publish = false
 name = "raxon-cli"
+description = "Internal crate for the raxon UI framework"
 version = "0.1.0"
 edition = "2021"
 

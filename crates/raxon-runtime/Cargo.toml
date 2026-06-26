@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-runtime"
 description = "App driver for rax: mounts a view, runs layout, drains events, and drives frames."
 version.workspace = true
@@ -13,10 +12,10 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [dependencies]
-raxon-core = { path = "../raxon-core" }
-raxon-dom = { path = "../raxon-dom" }
-raxon-layout = { path = "../raxon-layout" }
-raxon-reactive = { path = "../raxon-reactive" }
-raxon-async = { path = "../raxon-async" }
-raxon-anim = { path = "../raxon-anim" }
-raxon-view = { path = "../raxon-view" }
+raxon-core = { path = "../raxon-core", version = "0.0.1" }
+raxon-dom = { path = "../raxon-dom", version = "0.0.1" }
+raxon-layout = { path = "../raxon-layout", version = "0.0.1" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }
+raxon-async = { path = "../raxon-async", version = "0.0.1" }
+raxon-anim = { path = "../raxon-anim", version = "0.0.1" }
+raxon-view = { path = "../raxon-view", version = "0.0.1" }

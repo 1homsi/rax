@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-form"
 description = "Form validation helpers for rax."
 version.workspace = true
@@ -9,4 +8,4 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-raxon-reactive = { path = "../raxon-reactive" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }

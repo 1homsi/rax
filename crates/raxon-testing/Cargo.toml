@@ -1,9 +1,9 @@
 [package]
-publish = false
 name = "raxon-testing"
+description = "Internal crate for the raxon UI framework"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-raxon-reactive = { path = "../raxon-reactive" }
-raxon-dom = { path = "../raxon-dom" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }
+raxon-dom = { path = "../raxon-dom", version = "0.0.1" }

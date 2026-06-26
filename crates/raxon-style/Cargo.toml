@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-style"
 description = "Typed design tokens and a runtime-switchable theme for the rax framework."
 version.workspace = true
@@ -13,5 +12,5 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [dependencies]
-raxon-core = { path = "../raxon-core" }
-raxon-reactive = { path = "../raxon-reactive" }
+raxon-core = { path = "../raxon-core", version = "0.0.1" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }

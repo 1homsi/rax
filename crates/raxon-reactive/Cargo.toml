@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-reactive"
 description = "Fine-grained reactive runtime (signals, memos, effects) for the rax UI framework."
 version.workspace = true
@@ -13,4 +12,4 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [dependencies]
-raxon-core = { path = "../raxon-core" }
+raxon-core = { path = "../raxon-core", version = "0.0.1" }

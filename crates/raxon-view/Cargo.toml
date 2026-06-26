@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-view"
 description = "Declarative, macro-free typed view builder for rax. Lowers to the rax-dom element tree."
 version.workspace = true
@@ -13,9 +12,9 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [dependencies]
-raxon-core = { path = "../raxon-core" }
-raxon-dom = { path = "../raxon-dom" }
-raxon-reactive = { path = "../raxon-reactive" }
-raxon-net = { path = "../raxon-net" }
-raxon-async = { path = "../raxon-async" }
-raxon-anim = { path = "../raxon-anim" }
+raxon-core = { path = "../raxon-core", version = "0.0.1" }
+raxon-dom = { path = "../raxon-dom", version = "0.0.1" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }
+raxon-net = { path = "../raxon-net", version = "0.0.1" }
+raxon-async = { path = "../raxon-async", version = "0.0.1" }
+raxon-anim = { path = "../raxon-anim", version = "0.0.1" }

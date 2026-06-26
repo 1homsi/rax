@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-net"
 description = "HTTP client abstraction for rax, returning reactive Resources."
 version.workspace = true
@@ -13,8 +12,8 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [dependencies]
-raxon-reactive = { path = "../raxon-reactive" }
-raxon-async = { path = "../raxon-async" }
+raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }
+raxon-async = { path = "../raxon-async", version = "0.0.1" }
 tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 ureq = { version = "2", features = [] }
 serde = { version = "1" }

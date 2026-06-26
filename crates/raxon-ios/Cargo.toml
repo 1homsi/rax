@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "raxon-ios"
 description = "iOS (UIKit) backend for rax, implemented in pure Rust via objc2."
 version.workspace = true
@@ -13,13 +12,13 @@ missing_docs = "warn"
 # objc2 interop requires unsafe; allow it in this crate only.
 
 [dependencies]
-raxon-core = { path = "../raxon-core" }
-raxon-dom = { path = "../raxon-dom" }
-raxon-runtime = { path = "../raxon-runtime" }
-raxon-view = { path = "../raxon-view" }
-raxon-store = { path = "../raxon-store" }
-raxon-net = { path = "../raxon-net" }
-raxon-plugin = { path = "../raxon-plugin" }
+raxon-core = { path = "../raxon-core", version = "0.0.1" }
+raxon-dom = { path = "../raxon-dom", version = "0.0.1" }
+raxon-runtime = { path = "../raxon-runtime", version = "0.0.1" }
+raxon-view = { path = "../raxon-view", version = "0.0.1" }
+raxon-store = { path = "../raxon-store", version = "0.0.1" }
+raxon-net = { path = "../raxon-net", version = "0.0.1" }
+raxon-plugin = { path = "../raxon-plugin", version = "0.0.1" }
 
 # UIKit is only present on Apple mobile targets; gate the bindings so the rest
 # of the workspace still builds on the host.
