@@ -1969,6 +1969,8 @@ impl TabItem {
 
 /// A bottom tab bar. Renders the selected tab's content above a row of tab buttons.
 pub fn tab_bar(tabs: Vec<TabItem>, selected: Signal<usize>) -> impl View {
+    const TAB_BAR_HEIGHT: f32 = 49.0;
+
     let mut content_views: Vec<BoxedView> = Vec::new();
     let mut button_views: Vec<BoxedView> = Vec::new();
 
@@ -2017,7 +2019,9 @@ pub fn tab_bar(tabs: Vec<TabItem>, selected: Signal<usize>) -> impl View {
         boxed(
             row(button_views)
                 .background(Color::hex(0xF9F9F9ff))
-                .border(1.0, Color::hex(0xE0E0E0ff)),
+                .border(1.0, Color::hex(0xE0E0E0ff))
+                .height(TAB_BAR_HEIGHT)
+                .flex_shrink(0.0),
         ),
     ))
 }
@@ -2519,5 +2523,68 @@ mod date_math_tests {
         assert_eq!(weekday(2000, 1, 1), 6);
         // 2024-02-29 was a Thursday (4).
         assert_eq!(weekday(2024, 2, 29), 4);
+    }
+}
+
+#[cfg(test)]
+mod tab_bar_tests {
+    use crate::core::{Rect, Size};
+    use crate::dom::{Host, RecordingBackend, Tree, WidgetId};
+    use crate::reactive::{create_root, create_signal};
+    use crate::view::{mount, tab, tab_bar, text, ViewExt};
+
+    fn frame_of(frames: &[(WidgetId, crate::layout::NodeLayout)], id: WidgetId) -> Rect {
+        frames
+            .iter()
+            .find(|(candidate, _)| *candidate == id)
+            .expect("frame present")
+            .1
+            .frame
+    }
+
+    #[test]
+    fn tab_bar_keeps_button_row_visible_with_growing_content() {
+        let ((tree, root), scope) = create_root(|| {
+            let mut tree = Tree::new(Host::new(RecordingBackend::new()));
+            let selected = create_signal(0usize);
+            let root = mount(
+                &mut tree,
+                tab_bar(
+                    vec![
+                        tab("Home", "house", text("Home").grow(1.0)),
+                        tab("Orders", "list", text("Orders").grow(1.0)),
+                    ],
+                    selected,
+                ),
+            );
+            (tree, root)
+        });
+
+        let children = tree.children_of(root);
+        assert_eq!(children.len(), 2, "tab_bar has content and button row");
+        let content = children[0];
+        let buttons = children[1];
+
+        let frames = crate::layout::compute(&tree, root, Size::new(390.0, 700.0));
+        let content_frame = frame_of(&frames, content);
+        let button_frame = frame_of(&frames, buttons);
+
+        assert!(
+            (button_frame.size.height - 49.0).abs() < 0.5,
+            "button row should keep UITabBar height, got {:?}",
+            button_frame
+        );
+        assert!(
+            (button_frame.origin.y - 651.0).abs() < 0.5,
+            "button row should remain pinned below content, got {:?}",
+            button_frame
+        );
+        assert!(
+            (content_frame.size.height - 651.0).abs() < 0.5,
+            "growing content should yield fixed bar space, got {:?}",
+            content_frame
+        );
+
+        scope.dispose();
     }
 }
