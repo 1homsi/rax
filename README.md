@@ -40,8 +40,8 @@ Early but functional. A reactive multi-screen app with tab navigation, dynamic l
 | Animation (tweens, springs, keyframes) | ✅ |
 | Networking (HTTP, WebSocket, SSE) | ✅ |
 | SQLite, Keychain, local storage | ✅ |
-| Android backend | 🟡 command backend + driver + binding runtime + generated host glue + Gradle app shell + host session/registry/versioned bridge + command/event wire |
-| Web/WASM backend | 🟡 DOM command backend + driver + binding runtime + generated host glue + browser/dev-server shell + host session/registry/versioned bridge + command/event wire |
+| Android backend | 🟡 command backend + driver + binding runtime + generated host glue + Gradle app shell + build artifact copy + host session/registry/versioned bridge + command/event wire |
+| Web/WASM backend | 🟡 DOM command backend + driver + binding runtime + generated host glue + browser/dev-server shell + raw wasm loader/build config + host session/registry/versioned bridge + command/event wire |
 
 ## Structure
 
@@ -75,6 +75,8 @@ cargo check -p raxon --target aarch64-apple-ios-sim
 cargo check -p raxon --target aarch64-linux-android
 cargo check -p raxon --target wasm32-unknown-unknown
 raxon generate --target all                      # Android/Web host glue + project shells
+raxon build --target android --generated-dir generated
+raxon build --target web --generated-dir generated
 ```
 
 ## License

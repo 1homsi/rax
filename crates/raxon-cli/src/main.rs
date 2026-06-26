@@ -3,8 +3,8 @@
 //! Usage:
 //!   rax new <project-name>                Create a new raxon app project
 //!   rax doctor                            Print environment diagnostic info
-//!   rax build [--target <ios-sim|ios|android|web|macos>]
-//!                                         Print the cargo build command to run
+//!   rax build [--target <ios-sim|ios|android|web|macos>] [--dry-run]
+//!                                         Build or print a platform target
 //!   rax run [--target <ios-sim|ios>]      Print the cargo build + Xcode run steps
 //!   rax test [-- <args>]                  Run cargo test, forwarding extra args
 //!   rax lint                              Run cargo clippy --all-targets
@@ -21,6 +21,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 use std::process::Command;
+
+use serde_json::Value;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ANDROID_GRADLE_PLUGIN_VERSION: &str = "9.2.0";
@@ -46,8 +48,20 @@ fn main() {
             run_doctor();
         }
         Some("build") => {
-            let target = parse_target_flag(&args, "ios-sim");
-            run_build(&target);
+            if args
+                .iter()
+                .skip(2)
+                .any(|arg| arg == "--help" || arg == "-h")
+            {
+                println!("{}", build_usage());
+                return;
+            }
+            let options = parse_build_options(&args).unwrap_or_else(|error| {
+                eprintln!("{error}");
+                eprintln!("Usage: rax build [--target ios-sim|ios|android|web|macos] [--dry-run]");
+                process::exit(1);
+            });
+            run_build(&options);
         }
         Some("run") => {
             let target = parse_target_flag(&args, "ios-sim");
@@ -130,7 +144,7 @@ fn print_help() {
     println!("COMMANDS:");
     println!("    new <name>                Create a new raxon app project");
     println!("    doctor                    Print environment diagnostic info");
-    println!("    build [--target <TARGET>] Print the build command for a target");
+    println!("    build [--target <TARGET>] Build a Rust library for a platform target");
     println!("    run   [--target <TARGET>] Print the run steps for a target");
     println!("    test  [-- <args>]         Run cargo test, forwarding extra args");
     println!("    lint                      Run cargo clippy --all-targets");
@@ -225,38 +239,652 @@ fn run_doctor() {
 // build
 // ---------------------------------------------------------------------------
 
-fn run_build(target: &str) {
-    let cargo_triple = target_to_triple(target);
-    if cargo_triple.is_empty() {
-        eprintln!("Unknown target: {}", target);
-        eprintln!("Valid targets: ios-sim, ios, android, web, macos");
-        process::exit(1);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BuildProfile {
+    Debug,
+    Release,
+}
+
+impl BuildProfile {
+    fn cargo_args(self) -> &'static [&'static str] {
+        match self {
+            BuildProfile::Debug => &[],
+            BuildProfile::Release => &["--release"],
+        }
     }
 
-    println!("rax build --target {}", target);
-    println!();
-    println!("→ cargo build --target {} --release", cargo_triple);
-    println!();
-    println!("Run this command in your project directory.");
+    fn dir_name(self) -> &'static str {
+        match self {
+            BuildProfile::Debug => "debug",
+            BuildProfile::Release => "release",
+        }
+    }
 
-    if target == "ios-sim" || target == "ios" {
+    fn as_str(self) -> &'static str {
+        match self {
+            BuildProfile::Debug => "debug",
+            BuildProfile::Release => "release",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildOptions {
+    target: String,
+    profile: BuildProfile,
+    package: Option<String>,
+    manifest_path: Option<PathBuf>,
+    target_dir: Option<PathBuf>,
+    generated_dir: PathBuf,
+    out: Option<PathBuf>,
+    lib_name: Option<String>,
+    dry_run: bool,
+    copy_artifacts: bool,
+}
+
+impl Default for BuildOptions {
+    fn default() -> Self {
+        BuildOptions {
+            target: "ios-sim".to_string(),
+            profile: BuildProfile::Release,
+            package: None,
+            manifest_path: None,
+            target_dir: None,
+            generated_dir: PathBuf::from("generated"),
+            out: None,
+            lib_name: None,
+            dry_run: false,
+            copy_artifacts: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CommandSpec {
+    program: String,
+    args: Vec<String>,
+}
+
+impl CommandSpec {
+    fn new(program: impl Into<String>) -> Self {
+        CommandSpec {
+            program: program.into(),
+            args: Vec::new(),
+        }
+    }
+
+    fn arg(&mut self, arg: impl Into<String>) {
+        self.args.push(arg.into());
+    }
+
+    fn args<I, S>(&mut self, args: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.args.extend(args.into_iter().map(Into::into));
+    }
+
+    fn display(&self) -> String {
+        std::iter::once(self.program.as_str())
+            .chain(self.args.iter().map(String::as_str))
+            .map(shell_escape)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BuildPostAction {
+    CopyArtifact { from: PathBuf, to: PathBuf },
+    WriteWebBuildConfig { path: PathBuf, wasm_url: String },
+    Note(String),
+}
+
+impl BuildPostAction {
+    fn describe(&self) -> String {
+        match self {
+            BuildPostAction::CopyArtifact { from, to } => {
+                format!("copy {} -> {}", from.display(), to.display())
+            }
+            BuildPostAction::WriteWebBuildConfig { path, wasm_url } => {
+                format!("write {} with wasmUrl={}", path.display(), wasm_url)
+            }
+            BuildPostAction::Note(message) => message.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildPlan {
+    target: String,
+    triple: String,
+    profile: BuildProfile,
+    cargo: CommandSpec,
+    post_actions: Vec<BuildPostAction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CargoProjectInfo {
+    lib_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GeneratedBindingInfo {
+    android_library: Option<String>,
+    web_wasm_module: Option<String>,
+}
+
+fn build_usage() -> String {
+    [
+        "Usage: rax build [options]",
+        "",
+        "Options:",
+        "  --target ios-sim|ios|android|web|macos  Platform target (default: ios-sim)",
+        "  --release                              Build optimized artifacts (default)",
+        "  --debug                                Build debug artifacts",
+        "  --profile debug|release                Build profile",
+        "  --package, -p <name>                   Cargo package to build",
+        "  --manifest-path <path>                 Cargo manifest to build",
+        "  --target-dir <dir>                     Cargo target directory",
+        "  --generated-dir <dir>                  rax generate output dir (default: generated)",
+        "  --out <path>                           Copy final platform artifact to path/dir",
+        "  --lib-name <name>                      Native library/wasm artifact stem",
+        "  --android-library <name>               Alias for --lib-name on Android",
+        "  --dry-run, --print                     Print the plan without executing it",
+        "  --no-copy                              Build only; skip generated host artifact copy",
+        "",
+        "Environment:",
+        "  RAXON_CARGO                            Cargo binary used for the nested build",
+        "  RUSTC                                  Rust compiler used by cargo and target preflight",
+    ]
+    .join("\n")
+}
+
+fn parse_build_options(args: &[String]) -> Result<BuildOptions, String> {
+    let mut options = BuildOptions::default();
+    let mut iter = args.iter().skip(2).peekable();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--target" | "-t" => {
+                options.target = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --target".to_string())?
+                    .clone();
+            }
+            "--release" => {
+                options.profile = BuildProfile::Release;
+            }
+            "--debug" => {
+                options.profile = BuildProfile::Debug;
+            }
+            "--profile" => {
+                let profile = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --profile".to_string())?;
+                options.profile = match profile.as_str() {
+                    "debug" | "dev" => BuildProfile::Debug,
+                    "release" => BuildProfile::Release,
+                    other => return Err(format!("Unknown build profile '{other}'")),
+                };
+            }
+            "--package" | "-p" => {
+                options.package = Some(
+                    iter.next()
+                        .ok_or_else(|| "Missing value for --package".to_string())?
+                        .clone(),
+                );
+            }
+            "--manifest-path" => {
+                options.manifest_path =
+                    Some(PathBuf::from(iter.next().ok_or_else(|| {
+                        "Missing value for --manifest-path".to_string()
+                    })?));
+            }
+            "--target-dir" => {
+                options.target_dir =
+                    Some(PathBuf::from(iter.next().ok_or_else(|| {
+                        "Missing value for --target-dir".to_string()
+                    })?));
+            }
+            "--generated-dir" => {
+                options.generated_dir = PathBuf::from(
+                    iter.next()
+                        .ok_or_else(|| "Missing value for --generated-dir".to_string())?,
+                );
+            }
+            "--out" => {
+                options.out = Some(PathBuf::from(
+                    iter.next()
+                        .ok_or_else(|| "Missing value for --out".to_string())?,
+                ));
+            }
+            "--lib-name" | "--android-library" => {
+                options.lib_name = Some(
+                    iter.next()
+                        .ok_or_else(|| format!("Missing value for {arg}"))?
+                        .clone(),
+                );
+            }
+            "--dry-run" | "--print" => {
+                options.dry_run = true;
+            }
+            "--copy" => {
+                options.copy_artifacts = true;
+            }
+            "--no-copy" => {
+                options.copy_artifacts = false;
+            }
+            "--help" | "-h" => return Err(build_usage()),
+            other => return Err(format!("Unknown build option '{other}'")),
+        }
+    }
+    if target_to_triple(&options.target).is_empty() {
+        return Err(format!(
+            "Unknown target: {}. Valid targets: ios-sim, ios, android, web, macos",
+            options.target
+        ));
+    }
+    Ok(options)
+}
+
+fn run_build(options: &BuildOptions) {
+    let plan = create_build_plan(options).unwrap_or_else(|error| {
+        eprintln!("Failed to plan build: {error}");
+        process::exit(1);
+    });
+
+    println!("rax build --target {}", plan.target);
+    println!("profile: {}", plan.profile.as_str());
+    println!("target triple: {}", plan.triple);
+    println!();
+    println!("→ {}", plan.cargo.display());
+    if !plan.post_actions.is_empty() {
         println!();
-        println!("After the build succeeds, open your Xcode project and link the");
-        println!(
-            "generated `.a` static library from `target/{}/release/`.`",
-            cargo_triple
-        );
-    } else if target == "android" {
+        println!("After cargo build:");
+        for action in &plan.post_actions {
+            println!("  - {}", action.describe());
+        }
+    }
+    if options.dry_run {
         println!();
-        println!("Android hosts should load the generated native library from");
-        println!(
-            "`target/{}/release/` or use cargo-ndk for APK packaging.",
-            cargo_triple
-        );
-    } else if target == "web" {
-        println!();
-        println!("The web host should load the generated `.wasm` and drive");
-        println!("`raxon::web::WebDriver` from requestAnimationFrame.");
+        println!("Dry run only; no commands executed.");
+        return;
+    }
+
+    if let Err(error) = ensure_target_std_available(&plan.triple) {
+        eprintln!("{error}");
+        process::exit(1);
+    }
+    execute_command(&plan.cargo).unwrap_or_else(|code| process::exit(code));
+    if options.copy_artifacts {
+        if let Err(error) = execute_post_actions(&plan.post_actions) {
+            eprintln!("Build finished, but post-processing failed: {error}");
+            process::exit(1);
+        }
+    }
+}
+
+fn create_build_plan(options: &BuildOptions) -> Result<BuildPlan, String> {
+    let triple = target_to_triple(&options.target).to_string();
+    if triple.is_empty() {
+        return Err(format!("Unknown target: {}", options.target));
+    }
+
+    let project = read_cargo_project_info(options.manifest_path.as_deref())?;
+    let generated = read_generated_binding_info(&options.generated_dir);
+    let target_dir = effective_target_dir(options)?;
+    let mut cargo = CommandSpec::new(
+        env::var("RAXON_CARGO")
+            .or_else(|_| env::var("CARGO"))
+            .unwrap_or_else(|_| "cargo".to_string()),
+    );
+    cargo.arg("build");
+    cargo.arg("--target");
+    cargo.arg(&triple);
+    cargo.args(options.profile.cargo_args().iter().copied());
+    if let Some(package) = &options.package {
+        cargo.arg("--package");
+        cargo.arg(package);
+    }
+    if let Some(manifest_path) = &options.manifest_path {
+        cargo.arg("--manifest-path");
+        cargo.arg(manifest_path.display().to_string());
+    }
+    if let Some(target_dir) = &options.target_dir {
+        cargo.arg("--target-dir");
+        cargo.arg(target_dir.display().to_string());
+    }
+
+    let post_actions = build_post_actions(options, &project, generated.as_ref(), &target_dir)?;
+    Ok(BuildPlan {
+        target: options.target.clone(),
+        triple,
+        profile: options.profile,
+        cargo,
+        post_actions,
+    })
+}
+
+fn build_post_actions(
+    options: &BuildOptions,
+    project: &CargoProjectInfo,
+    generated: Option<&GeneratedBindingInfo>,
+    target_dir: &Path,
+) -> Result<Vec<BuildPostAction>, String> {
+    if !options.copy_artifacts {
+        return Ok(vec![BuildPostAction::Note(
+            "artifact copy disabled by --no-copy".to_string(),
+        )]);
+    }
+    let triple = target_to_triple(&options.target);
+    let profile_dir = options.profile.dir_name();
+    let mut actions = Vec::new();
+    match options.target.as_str() {
+        "android" => {
+            let lib_name = options
+                .lib_name
+                .clone()
+                .or_else(|| generated.and_then(|info| info.android_library.clone()))
+                .or_else(|| project.lib_name.clone())
+                .ok_or_else(|| {
+                    "Could not infer Android library name; pass --lib-name or --android-library"
+                        .to_string()
+                })?;
+            let file_name = format!("lib{lib_name}.so");
+            let source = target_dir.join(triple).join(profile_dir).join(&file_name);
+            let destination = artifact_destination(
+                options.out.as_deref(),
+                &options
+                    .generated_dir
+                    .join("android/app/src/main/jniLibs/arm64-v8a"),
+                &file_name,
+                generated.is_some(),
+            );
+            if let Some(destination) = destination {
+                actions.push(BuildPostAction::CopyArtifact {
+                    from: source,
+                    to: destination,
+                });
+            } else {
+                actions.push(BuildPostAction::Note(format!(
+                    "Android native library will be at {}",
+                    source.display()
+                )));
+            }
+        }
+        "web" => {
+            let lib_name = options
+                .lib_name
+                .clone()
+                .or_else(|| project.lib_name.clone())
+                .ok_or_else(|| "Could not infer wasm artifact name; pass --lib-name".to_string())?;
+            let file_name = format!("{lib_name}.wasm");
+            let source = target_dir.join(triple).join(profile_dir).join(&file_name);
+            let (destination, wasm_url) = web_artifact_destination(
+                options.out.as_deref(),
+                &options.generated_dir,
+                generated.and_then(|info| info.web_wasm_module.as_deref()),
+                &file_name,
+                generated.is_some(),
+            );
+            if let Some(destination) = destination {
+                actions.push(BuildPostAction::CopyArtifact {
+                    from: source,
+                    to: destination,
+                });
+                if let Some(wasm_url) = wasm_url {
+                    actions.push(BuildPostAction::WriteWebBuildConfig {
+                        path: options.generated_dir.join("web/raxon-web-build.js"),
+                        wasm_url,
+                    });
+                }
+            } else {
+                actions.push(BuildPostAction::Note(format!(
+                    "WebAssembly artifact will be at {}",
+                    source.display()
+                )));
+            }
+        }
+        "ios-sim" | "ios" => {
+            actions.push(BuildPostAction::Note(format!(
+                "Link the resulting iOS library from {}/{}/{} into your Xcode target.",
+                target_dir.display(),
+                triple,
+                profile_dir
+            )));
+        }
+        "macos" => {
+            actions.push(BuildPostAction::Note(format!(
+                "macOS artifact output: {}/{}/{}",
+                target_dir.display(),
+                triple,
+                profile_dir
+            )));
+        }
+        _ => {}
+    }
+    Ok(actions)
+}
+
+fn execute_command(command: &CommandSpec) -> Result<(), i32> {
+    let status = Command::new(&command.program)
+        .args(&command.args)
+        .status()
+        .map_err(|error| {
+            eprintln!("failed to run {}: {error}", command.program);
+            1
+        })?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(status.code().unwrap_or(1))
+    }
+}
+
+fn ensure_target_std_available(triple: &str) -> Result<(), String> {
+    let rustc = env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());
+    let output = Command::new(&rustc)
+        .args(["--print", "target-libdir", "--target", triple])
+        .output()
+        .map_err(|error| format!("failed to run {rustc}: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "Rust target {triple} is not available for {rustc}. Install it with `rustup target add {triple}` or set RUSTC/RAXON_CARGO to a toolchain that has it."
+        ));
+    }
+    let libdir = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    if !libdir.is_dir() || !target_libdir_has_core(&libdir) {
+        return Err(format!(
+            "Rust target {triple} is not installed for active rustc `{rustc}` (missing std/core libraries at {}). Install it for the active toolchain or run with RUSTC/RAXON_CARGO pointing at a rustup toolchain; for rustup: `rustup target add {triple}`.",
+            libdir.display()
+        ));
+    }
+    Ok(())
+}
+
+fn target_libdir_has_core(libdir: &Path) -> bool {
+    fs::read_dir(libdir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .any(|name| name.starts_with("libcore") && name.ends_with(".rlib"))
+}
+
+fn execute_post_actions(actions: &[BuildPostAction]) -> Result<(), String> {
+    for action in actions {
+        match action {
+            BuildPostAction::CopyArtifact { from, to } => {
+                if !from.exists() {
+                    return Err(format!(
+                        "expected artifact {} does not exist. Ensure the crate has the right [lib] crate-type and pass --lib-name if the artifact stem differs.",
+                        from.display()
+                    ));
+                }
+                if let Some(parent) = to.parent() {
+                    fs::create_dir_all(parent).map_err(|error| {
+                        format!("failed to create {}: {error}", parent.display())
+                    })?;
+                }
+                fs::copy(from, to).map_err(|error| {
+                    format!(
+                        "failed to copy {} to {}: {error}",
+                        from.display(),
+                        to.display()
+                    )
+                })?;
+                println!("copied {}", to.display());
+            }
+            BuildPostAction::WriteWebBuildConfig { path, wasm_url } => {
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).map_err(|error| {
+                        format!("failed to create {}: {error}", parent.display())
+                    })?;
+                }
+                fs::write(path, web_build_config_template(Some(wasm_url)))
+                    .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
+                println!("wrote {}", path.display());
+            }
+            BuildPostAction::Note(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn artifact_destination(
+    out: Option<&Path>,
+    generated_default_dir: &Path,
+    file_name: &str,
+    generated_manifest_exists: bool,
+) -> Option<PathBuf> {
+    if let Some(out) = out {
+        return Some(resolve_output_path(out, file_name));
+    }
+    if generated_manifest_exists {
+        return Some(generated_default_dir.join(file_name));
+    }
+    None
+}
+
+fn web_artifact_destination(
+    out: Option<&Path>,
+    generated_dir: &Path,
+    wasm_module: Option<&str>,
+    file_name: &str,
+    generated_manifest_exists: bool,
+) -> (Option<PathBuf>, Option<String>) {
+    if let Some(out) = out {
+        return (Some(resolve_output_path(out, file_name)), None);
+    }
+    if !generated_manifest_exists {
+        return (None, None);
+    }
+    let wasm_url = wasm_url_from_module(wasm_module, file_name);
+    let destination = generated_dir
+        .join("web")
+        .join(wasm_url.trim_start_matches("./"));
+    (Some(destination), Some(wasm_url))
+}
+
+fn wasm_url_from_module(wasm_module: Option<&str>, file_name: &str) -> String {
+    let module = wasm_module.unwrap_or("./pkg/app.js");
+    let module_path = module.trim_start_matches("./");
+    let base = Path::new(module_path);
+    let wasm_path = if base.extension().and_then(|ext| ext.to_str()) == Some("wasm") {
+        base.to_path_buf()
+    } else {
+        base.parent()
+            .map(|parent| parent.join(file_name))
+            .unwrap_or_else(|| PathBuf::from(file_name))
+    };
+    format!("./{}", wasm_path.display())
+}
+
+fn resolve_output_path(out: &Path, file_name: &str) -> PathBuf {
+    if out.extension().is_some() {
+        out.to_path_buf()
+    } else {
+        out.join(file_name)
+    }
+}
+
+fn effective_target_dir(options: &BuildOptions) -> Result<PathBuf, String> {
+    if let Some(target_dir) = &options.target_dir {
+        return Ok(target_dir.clone());
+    }
+    if let Ok(target_dir) = env::var("CARGO_TARGET_DIR") {
+        if !target_dir.trim().is_empty() {
+            return Ok(PathBuf::from(target_dir));
+        }
+    }
+    Ok(env::current_dir()
+        .map_err(|error| format!("failed to read current directory: {error}"))?
+        .join("target"))
+}
+
+fn read_cargo_project_info(manifest_path: Option<&Path>) -> Result<CargoProjectInfo, String> {
+    let manifest_path = manifest_path
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("Cargo.toml"));
+    let text = fs::read_to_string(&manifest_path)
+        .map_err(|error| format!("failed to read {}: {error}", manifest_path.display()))?;
+    let package_name = parse_toml_string_in_section(&text, "package", "name");
+    let lib_name = parse_toml_string_in_section(&text, "lib", "name")
+        .or_else(|| package_name.as_ref().map(|name| name.replace('-', "_")));
+    Ok(CargoProjectInfo { lib_name })
+}
+
+fn parse_toml_string_in_section(text: &str, section: &str, key: &str) -> Option<String> {
+    let mut in_section = false;
+    let section_header = format!("[{section}]");
+    for raw_line in text.lines() {
+        let line = raw_line.split('#').next().unwrap_or("").trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            in_section = line == section_header;
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        let Some((candidate_key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if candidate_key.trim() != key {
+            continue;
+        }
+        let value = value.trim();
+        if let Some(stripped) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+            return Some(stripped.to_string());
+        }
+    }
+    None
+}
+
+fn read_generated_binding_info(generated_dir: &Path) -> Option<GeneratedBindingInfo> {
+    let manifest_path = generated_dir.join("raxon-bindings.json");
+    let text = fs::read_to_string(manifest_path).ok()?;
+    let value: Value = serde_json::from_str(&text).ok()?;
+    Some(GeneratedBindingInfo {
+        android_library: value
+            .pointer("/android/library")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        web_wasm_module: value
+            .pointer("/web/wasmModule")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+    })
+}
+
+fn shell_escape(value: &str) -> String {
+    if value.chars().all(|ch| {
+        ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':' | '=' | '+')
+    }) {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
     }
 }
 
@@ -1695,7 +2323,7 @@ fn web_js_host_template(options: &GenerateOptions) -> String {
 const textDecoder = new TextDecoder();
 
 export async function createRaxonWebHost(root, options = {}) {
-  const module = options.wasm ?? await import("__WASM_MODULE__");
+  const module = options.wasm ?? await loadRaxonWasmModule(options);
   if (typeof module.default === "function" && options.initialize !== false) {
     await module.default(options.wasmUrl);
   }
@@ -1711,6 +2339,28 @@ export async function createRaxonWebHost(root, options = {}) {
   });
   if (options.mount !== false) host.mount();
   return host;
+}
+
+export async function loadRaxonWasmModule(options = {}) {
+  if (options.wasmUrl) {
+    return instantiateRaxonWasm(options.wasmUrl, options.imports);
+  }
+  return import("__WASM_MODULE__");
+}
+
+export async function instantiateRaxonWasm(wasmUrl, imports = {}) {
+  const response = await fetch(wasmUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to load ${wasmUrl}: ${response.status} ${response.statusText}`);
+  }
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (WebAssembly.instantiateStreaming && contentType.includes("application/wasm")) {
+    const result = await WebAssembly.instantiateStreaming(response, imports);
+    return result.instance.exports;
+  }
+  const bytes = await response.arrayBuffer();
+  const result = await WebAssembly.instantiate(bytes, imports);
+  return result.instance.exports;
 }
 
 export class RaxonWebHost {
@@ -2108,6 +2758,7 @@ export interface RaxonWebHostOptions {
   wasm?: Record<string, any>;
   memory?: WebAssembly.Memory;
   wasmUrl?: string;
+  imports?: WebAssembly.Imports;
   initialize?: boolean;
   mount?: boolean;
   onBridgeError?: (error: RaxonBridgeError) => void;
@@ -2157,6 +2808,10 @@ fn generate_web_host_shell(
     let main_path = web_dir.join("main.js");
     fs::write(&main_path, web_main_template(options))?;
     files.push(main_path);
+
+    let build_config_path = web_dir.join("raxon-web-build.js");
+    fs::write(&build_config_path, web_build_config_template(None))?;
+    files.push(build_config_path);
 
     let package_path = web_dir.join("package.json");
     fs::write(&package_path, web_package_json_template(options))?;
@@ -2216,7 +2871,8 @@ fn web_index_template(options: &GenerateOptions) -> String {
 
 fn web_main_template(options: &GenerateOptions) -> String {
     format!(
-        r#"import {{ createRaxonWebHost }} from "./raxon-web-host.js";
+        r#"import {{ raxonWebBuild }} from "./raxon-web-build.js";
+import {{ createRaxonWebHost }} from "./raxon-web-host.js";
 
 const root = document.getElementById("{root_id}");
 if (!root) {{
@@ -2233,7 +2889,7 @@ function readViewport() {{
 
 const host = await createRaxonWebHost(root, {{
   mount: false,
-  wasmUrl: undefined,
+  wasmUrl: raxonWebBuild.wasmUrl,
   onBridgeError(error) {{
     console.error("[raxon] bridge error", error);
   }},
@@ -2278,6 +2934,19 @@ window.addEventListener("beforeunload", () => {{
 }});
 "#,
         root_id = js_string_escape(&options.web_root_id),
+    )
+}
+
+fn web_build_config_template(wasm_url: Option<&str>) -> String {
+    let wasm_url = wasm_url
+        .map(|url| format!("\"{}\"", js_string_escape(url)))
+        .unwrap_or_else(|| "undefined".to_string());
+    format!(
+        r#"// Generated by `rax generate`; `rax build --target web` updates wasmUrl.
+export const raxonWebBuild = {{
+  wasmUrl: {wasm_url},
+}};
+"#
     )
 }
 
@@ -2412,15 +3081,17 @@ Generated by `rax generate --target web`.
 - `raxon_web_bridge.rs`: Rust wasm bridge module for your app crate.
 - `raxon-web-host.js`: browser host runtime that applies DOM command batches and emits raxon wire events.
 - `raxon-web-host.d.ts`: TypeScript declarations for custom host integration.
-- `index.html` and `main.js`: static browser shell that mounts `{wasm_module}`, resizes with `ResizeObserver`, and ticks with `requestAnimationFrame`.
+- `index.html`, `main.js`, and `raxon-web-build.js`: browser shell that loads `{wasm_module}` or a raw `.wasm` URL written by `rax build --target web`, resizes with `ResizeObserver`, and ticks with `requestAnimationFrame`.
 - `package.json` and `dev-server.mjs`: no-dependency Node dev server with wasm MIME and cross-origin isolation headers.
 
 ## Rust side
 
 Include `raxon_web_bridge.rs` from your app crate and expose the generated wasm
-module at `{wasm_module}`. The default shell expects a wasm-bindgen-style module
-whose default export initializes the `.wasm` and whose named exports include the
-`raxon_web_*` bridge functions.
+module at `{wasm_module}`, or run `rax build --target web --generated-dir <dir>`
+to copy the raw `.wasm` into this shell and update `raxon-web-build.js`. The host
+runtime supports both wasm-bindgen-style JS modules and direct `.wasm`
+instantiation; in both cases the exports must include the `raxon_web_*` bridge
+functions.
 
 ## Browser side
 
@@ -2696,6 +3367,176 @@ mod tests {
     }
 
     #[test]
+    fn parses_build_options() {
+        let args = vec![
+            "rax".to_string(),
+            "build".to_string(),
+            "--target".to_string(),
+            "web".to_string(),
+            "--debug".to_string(),
+            "--package".to_string(),
+            "demo-app".to_string(),
+            "--manifest-path".to_string(),
+            "app/Cargo.toml".to_string(),
+            "--target-dir".to_string(),
+            "build-target".to_string(),
+            "--generated-dir".to_string(),
+            "bindings".to_string(),
+            "--out".to_string(),
+            "dist".to_string(),
+            "--lib-name".to_string(),
+            "demo_app".to_string(),
+            "--dry-run".to_string(),
+            "--no-copy".to_string(),
+        ];
+
+        let options = parse_build_options(&args).expect("build options parse");
+
+        assert_eq!(options.target, "web");
+        assert_eq!(options.profile, BuildProfile::Debug);
+        assert_eq!(options.package.as_deref(), Some("demo-app"));
+        assert_eq!(
+            options.manifest_path.as_deref(),
+            Some(Path::new("app/Cargo.toml"))
+        );
+        assert_eq!(
+            options.target_dir.as_deref(),
+            Some(Path::new("build-target"))
+        );
+        assert_eq!(options.generated_dir, PathBuf::from("bindings"));
+        assert_eq!(options.out.as_deref(), Some(Path::new("dist")));
+        assert_eq!(options.lib_name.as_deref(), Some("demo_app"));
+        assert!(options.dry_run);
+        assert!(!options.copy_artifacts);
+    }
+
+    #[test]
+    fn build_plan_copies_android_library_into_generated_project() {
+        let out_dir = temp_output_dir("android-build-plan");
+        let manifest_path = out_dir.join("Cargo.toml");
+        let generated_dir = out_dir.join("generated");
+        fs::create_dir_all(&generated_dir).unwrap();
+        fs::write(
+            &manifest_path,
+            r#"[package]
+name = "demo-app"
+
+[lib]
+name = "demo_lib"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            generated_dir.join("raxon-bindings.json"),
+            r#"{
+  "android": { "library": "demo_native" },
+  "web": { "wasmModule": "./pkg/demo.js" }
+}
+"#,
+        )
+        .unwrap();
+        let options = BuildOptions {
+            target: "android".to_string(),
+            manifest_path: Some(manifest_path),
+            target_dir: Some(out_dir.join("target")),
+            generated_dir: generated_dir.clone(),
+            dry_run: true,
+            ..BuildOptions::default()
+        };
+
+        let plan = create_build_plan(&options).expect("build plan");
+
+        assert_eq!(plan.triple, "aarch64-linux-android");
+        assert_eq!(
+            plan.cargo.args,
+            vec![
+                "build".to_string(),
+                "--target".to_string(),
+                "aarch64-linux-android".to_string(),
+                "--release".to_string(),
+                "--manifest-path".to_string(),
+                out_dir.join("Cargo.toml").display().to_string(),
+                "--target-dir".to_string(),
+                out_dir.join("target").display().to_string(),
+            ]
+        );
+        assert_eq!(
+            plan.post_actions,
+            vec![BuildPostAction::CopyArtifact {
+                from: out_dir.join("target/aarch64-linux-android/release/libdemo_native.so"),
+                to: generated_dir.join("android/app/src/main/jniLibs/arm64-v8a/libdemo_native.so"),
+            }]
+        );
+
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
+    fn build_plan_copies_web_wasm_and_updates_build_config() {
+        let out_dir = temp_output_dir("web-build-plan");
+        let manifest_path = out_dir.join("Cargo.toml");
+        let generated_dir = out_dir.join("generated");
+        fs::create_dir_all(&generated_dir).unwrap();
+        fs::write(
+            &manifest_path,
+            r#"[package]
+name = "demo-app"
+
+[lib]
+name = "demo_web"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            generated_dir.join("raxon-bindings.json"),
+            r#"{
+  "android": { "library": "demo_native" },
+  "web": { "wasmModule": "./pkg/demo.js" }
+}
+"#,
+        )
+        .unwrap();
+        let options = BuildOptions {
+            target: "web".to_string(),
+            manifest_path: Some(manifest_path),
+            target_dir: Some(out_dir.join("target")),
+            generated_dir: generated_dir.clone(),
+            dry_run: true,
+            ..BuildOptions::default()
+        };
+
+        let plan = create_build_plan(&options).expect("build plan");
+
+        assert_eq!(plan.triple, "wasm32-unknown-unknown");
+        assert_eq!(
+            plan.post_actions,
+            vec![
+                BuildPostAction::CopyArtifact {
+                    from: out_dir.join("target/wasm32-unknown-unknown/release/demo_web.wasm"),
+                    to: generated_dir.join("web/pkg/demo_web.wasm"),
+                },
+                BuildPostAction::WriteWebBuildConfig {
+                    path: generated_dir.join("web/raxon-web-build.js"),
+                    wasm_url: "./pkg/demo_web.wasm".to_string(),
+                },
+            ]
+        );
+
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
+    fn target_libdir_probe_requires_libcore() {
+        let out_dir = temp_output_dir("target-libdir");
+        fs::create_dir_all(&out_dir).unwrap();
+        assert!(!target_libdir_has_core(&out_dir));
+        fs::write(out_dir.join("libcore-demo.rlib"), "").unwrap();
+        assert!(target_libdir_has_core(&out_dir));
+
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
     fn jni_function_prefix_escapes_underscores() {
         assert_eq!(
             jni_function_prefix("dev.raxon_demo", "Demo_Host"),
@@ -2721,7 +3562,7 @@ mod tests {
 
         let files = generate_bindings(&options).expect("bindings generate");
 
-        assert_eq!(files.len(), 20);
+        assert_eq!(files.len(), 21);
         let android_rust =
             fs::read_to_string(out_dir.join("android/raxon_android_bridge.rs")).unwrap();
         assert!(android_rust.contains("Java_dev_raxon_demo_DemoHost_nativeMount"));
@@ -2784,7 +3625,9 @@ mod tests {
         assert!(web_rust.contains("mount_web(raxon::core::Size::new"));
 
         let web_js = fs::read_to_string(out_dir.join("web/raxon-web-host.js")).unwrap();
-        assert!(web_js.contains("await import(\"./pkg/demo.js\")"));
+        assert!(web_js.contains("loadRaxonWasmModule(options)"));
+        assert!(web_js.contains("return import(\"./pkg/demo.js\")"));
+        assert!(web_js.contains("instantiateRaxonWasm(wasmUrl"));
         assert!(web_js.contains("dispatchEvents(events)"));
         assert!(web_js.contains("applyCommand(command)"));
         assert!(web_js.contains("command.tag_name"));
@@ -2799,9 +3642,14 @@ mod tests {
         assert!(web_index.contains("id=\"demo_root\""));
 
         let web_main = fs::read_to_string(out_dir.join("web/main.js")).unwrap();
+        assert!(web_main.contains("import { raxonWebBuild } from \"./raxon-web-build.js\""));
         assert!(web_main.contains("createRaxonWebHost(root"));
+        assert!(web_main.contains("wasmUrl: raxonWebBuild.wasmUrl"));
         assert!(web_main.contains("ResizeObserver"));
         assert!(web_main.contains("window.requestAnimationFrame(frame)"));
+
+        let build_config = fs::read_to_string(out_dir.join("web/raxon-web-build.js")).unwrap();
+        assert!(build_config.contains("wasmUrl: undefined"));
 
         let package_json = fs::read_to_string(out_dir.join("web/package.json")).unwrap();
         assert!(package_json.contains("\"name\": \"demo-app\""));
@@ -2820,6 +3668,7 @@ mod tests {
         assert!(manifest.contains("\"android/app/src/main/java/dev/raxon/demo/DemoActivity.kt\""));
         assert!(manifest.contains("\"android/app/build.gradle.kts\""));
         assert!(manifest.contains("\"web/index.html\""));
+        assert!(manifest.contains("\"web/raxon-web-build.js\""));
         assert!(manifest.contains("\"web/package.json\""));
 
         let _ = fs::remove_dir_all(out_dir);
@@ -2836,10 +3685,11 @@ mod tests {
 
         let files = generate_bindings(&options).expect("bindings generate");
 
-        assert_eq!(files.len(), 9);
+        assert_eq!(files.len(), 10);
         assert!(out_dir.join("web/raxon-web-host.js").exists());
         assert!(out_dir.join("web/index.html").exists());
         assert!(out_dir.join("web/main.js").exists());
+        assert!(out_dir.join("web/raxon-web-build.js").exists());
         assert!(out_dir.join("web/package.json").exists());
         assert!(out_dir.join("web/dev-server.mjs").exists());
         assert!(!out_dir.join("android").exists());
