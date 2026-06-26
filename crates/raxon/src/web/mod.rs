@@ -22,6 +22,9 @@ use crate::view::View;
 /// A shared queue of DOM commands produced by [`WebDomBackend`].
 pub type DomCommandQueue = Rc<RefCell<Vec<DomCommand>>>;
 
+/// Web host session used by generated browser glue.
+pub type WebHostSession = crate::host::HostSession<WebDriver>;
+
 /// Host-originated web event payload for JavaScript adapters.
 pub type DomWireEvent = crate::wire::WireEvent;
 
@@ -1273,6 +1276,35 @@ impl WebDriver {
     }
 }
 
+impl crate::host::HostDriver for WebDriver {
+    fn tick(&mut self) {
+        WebDriver::tick(self);
+    }
+
+    fn set_viewport(&mut self, viewport: Size) {
+        WebDriver::set_viewport(self, viewport);
+    }
+
+    fn dispatch_wire_event_batch_json(
+        &self,
+        payload: &str,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        WebDriver::dispatch_wire_event_batch_json(self, payload)
+    }
+
+    fn drain_command_batch_json(&self) -> Result<String, serde_json::Error> {
+        WebDriver::drain_command_batch_json(self)
+    }
+}
+
+/// Mounts a web host session around a raxon app.
+pub fn mount_web_host_session<V: View>(
+    viewport: Size,
+    make_view: impl FnOnce() -> V,
+) -> WebHostSession {
+    crate::host::HostSession::new(WebDriver::new(viewport, make_view))
+}
+
 /// Converts a color into an `rgba(r, g, b, a)` CSS string.
 pub fn color_to_css(color: Color) -> String {
     let alpha = color.a as f32 / 255.0;
@@ -1420,5 +1452,44 @@ mod tests {
         driver.tick();
 
         assert_eq!(tapped.get(), 2);
+    }
+
+    #[test]
+    fn host_session_dispatches_events_ticks_and_drains_commands() {
+        let count = create_signal(0);
+        let text_count = count;
+        let button_count = count;
+        let mut session = mount_web_host_session(Size::new(320.0, 480.0), || {
+            column((
+                text(move || format!("Count {}", text_count.get())),
+                button("Tap", move || button_count.update(|value| *value += 1)),
+            ))
+        });
+        let batch = session.driver().drain_command_batch();
+        let button_id = batch
+            .commands
+            .iter()
+            .find_map(|command| match command {
+                DomWireCommand::Create { id, tag_name, .. } if tag_name == "button" => Some(*id),
+                _ => None,
+            })
+            .expect("button create command is present");
+        let events = DomWireEventBatch::new(vec![DomWireEvent::Tap { target: button_id }]);
+        let encoded = events.encode_json().expect("event batch encodes");
+
+        let commands = session
+            .dispatch_events_tick_and_drain_command_batch_json(&encoded)
+            .expect("session round-trip succeeds");
+        let commands_json: serde_json::Value =
+            serde_json::from_str(&commands).expect("commands are valid JSON");
+        let commands = commands_json["commands"]
+            .as_array()
+            .expect("commands is an array");
+
+        assert!(commands.iter().any(|command| {
+            command["type"].as_str() == Some("set_attribute")
+                && command["attr"]["name"].as_str() == Some("text")
+                && command["attr"]["value"].as_str() == Some("Count 1")
+        }));
     }
 }

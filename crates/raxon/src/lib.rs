@@ -72,6 +72,8 @@ pub mod layout;
 pub mod android;
 /// WebAssembly DOM backend command queue and driver foundation.
 pub mod web;
+/// Shared host-session lifecycle for generated platform glue.
+pub mod host;
 /// Versioned JSON wire protocol for host-originated platform events.
 pub mod wire;
 

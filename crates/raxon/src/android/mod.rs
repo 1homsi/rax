@@ -22,6 +22,9 @@ use crate::view::View;
 /// A shared queue of Android commands produced by [`AndroidBackend`].
 pub type AndroidCommandQueue = Rc<RefCell<Vec<AndroidCommand>>>;
 
+/// Android host session used by generated JNI glue.
+pub type AndroidHostSession = crate::host::HostSession<AndroidDriver>;
+
 /// Host-originated Android event payload for JNI adapters.
 pub type AndroidWireEvent = crate::wire::WireEvent;
 
@@ -1289,6 +1292,35 @@ impl AndroidDriver {
     }
 }
 
+impl crate::host::HostDriver for AndroidDriver {
+    fn tick(&mut self) {
+        AndroidDriver::tick(self);
+    }
+
+    fn set_viewport(&mut self, viewport: Size) {
+        AndroidDriver::set_viewport(self, viewport);
+    }
+
+    fn dispatch_wire_event_batch_json(
+        &self,
+        payload: &str,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        AndroidDriver::dispatch_wire_event_batch_json(self, payload)
+    }
+
+    fn drain_command_batch_json(&self) -> Result<String, serde_json::Error> {
+        AndroidDriver::drain_command_batch_json(self)
+    }
+}
+
+/// Mounts an Android host session around a raxon app.
+pub fn mount_android_host_session<V: View>(
+    viewport: Size,
+    make_view: impl FnOnce() -> V,
+) -> AndroidHostSession {
+    crate::host::HostSession::new(AndroidDriver::new(viewport, make_view))
+}
+
 /// Converts a color into Android's packed `0xAARRGGBB` layout.
 pub const fn color_to_argb(color: Color) -> u32 {
     color.to_argb_u32()
@@ -1436,5 +1468,48 @@ mod tests {
         driver.tick();
 
         assert_eq!(tapped.get(), 2);
+    }
+
+    #[test]
+    fn host_session_dispatches_events_ticks_and_drains_commands() {
+        let count = create_signal(0);
+        let text_count = count;
+        let button_count = count;
+        let mut session = mount_android_host_session(Size::new(320.0, 480.0), || {
+            column((
+                text(move || format!("Count {}", text_count.get())),
+                button("Tap", move || button_count.update(|value| *value += 1)),
+            ))
+        });
+        let batch = session.driver().drain_command_batch();
+        let button_id = batch
+            .commands
+            .iter()
+            .find_map(|command| match command {
+                AndroidWireCommand::Create { id, class_name }
+                    if class_name == "android.widget.Button" =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .expect("button create command is present");
+        let events = AndroidWireEventBatch::new(vec![AndroidWireEvent::Tap { target: button_id }]);
+        let encoded = events.encode_json().expect("event batch encodes");
+
+        let commands = session
+            .dispatch_events_tick_and_drain_command_batch_json(&encoded)
+            .expect("session round-trip succeeds");
+        let commands_json: serde_json::Value =
+            serde_json::from_str(&commands).expect("commands are valid JSON");
+        let commands = commands_json["commands"]
+            .as_array()
+            .expect("commands is an array");
+
+        assert!(commands.iter().any(|command| {
+            command["type"].as_str() == Some("set_attribute")
+                && command["attr"]["name"].as_str() == Some("text")
+                && command["attr"]["value"].as_str() == Some("Count 1")
+        }));
     }
 }
