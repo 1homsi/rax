@@ -10,8 +10,8 @@
 //!   rax lint                              Run cargo clippy --all-targets
 //!   rax fmt [--check]                     Run cargo fmt (or check formatting)
 //!   rax add <crate-name>                  Print the cargo add command for a crate
-//!   rax generate [--target android|web|all]
-//!                                         Generate platform host binding glue
+//!   rax generate [--target android|web|all] [--glue-only]
+//!                                         Generate platform host bindings/shells
 //!   rax --version                         Print the rax version
 //!   rax --help                            Print help
 
@@ -96,7 +96,7 @@ fn main() {
             let options = parse_generate_options(&args).unwrap_or_else(|error| {
                 eprintln!("{error}");
                 eprintln!(
-                    "Usage: rax generate [--target android|web|all] [--out generated] [--app-fn app]"
+                    "Usage: rax generate [--target android|web|all] [--out generated] [--app-fn app] [--glue-only]"
                 );
                 process::exit(1);
             });
@@ -131,7 +131,7 @@ fn print_help() {
     println!("    lint                      Run cargo clippy --all-targets");
     println!("    fmt   [--check]           Run cargo fmt (or --check to only verify)");
     println!("    add   <crate-name>        Print the cargo add command for a crate");
-    println!("    generate                  Generate Android/Web host binding glue");
+    println!("    generate                  Generate Android/Web host bindings and shells");
     println!("    --version                 Print the rax version");
     println!("    --help                    Print this help message");
     println!();
@@ -372,7 +372,12 @@ struct GenerateOptions {
     app_fn: String,
     android_package: String,
     android_class: String,
+    android_activity: String,
+    android_library: String,
     wasm_module: String,
+    web_title: String,
+    web_root_id: String,
+    host_shells: bool,
 }
 
 impl Default for GenerateOptions {
@@ -383,7 +388,12 @@ impl Default for GenerateOptions {
             app_fn: "app".to_string(),
             android_package: "com.example.raxon".to_string(),
             android_class: "RaxonHost".to_string(),
+            android_activity: "RaxonActivity".to_string(),
+            android_library: "raxon_app".to_string(),
             wasm_module: "./app_wasm.js".to_string(),
+            web_title: "Raxon App".to_string(),
+            web_root_id: "app".to_string(),
+            host_shells: true,
         }
     }
 }
@@ -423,11 +433,41 @@ fn parse_generate_options(args: &[String]) -> Result<GenerateOptions, String> {
                     .ok_or_else(|| "Missing value for --android-class".to_string())?
                     .clone();
             }
+            "--android-activity" => {
+                options.android_activity = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --android-activity".to_string())?
+                    .clone();
+            }
+            "--android-library" => {
+                options.android_library = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --android-library".to_string())?
+                    .clone();
+            }
             "--wasm-module" => {
                 options.wasm_module = iter
                     .next()
                     .ok_or_else(|| "Missing value for --wasm-module".to_string())?
                     .clone();
+            }
+            "--web-title" => {
+                options.web_title = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --web-title".to_string())?
+                    .clone();
+            }
+            "--web-root-id" => {
+                options.web_root_id = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --web-root-id".to_string())?
+                    .clone();
+            }
+            "--host-shells" => {
+                options.host_shells = true;
+            }
+            "--glue-only" | "--no-host-shells" => {
+                options.host_shells = false;
             }
             "--help" | "-h" => {
                 return Err(generate_usage());
@@ -437,7 +477,10 @@ fn parse_generate_options(args: &[String]) -> Result<GenerateOptions, String> {
     }
     validate_rust_path(&options.app_fn, "--app-fn")?;
     validate_android_identifier(&options.android_class, "--android-class")?;
+    validate_android_identifier(&options.android_activity, "--android-activity")?;
+    validate_android_library_name(&options.android_library)?;
     validate_android_package(&options.android_package)?;
+    validate_html_id(&options.web_root_id)?;
     Ok(options)
 }
 
@@ -446,12 +489,18 @@ fn generate_usage() -> String {
         "Usage: rax generate [options]",
         "",
         "Options:",
-        "  --target android|web|all      Which platform binding glue to generate",
+        "  --target android|web|all      Which platform bindings to generate",
         "  --out <dir>                   Output directory (default: generated)",
         "  --app-fn <path>               Rust app factory path (default: app)",
         "  --android-package <package>   Android package (default: com.example.raxon)",
         "  --android-class <name>        Android Kotlin host class (default: RaxonHost)",
+        "  --android-activity <name>     Android Activity class (default: RaxonActivity)",
+        "  --android-library <name>      Native library loaded by the Activity",
         "  --wasm-module <path>          JS import path for the wasm module",
+        "  --web-title <title>           Browser shell document title",
+        "  --web-root-id <id>            Browser shell mount element id",
+        "  --host-shells                 Generate Android Activity/Web browser shells (default)",
+        "  --glue-only                   Generate only glue files for brownfield hosts",
     ]
     .join("\n")
 }
@@ -460,7 +509,7 @@ fn run_generate(options: &GenerateOptions) {
     match generate_bindings(options) {
         Ok(files) => {
             println!(
-                "Generated {} host binding file{} in {}",
+                "Generated {} host binding/shell file{} in {}",
                 files.len(),
                 if files.len() == 1 { "" } else { "s" },
                 options.out_dir.display()
@@ -487,9 +536,23 @@ fn generate_bindings(options: &GenerateOptions) -> std::io::Result<Vec<PathBuf>>
         fs::write(&rust_path, android_rust_bridge_template(options))?;
         files.push(rust_path);
 
-        let kotlin_path = android_dir.join(format!("{}.kt", options.android_class));
+        let kotlin_path = if options.host_shells {
+            android_dir
+                .join("app/src/main/java")
+                .join(android_package_path(&options.android_package))
+                .join(format!("{}.kt", options.android_class))
+        } else {
+            android_dir.join(format!("{}.kt", options.android_class))
+        };
+        if let Some(parent) = kotlin_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         fs::write(&kotlin_path, android_kotlin_host_template(options))?;
         files.push(kotlin_path);
+
+        if options.host_shells {
+            generate_android_host_shell(options, &android_dir, &mut files)?;
+        }
     }
 
     if options.target.includes_web() {
@@ -506,6 +569,10 @@ fn generate_bindings(options: &GenerateOptions) -> std::io::Result<Vec<PathBuf>>
         let dts_path = web_dir.join("raxon-web-host.d.ts");
         fs::write(&dts_path, web_types_template())?;
         files.push(dts_path);
+
+        if options.host_shells {
+            generate_web_host_shell(options, &web_dir, &mut files)?;
+        }
     }
 
     let manifest_path = options.out_dir.join("raxon-bindings.json");
@@ -552,6 +619,31 @@ fn validate_android_package(value: &str) -> Result<(), String> {
     }
 }
 
+fn validate_android_library_name(value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err("--android-library cannot be empty".to_string());
+    }
+    let valid = value
+        .chars()
+        .all(|ch| ch == '_' || ch == '-' || ch == '.' || ch.is_ascii_alphanumeric());
+    if valid {
+        Ok(())
+    } else {
+        Err("--android-library must contain only letters, numbers, '_', '-', or '.'".to_string())
+    }
+}
+
+fn validate_html_id(value: &str) -> Result<(), String> {
+    let mut chars = value.chars();
+    let valid = matches!(chars.next(), Some(ch) if ch == '_' || ch.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch == '-' || ch.is_ascii_alphanumeric());
+    if valid {
+        Ok(())
+    } else {
+        Err("--web-root-id must start with a letter or '_' and contain only letters, numbers, '_' or '-'".to_string())
+    }
+}
+
 fn jni_function_prefix(package: &str, class: &str) -> String {
     let mut prefix = String::from("Java_");
     let package = package
@@ -595,6 +687,36 @@ fn json_escape(value: &str) -> String {
             _ => vec![ch],
         })
         .collect()
+}
+
+fn js_string_escape(value: &str) -> String {
+    json_escape(value)
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '&' => "&amp;".chars().collect::<Vec<_>>(),
+            '<' => "&lt;".chars().collect::<Vec<_>>(),
+            '>' => "&gt;".chars().collect::<Vec<_>>(),
+            '"' => "&quot;".chars().collect::<Vec<_>>(),
+            '\'' => "&#39;".chars().collect::<Vec<_>>(),
+            _ => vec![ch],
+        })
+        .collect()
+}
+
+fn xml_escape(value: &str) -> String {
+    html_escape(value)
+}
+
+fn android_package_path(package: &str) -> PathBuf {
+    let mut path = PathBuf::new();
+    for segment in package.split('.') {
+        path.push(segment);
+    }
+    path
 }
 
 fn android_rust_bridge_template(options: &GenerateOptions) -> String {
@@ -1077,6 +1199,253 @@ class __ANDROID_CLASS__(private val root: ViewGroup) {
     .replace("__ANDROID_CLASS__", &options.android_class)
 }
 
+fn generate_android_host_shell(
+    options: &GenerateOptions,
+    android_dir: &Path,
+    files: &mut Vec<PathBuf>,
+) -> std::io::Result<()> {
+    let java_dir = android_dir
+        .join("app/src/main/java")
+        .join(android_package_path(&options.android_package));
+    fs::create_dir_all(&java_dir)?;
+
+    let activity_path = java_dir.join(format!("{}.kt", options.android_activity));
+    fs::write(&activity_path, android_activity_template(options))?;
+    files.push(activity_path);
+
+    let manifest_path = android_dir.join("app/src/main/AndroidManifest.xml");
+    if let Some(parent) = manifest_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&manifest_path, android_manifest_template(options))?;
+    files.push(manifest_path);
+
+    let values_dir = android_dir.join("app/src/main/res/values");
+    fs::create_dir_all(&values_dir)?;
+
+    let strings_path = values_dir.join("strings.xml");
+    fs::write(&strings_path, android_strings_template(options))?;
+    files.push(strings_path);
+
+    let styles_path = values_dir.join("styles.xml");
+    fs::write(&styles_path, android_styles_template())?;
+    files.push(styles_path);
+
+    let readme_path = android_dir.join("README.md");
+    fs::write(&readme_path, android_shell_readme_template(options))?;
+    files.push(readme_path);
+
+    Ok(())
+}
+
+fn android_activity_template(options: &GenerateOptions) -> String {
+    r#"package __ANDROID_PACKAGE__
+
+import android.app.Activity
+import android.os.Bundle
+import android.view.Choreographer
+import android.widget.FrameLayout
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Generated raxon Android Activity shell.
+ *
+ * It owns the Android view root, loads the Rust cdylib, mounts the generated
+ * host bridge after the first layout, drives ticks from Choreographer, forwards
+ * size changes, and sends system back as a versioned raxon event.
+ */
+open class __ANDROID_ACTIVITY__ : Activity() {
+    protected lateinit var root: FrameLayout
+        private set
+    protected lateinit var host: __ANDROID_CLASS__
+        private set
+
+    private var running = false
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!running) return
+            if (::host.isInitialized && host.handle != 0L) {
+                host.tick()
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        __ANDROID_CLASS__.loadLibrary(NATIVE_LIBRARY)
+
+        root = FrameLayout(this)
+        root.clipToPadding = false
+        setContentView(root)
+
+        host = __ANDROID_CLASS__(root)
+        installDefaultPlatformHandlers(host)
+        root.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            val width = (right - left).toFloat()
+            val height = (bottom - top).toFloat()
+            val oldWidth = (oldRight - oldLeft).toFloat()
+            val oldHeight = (oldBottom - oldTop).toFloat()
+            if (width > 0f && height > 0f && (width != oldWidth || height != oldHeight)) {
+                mountOrResize(width, height)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        startFrameLoop()
+    }
+
+    override fun onPause() {
+        stopFrameLoop()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (::host.isInitialized && host.handle != 0L) {
+            host.destroy()
+        }
+        super.onDestroy()
+    }
+
+    override fun onBackPressed() {
+        if (::host.isInitialized && host.handle != 0L) {
+            host.dispatchEvents(JSONArray().put(JSONObject().put("type", "back_pressed")))
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    protected open fun installDefaultPlatformHandlers(host: __ANDROID_CLASS__) {
+        host.platformRequestHandler = { request ->
+            when (request.optString("type")) {
+                "announce_accessibility" -> {
+                    root.announceForAccessibility(request.optString("message"))
+                }
+                "request_focus" -> {
+                    host.views[request.optLong("id")]?.requestFocus()
+                }
+            }
+        }
+    }
+
+    protected fun mountOrResize(width: Float = root.width.toFloat(), height: Float = root.height.toFloat()) {
+        if (width <= 0f || height <= 0f) return
+        if (host.handle == 0L) {
+            host.mount(width, height)
+        } else {
+            host.resize(width, height)
+        }
+    }
+
+    private fun startFrameLoop() {
+        if (running) return
+        running = true
+        mountOrResize()
+        Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    private fun stopFrameLoop() {
+        if (!running) return
+        running = false
+        Choreographer.getInstance().removeFrameCallback(frameCallback)
+    }
+
+    companion object {
+        const val NATIVE_LIBRARY: String = "__ANDROID_LIBRARY__"
+    }
+}
+"#
+    .replace("__ANDROID_PACKAGE__", &options.android_package)
+    .replace("__ANDROID_ACTIVITY__", &options.android_activity)
+    .replace("__ANDROID_CLASS__", &options.android_class)
+    .replace("__ANDROID_LIBRARY__", &options.android_library)
+}
+
+fn android_manifest_template(options: &GenerateOptions) -> String {
+    r#"<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:theme="@style/RaxonTheme">
+        <activity
+            android:name="__ANDROID_PACKAGE__.__ANDROID_ACTIVITY__"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+"#
+    .replace("__ANDROID_PACKAGE__", &options.android_package)
+    .replace("__ANDROID_ACTIVITY__", &options.android_activity)
+}
+
+fn android_strings_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">{}</string>
+</resources>
+"#,
+        xml_escape(&options.web_title)
+    )
+}
+
+fn android_styles_template() -> String {
+    r#"<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="RaxonTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+</resources>
+"#
+    .to_string()
+}
+
+fn android_shell_readme_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"# raxon Android Host Shell
+
+Generated by `rax generate --target android`.
+
+## Files
+
+- `raxon_android_bridge.rs`: Rust JNI bridge module for your app crate.
+- `app/src/main/java/{package_path}/{host_class}.kt`: generated Android view host.
+- `app/src/main/java/{package_path}/{activity}.kt`: Activity shell that mounts the Rust app, drives `Choreographer`, handles resize, and forwards back events.
+- `app/src/main/AndroidManifest.xml`: launcher Activity declaration.
+- `app/src/main/res/values/*.xml`: minimal resources for the generated Activity.
+
+## Rust side
+
+Include `raxon_android_bridge.rs` from your app crate and build a `cdylib` named
+`{library}` for `aarch64-linux-android` (for example with `cargo ndk`). The
+generated Activity calls `System.loadLibrary("{library}")`.
+
+## Android side
+
+Copy the `app/src/main` tree into an Android application module, or merge these
+files into an existing module. Override `{activity}.installDefaultPlatformHandlers`
+or set hooks on `{host_class}` for platform services and custom widgets.
+"#,
+        package_path = options.android_package.replace('.', "/"),
+        host_class = options.android_class,
+        activity = options.android_activity,
+        library = options.android_library,
+    )
+}
+
 fn web_rust_bridge_template(options: &GenerateOptions) -> String {
     let app_fn = app_fn_reference(&options.app_fn);
     r#"// Generated by `rax generate --target web`.
@@ -1549,7 +1918,7 @@ export class RaxonWebHost {
   }
 }
 "#
-    .replace("__WASM_MODULE__", &options.wasm_module)
+    .replace("__WASM_MODULE__", &js_string_escape(&options.wasm_module))
 }
 
 fn web_types_template() -> String {
@@ -1606,6 +1975,164 @@ export class RaxonWebHost {
     .to_string()
 }
 
+fn generate_web_host_shell(
+    options: &GenerateOptions,
+    web_dir: &Path,
+    files: &mut Vec<PathBuf>,
+) -> std::io::Result<()> {
+    let index_path = web_dir.join("index.html");
+    fs::write(&index_path, web_index_template(options))?;
+    files.push(index_path);
+
+    let main_path = web_dir.join("main.js");
+    fs::write(&main_path, web_main_template(options))?;
+    files.push(main_path);
+
+    let readme_path = web_dir.join("README.md");
+    fs::write(&readme_path, web_shell_readme_template(options))?;
+    files.push(readme_path);
+
+    Ok(())
+}
+
+fn web_index_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <style>
+      html,
+      body,
+      #{root_id} {{
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }}
+
+      body {{
+        overflow: hidden;
+        background: #ffffff;
+        color: #111111;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }}
+
+      #{root_id} {{
+        position: relative;
+        overflow: hidden;
+      }}
+    </style>
+  </head>
+  <body>
+    <main id="{root_id}"></main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+"#,
+        title = html_escape(&options.web_title),
+        root_id = html_escape(&options.web_root_id),
+    )
+}
+
+fn web_main_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"import {{ createRaxonWebHost }} from "./raxon-web-host.js";
+
+const root = document.getElementById("{root_id}");
+if (!root) {{
+  throw new Error("Missing raxon mount element #{root_id}");
+}}
+
+function readViewport() {{
+  const rect = root.getBoundingClientRect();
+  return {{
+    width: Math.max(1, rect.width || window.innerWidth || 1),
+    height: Math.max(1, rect.height || window.innerHeight || 1),
+  }};
+}}
+
+const host = await createRaxonWebHost(root, {{
+  mount: false,
+  wasmUrl: undefined,
+  onBridgeError(error) {{
+    console.error("[raxon] bridge error", error);
+  }},
+  handlePlatformRequest(request) {{
+    console.warn("[raxon] unhandled platform request", request);
+  }},
+}});
+
+const initial = readViewport();
+host.mount(initial.width, initial.height);
+
+let lastWidth = initial.width;
+let lastHeight = initial.height;
+function resizeIfNeeded() {{
+  const next = readViewport();
+  if (next.width !== lastWidth || next.height !== lastHeight) {{
+    lastWidth = next.width;
+    lastHeight = next.height;
+    host.resize(next.width, next.height);
+  }}
+}}
+
+if ("ResizeObserver" in window) {{
+  const observer = new ResizeObserver(resizeIfNeeded);
+  observer.observe(root);
+}} else {{
+  window.addEventListener("resize", resizeIfNeeded);
+}}
+
+let running = true;
+function frame() {{
+  if (!running) return;
+  resizeIfNeeded();
+  host.tick();
+  window.requestAnimationFrame(frame);
+}}
+window.requestAnimationFrame(frame);
+
+window.addEventListener("beforeunload", () => {{
+  running = false;
+  if (host.handle) host.destroy();
+}});
+"#,
+        root_id = js_string_escape(&options.web_root_id),
+    )
+}
+
+fn web_shell_readme_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"# raxon Web Host Shell
+
+Generated by `rax generate --target web`.
+
+## Files
+
+- `raxon_web_bridge.rs`: Rust wasm bridge module for your app crate.
+- `raxon-web-host.js`: browser host runtime that applies DOM command batches and emits raxon wire events.
+- `raxon-web-host.d.ts`: TypeScript declarations for custom host integration.
+- `index.html` and `main.js`: static browser shell that mounts `{wasm_module}`, resizes with `ResizeObserver`, and ticks with `requestAnimationFrame`.
+
+## Rust side
+
+Include `raxon_web_bridge.rs` from your app crate and expose the generated wasm
+module at `{wasm_module}`. The default shell expects a wasm-bindgen-style module
+whose default export initializes the `.wasm` and whose named exports include the
+`raxon_web_*` bridge functions.
+
+## Browser side
+
+Serve this directory with any static server and open `index.html`. Customize
+`main.js` to handle platform requests such as notifications, media picker,
+clipboard, and accessibility announcements for your app.
+"#,
+        wasm_module = options.wasm_module,
+    )
+}
+
 fn binding_manifest_template(options: &GenerateOptions, files: &[PathBuf]) -> String {
     let file_list = files
         .iter()
@@ -1619,14 +2146,19 @@ fn binding_manifest_template(options: &GenerateOptions, files: &[PathBuf]) -> St
         r#"{{
   "tool": "raxon-cli",
   "target": "{}",
+  "hostShells": {},
   "bridgeProtocolVersion": 1,
   "appFn": "{}",
   "android": {{
     "package": "{}",
-    "class": "{}"
+    "class": "{}",
+    "activity": "{}",
+    "library": "{}"
   }},
   "web": {{
-    "wasmModule": "{}"
+    "wasmModule": "{}",
+    "title": "{}",
+    "rootId": "{}"
   }},
   "files": [
 {}
@@ -1634,10 +2166,15 @@ fn binding_manifest_template(options: &GenerateOptions, files: &[PathBuf]) -> St
 }}
 "#,
         options.target.as_str(),
+        options.host_shells,
         json_escape(&options.app_fn),
         json_escape(&options.android_package),
         json_escape(&options.android_class),
+        json_escape(&options.android_activity),
+        json_escape(&options.android_library),
         json_escape(&options.wasm_module),
+        json_escape(&options.web_title),
+        json_escape(&options.web_root_id),
         file_list
     )
 }
@@ -1818,8 +2355,17 @@ mod tests {
             "dev.raxon.demo".to_string(),
             "--android-class".to_string(),
             "DemoHost".to_string(),
+            "--android-activity".to_string(),
+            "DemoActivity".to_string(),
+            "--android-library".to_string(),
+            "demo_lib".to_string(),
             "--wasm-module".to_string(),
             "./pkg/demo.js".to_string(),
+            "--web-title".to_string(),
+            "Demo App".to_string(),
+            "--web-root-id".to_string(),
+            "demo_root".to_string(),
+            "--glue-only".to_string(),
         ];
 
         let options = parse_generate_options(&args).expect("options parse");
@@ -1829,7 +2375,12 @@ mod tests {
         assert_eq!(options.app_fn, "crate::ui::app");
         assert_eq!(options.android_package, "dev.raxon.demo");
         assert_eq!(options.android_class, "DemoHost");
+        assert_eq!(options.android_activity, "DemoActivity");
+        assert_eq!(options.android_library, "demo_lib");
         assert_eq!(options.wasm_module, "./pkg/demo.js");
+        assert_eq!(options.web_title, "Demo App");
+        assert_eq!(options.web_root_id, "demo_root");
+        assert!(!options.host_shells);
     }
 
     #[test]
@@ -1860,20 +2411,27 @@ mod tests {
             app_fn: "crate::ui::app".to_string(),
             android_package: "dev.raxon.demo".to_string(),
             android_class: "DemoHost".to_string(),
+            android_activity: "DemoActivity".to_string(),
+            android_library: "demo_lib".to_string(),
             wasm_module: "./pkg/demo.js".to_string(),
+            web_title: "Demo App".to_string(),
+            web_root_id: "demo_root".to_string(),
             ..GenerateOptions::default()
         };
 
         let files = generate_bindings(&options).expect("bindings generate");
 
-        assert_eq!(files.len(), 6);
+        assert_eq!(files.len(), 14);
         let android_rust =
             fs::read_to_string(out_dir.join("android/raxon_android_bridge.rs")).unwrap();
         assert!(android_rust.contains("Java_dev_raxon_demo_DemoHost_nativeMount"));
         assert!(android_rust.contains("mount_android(raxon::core::Size::new"));
         assert!(android_rust.contains("crate::ui::app"));
 
-        let kotlin = fs::read_to_string(out_dir.join("android/DemoHost.kt")).unwrap();
+        let kotlin = fs::read_to_string(
+            out_dir.join("android/app/src/main/java/dev/raxon/demo/DemoHost.kt"),
+        )
+        .unwrap();
         assert!(kotlin.contains("package dev.raxon.demo"));
         assert!(kotlin.contains("class DemoHost"));
         assert!(kotlin.contains("nativeHandleRequest"));
@@ -1883,6 +2441,19 @@ mod tests {
         assert!(kotlin.contains("installGesture"));
         assert!(kotlin.contains("type\", \"text_changed\""));
         assert!(kotlin.contains("commandHandler(command)"));
+
+        let activity = fs::read_to_string(
+            out_dir.join("android/app/src/main/java/dev/raxon/demo/DemoActivity.kt"),
+        )
+        .unwrap();
+        assert!(activity.contains("open class DemoActivity : Activity()"));
+        assert!(activity.contains("Choreographer.getInstance().postFrameCallback"));
+        assert!(activity.contains("DemoHost.loadLibrary(NATIVE_LIBRARY)"));
+        assert!(activity.contains("const val NATIVE_LIBRARY: String = \"demo_lib\""));
+
+        let manifest =
+            fs::read_to_string(out_dir.join("android/app/src/main/AndroidManifest.xml")).unwrap();
+        assert!(manifest.contains("android:name=\"dev.raxon.demo.DemoActivity\""));
 
         let web_rust = fs::read_to_string(out_dir.join("web/raxon_web_bridge.rs")).unwrap();
         assert!(web_rust.contains("raxon_web_handle_request"));
@@ -1899,16 +2470,28 @@ mod tests {
         assert!(web_js.contains("node.style.color = attr.value"));
         assert!(web_js.contains("handlePlatformRequest(command.request ?? command)"));
 
+        let web_index = fs::read_to_string(out_dir.join("web/index.html")).unwrap();
+        assert!(web_index.contains("<title>Demo App</title>"));
+        assert!(web_index.contains("id=\"demo_root\""));
+
+        let web_main = fs::read_to_string(out_dir.join("web/main.js")).unwrap();
+        assert!(web_main.contains("createRaxonWebHost(root"));
+        assert!(web_main.contains("ResizeObserver"));
+        assert!(web_main.contains("window.requestAnimationFrame(frame)"));
+
         let manifest = fs::read_to_string(out_dir.join("raxon-bindings.json")).unwrap();
         assert!(manifest.contains("\"target\": \"all\""));
+        assert!(manifest.contains("\"hostShells\": true"));
         assert!(manifest.contains("\"bridgeProtocolVersion\": 1"));
         assert!(manifest.contains("\"android/raxon_android_bridge.rs\""));
+        assert!(manifest.contains("\"android/app/src/main/java/dev/raxon/demo/DemoActivity.kt\""));
+        assert!(manifest.contains("\"web/index.html\""));
 
         let _ = fs::remove_dir_all(out_dir);
     }
 
     #[test]
-    fn generate_web_only_skips_android_files() {
+    fn generate_web_only_writes_browser_shell_and_skips_android_files() {
         let out_dir = temp_output_dir("web");
         let options = GenerateOptions {
             target: GenerateTarget::Web,
@@ -1918,9 +2501,32 @@ mod tests {
 
         let files = generate_bindings(&options).expect("bindings generate");
 
+        assert_eq!(files.len(), 7);
+        assert!(out_dir.join("web/raxon-web-host.js").exists());
+        assert!(out_dir.join("web/index.html").exists());
+        assert!(out_dir.join("web/main.js").exists());
+        assert!(!out_dir.join("android").exists());
+
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
+    fn generate_glue_only_skips_host_shell_files() {
+        let out_dir = temp_output_dir("glue");
+        let options = GenerateOptions {
+            target: GenerateTarget::Web,
+            out_dir: out_dir.clone(),
+            host_shells: false,
+            ..GenerateOptions::default()
+        };
+
+        let files = generate_bindings(&options).expect("bindings generate");
+
         assert_eq!(files.len(), 4);
         assert!(out_dir.join("web/raxon-web-host.js").exists());
-        assert!(!out_dir.join("android").exists());
+        assert!(!out_dir.join("web/index.html").exists());
+        let manifest = fs::read_to_string(out_dir.join("raxon-bindings.json")).unwrap();
+        assert!(manifest.contains("\"hostShells\": false"));
 
         let _ = fs::remove_dir_all(out_dir);
     }
