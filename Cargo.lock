@@ -764,83 +764,6 @@ dependencies = [
 name = "raxon"
 version = "0.0.1"
 dependencies = [
- "raxon-anim",
- "raxon-async",
- "raxon-core",
- "raxon-intl",
- "raxon-ios",
- "raxon-keychain",
- "raxon-nav",
- "raxon-net",
- "raxon-plugin",
- "raxon-reactive",
- "raxon-runtime",
- "raxon-store",
- "raxon-style",
- "raxon-test",
- "raxon-view",
-]
-
-[[package]]
-name = "raxon-anim"
-version = "0.0.1"
-dependencies = [
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-async"
-version = "0.0.1"
-dependencies = [
- "futures",
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-cli"
-version = "0.1.0"
-
-[[package]]
-name = "raxon-core"
-version = "0.0.1"
-
-[[package]]
-name = "raxon-dom"
-version = "0.0.1"
-dependencies = [
- "raxon-core",
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-form"
-version = "0.0.1"
-dependencies = [
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-fs"
-version = "0.0.1"
-
-[[package]]
-name = "raxon-i18n"
-version = "0.0.1"
-dependencies = [
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-intl"
-version = "0.0.1"
-dependencies = [
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-ios"
-version = "0.0.1"
-dependencies = [
  "block2",
  "futures",
  "objc2",
@@ -849,139 +772,17 @@ dependencies = [
  "objc2-foundation",
  "objc2-quartz-core",
  "objc2-ui-kit",
- "raxon-core",
- "raxon-dom",
- "raxon-net",
- "raxon-plugin",
- "raxon-runtime",
- "raxon-store",
- "raxon-view",
- "ureq",
-]
-
-[[package]]
-name = "raxon-keychain"
-version = "0.0.1"
-
-[[package]]
-name = "raxon-layout"
-version = "0.0.1"
-dependencies = [
- "raxon-core",
- "raxon-dom",
- "raxon-reactive",
- "taffy",
-]
-
-[[package]]
-name = "raxon-log"
-version = "0.0.1"
-
-[[package]]
-name = "raxon-nav"
-version = "0.0.1"
-dependencies = [
- "raxon-anim",
- "raxon-dom",
- "raxon-reactive",
- "raxon-runtime",
- "raxon-test",
- "raxon-view",
-]
-
-[[package]]
-name = "raxon-net"
-version = "0.0.1"
-dependencies = [
- "raxon-async",
- "raxon-reactive",
+ "rusqlite",
  "serde",
  "serde_json",
+ "taffy",
  "tungstenite",
  "ureq",
 ]
 
 [[package]]
-name = "raxon-plugin"
-version = "0.0.1"
-
-[[package]]
-name = "raxon-reactive"
-version = "0.0.1"
-dependencies = [
- "raxon-core",
-]
-
-[[package]]
-name = "raxon-runtime"
-version = "0.0.1"
-dependencies = [
- "raxon-anim",
- "raxon-async",
- "raxon-core",
- "raxon-dom",
- "raxon-layout",
- "raxon-reactive",
- "raxon-view",
-]
-
-[[package]]
-name = "raxon-scheduler"
-version = "0.0.1"
-
-[[package]]
-name = "raxon-sqlite"
-version = "0.0.1"
-dependencies = [
- "raxon-reactive",
- "rusqlite",
-]
-
-[[package]]
-name = "raxon-store"
-version = "0.0.1"
-dependencies = [
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-style"
-version = "0.0.1"
-dependencies = [
- "raxon-core",
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-test"
-version = "0.0.1"
-dependencies = [
- "raxon-core",
- "raxon-dom",
- "raxon-reactive",
- "raxon-runtime",
- "raxon-view",
-]
-
-[[package]]
-name = "raxon-testing"
+name = "raxon-cli"
 version = "0.1.0"
-dependencies = [
- "raxon-dom",
- "raxon-reactive",
-]
-
-[[package]]
-name = "raxon-view"
-version = "0.0.1"
-dependencies = [
- "raxon-anim",
- "raxon-async",
- "raxon-core",
- "raxon-dom",
- "raxon-net",
- "raxon-reactive",
-]
 
 [[package]]
 name = "ring"

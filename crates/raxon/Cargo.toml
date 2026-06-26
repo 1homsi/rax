@@ -15,26 +15,66 @@ missing_docs = "warn"
 
 [features]
 default = []
-# Pulls in the host-side testing harness (`rax::test`).
-testing = ["dep:raxon-test"]
+testing = []
 
 [dependencies]
-raxon-core = { path = "../raxon-core", version = "0.0.1" }
-raxon-reactive = { path = "../raxon-reactive", version = "0.0.1" }
-raxon-view = { path = "../raxon-view", version = "0.0.1" }
-raxon-runtime = { path = "../raxon-runtime", version = "0.0.1" }
-raxon-nav = { path = "../raxon-nav", version = "0.0.1" }
-raxon-store = { path = "../raxon-store", version = "0.0.1" }
-raxon-net = { path = "../raxon-net", version = "0.0.1" }
-raxon-anim = { path = "../raxon-anim", version = "0.0.1" }
-raxon-async = { path = "../raxon-async", version = "0.0.1" }
-raxon-intl = { path = "../raxon-intl", version = "0.0.1" }
-raxon-style = { path = "../raxon-style", version = "0.0.1" }
-raxon-plugin = { path = "../raxon-plugin", version = "0.0.1" }
-raxon-keychain = { path = "../raxon-keychain", version = "0.0.1" }
-raxon-test = { path = "../raxon-test", version = "0.0.1", optional = true }
+futures = { version = "0.3", default-features = false, features = ["executor", "std"] }
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+ureq = { version = "2", features = [] }
+serde = { version = "1" }
+serde_json = { version = "1" }
+rusqlite = { version = "0.31", features = ["bundled"] }
+taffy = "0.7"
 
-# The iOS backend only exists on Apple mobile targets; gate it so raxon builds
-# everywhere (host tests, future desktop/web) without dragging in UIKit.
 [target.'cfg(target_os = "ios")'.dependencies]
-raxon-ios = { path = "../raxon-ios", version = "0.0.1" }
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSString",
+    "NSObject",
+    "NSNotification",
+    "NSThread",
+    "NSRunLoop",
+    "NSUserDefaults",
+    "NSData",
+] }
+objc2-ui-kit = { version = "0.3", features = [
+    "UIResponder",
+    "UIView",
+    "UILabel",
+    "UIButton",
+    "UIControl",
+    "UIColor",
+    "UIFont",
+    "UIScreen",
+    "UIWindow",
+    "UIViewController",
+    "UIApplication",
+    "UIGeometry",
+    "UIImageView",
+    "UIImage",
+    "UISwitch",
+    "UISlider",
+    "UISegmentedControl",
+    "UIStepper",
+    "UITextField",
+    "UITextView",
+    "UIGestureRecognizer",
+    "UITapGestureRecognizer",
+    "UILongPressGestureRecognizer",
+    "UIPanGestureRecognizer",
+    "UIPinchGestureRecognizer",
+    "UIRotationGestureRecognizer",
+    "UIScrollView",
+    "UIActivityIndicatorView",
+    "UIProgressView",
+    "UITraitCollection",
+    "UIInterface",
+] }
+objc2-quartz-core = { version = "0.3", features = [
+    "CADisplayLink",
+    "CALayer",
+    "CAGradientLayer",
+] }
+objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
+objc2-core-graphics = { version = "0.3", features = ["CGColor"] }
+block2 = "0.6"

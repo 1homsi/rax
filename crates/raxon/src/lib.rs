@@ -1,12 +1,9 @@
-//! # rax
+//! # raxon
 //!
-//! The framework facade. Depend on this one crate and write your whole app
-//! against [`rax::prelude`](prelude); reach for the namespaced modules
-//! ([`reactive`], [`view`], [`style`], …) when you want the full surface of a
-//! subsystem.
+//! A reactive, signal-driven native UI framework for Rust.
 //!
 //! ```
-//! use rax::prelude::*;
+//! use raxon::prelude::*;
 //!
 //! fn counter(count: Signal<i32>) -> impl View {
 //!     column((
@@ -21,15 +18,6 @@
 //!     .padding(16.0)
 //! }
 //! ```
-//!
-//! ## Building your own components
-//!
-//! Everything user-facing is a [`View`](view::View). To make a reusable
-//! component, write a function returning `impl View` (or a struct implementing
-//! `View`) using only this public surface — the same way the built-in
-//! [`checkbox`](view::checkbox) / [`radio`](view::radio) are composed from
-//! `icon` + `text` + `row` + `dynamic` + `on_tap`. There is no privileged
-//! internal API: your components are first-class peers of ours.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -37,64 +25,73 @@
 // --- subsystems, namespaced ------------------------------------------------
 
 /// Core value types: colors, geometry, and the neutral layout style model.
-pub use raxon_core as core;
+pub mod core;
 /// Fine-grained reactivity: signals, memos, effects, context, scopes.
-pub use raxon_reactive as reactive;
+pub mod reactive;
+/// The virtual DOM: element tree, mutations, events, and backend trait.
+pub mod dom;
 /// The declarative, macro-free view builder.
-pub use raxon_view as view;
+pub mod view;
 /// The app runtime that drives layout, events, and frames.
-pub use raxon_runtime as runtime;
+pub mod runtime;
 /// Navigation: stack/tab navigators and typed routes.
-pub use raxon_nav as nav;
+pub mod nav;
 /// Key-value storage and persisted signals.
-pub use raxon_store as store;
+pub mod store;
 /// HTTP client and request/response types.
-pub use raxon_net as net;
+pub mod net;
 /// Animation: tweens and easing.
-pub use raxon_anim as anim;
+pub mod anim;
 /// Cooperative async: the executor and `Resource`.
-pub use raxon_async as async_rt;
+pub mod async_rt;
 /// Internationalization: message catalogs and lookup.
-pub use raxon_intl as intl;
+pub mod intl;
 /// Theming: palettes, spacing, typography, and the `Theme` context.
-pub use raxon_style as style;
+pub mod style;
+/// Plugin system for registering native modules with the raxon runtime.
+pub mod plugin;
+/// Secure key-value storage (iOS Keychain on device, in-memory elsewhere).
+pub mod keychain;
+/// Structured logging.
+pub mod log;
+/// i18n message format helpers.
+pub mod i18n;
+/// SQLite database access.
+pub mod sqlite;
+/// Filesystem utilities.
+pub mod fs;
+/// Form validation helpers.
+pub mod form;
+/// Frame scheduler and clock.
+pub mod scheduler;
+/// Layout engine integration.
+pub mod layout;
 
-/// Plugin system for registering native modules with the rax runtime.
-pub use raxon_plugin as plugin;
+/// Host-side testing harness (enable the `testing` feature).
+#[cfg(feature = "testing")]
+pub mod testing;
 
 /// Compile-time platform detection helpers.
 pub mod platform;
 
-/// Secure key-value storage (iOS Keychain on device, in-memory elsewhere).
-pub use raxon_keychain as keychain;
-
-/// Host-side testing harness (enable the `testing` feature).
-#[cfg(feature = "testing")]
-pub use raxon_test as test;
-
 // The iOS backend's entry point, surfaced at the crate root on Apple targets so
-// apps call `rax::run(app)` without naming the backend crate.
+// apps call `raxon::run(app)` without naming the backend crate.
 #[cfg(target_os = "ios")]
-pub use raxon_ios::run;
+pub mod ios;
+
+#[cfg(target_os = "ios")]
+pub use ios::run;
 
 /// The common surface for building an app: import this and start writing views.
 ///
 /// Bundles the view builders + modifiers, the reactive primitives, the core
-/// value types, and the most-used helpers from each subsystem. Anything not
-/// here is one module away (e.g. `rax::net::MockClient`, `rax::style::Theme`).
+/// value types, and the most-used helpers from each subsystem.
 pub mod prelude {
-    // The whole view builder API (containers, controls, modifiers, the `View`
-    // trait, and the re-exported style enums like `AlignItems`/`Position`).
-    pub use raxon_view::*;
+    pub use crate::view::*;
+    pub use crate::reactive::*;
+    pub use crate::core::{Color, ColorScheme, FlexDirection, LayoutStyle, Point, Rect, Size};
 
-    // Reactivity: signals, memos, effects, context, batching, roots.
-    pub use raxon_reactive::*;
-
-    // Core value types not already surfaced via the view layer.
-    pub use raxon_core::{Color, ColorScheme, FlexDirection, LayoutStyle, Point, Rect, Size};
-
-    // The app entry point and runtime, plus appearance controls.
-    pub use raxon_runtime::{
+    pub use crate::runtime::{
         authenticate_biometric, cancel_notification, clear_ui_state, haptic,
         install_error_overlay, last_panic, on_deep_link, register_background_task,
         restore_ui_state, save_ui_state, schedule_background_task, schedule_notification,
@@ -102,34 +99,26 @@ pub mod prelude {
         App, Backdrop, HapticStyle, KeyboardType, LocalNotification, TextStyle,
     };
 
-    // High-frequency helpers from the satellite crates. Full surfaces live in
-    // the namespaced modules (`rax::nav`, `rax::store`, …).
-    pub use raxon_anim::{
+    pub use crate::anim::{
         animate, animate_offthread, decay, delayed, oscillate, parallel, sequence, spring, stagger,
         start_animation_thread, Easing, OffThreadValue, Spring,
     };
-    pub use raxon_async::{create_resource, Resource};
-    // HTTP client helpers — `get`/`post` return a `Resource<Response>`.
-    pub use raxon_net::{
+    pub use crate::async_rt::{create_resource, Resource, ResourceState};
+    pub use crate::net::{
         connect_sse, connect_ws, gc_query_cache, get, invalidate_query, post, send, use_query,
         use_query_stale, Method, Request, Response, SseEvent, WsHandle, WsMessage,
     };
-    // Async resource state (needed to match on Loading/Ready/Failed).
-    pub use raxon_async::ResourceState;
-    pub use raxon_intl::{t, t_args, t_plural};
-    pub use raxon_nav::{
+    pub use crate::intl::{t, t_args, t_plural};
+    pub use crate::nav::{
         create_navigator, routes, transition_routes, use_navigator, NavigationTransition,
         Navigator,
     };
-    pub use raxon_store::{persisted, store_get, store_set};
-    pub use raxon_style::{theme, use_theme, Theme};
-    pub use raxon_plugin::{dispatch_plugin_event, register_plugin, Plugin};
-    pub use raxon_keychain::{delete_secret, get_secret, set_secret};
-
-    // Platform detection helpers.
+    pub use crate::store::{persisted, store_get, store_set};
+    pub use crate::style::{theme, use_theme, Theme};
+    pub use crate::plugin::{dispatch_plugin_event, register_plugin, Plugin};
+    pub use crate::keychain::{delete_secret, get_secret, set_secret};
     pub use crate::platform::platform_value;
 
-    // The iOS launcher, so `run(app)` is in scope on device/simulator.
     #[cfg(target_os = "ios")]
-    pub use raxon_ios::run;
+    pub use crate::ios::run;
 }
