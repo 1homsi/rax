@@ -23,6 +23,11 @@ use std::process;
 use std::process::Command;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const ANDROID_GRADLE_PLUGIN_VERSION: &str = "9.2.0";
+const GRADLE_WRAPPER_VERSION: &str = "9.4.1";
+const ANDROID_COMPILE_SDK: u32 = 36;
+const ANDROID_MIN_SDK: u32 = 23;
+const ANDROID_TARGET_SDK: u32 = 36;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -499,7 +504,7 @@ fn generate_usage() -> String {
         "  --wasm-module <path>          JS import path for the wasm module",
         "  --web-title <title>           Browser shell document title",
         "  --web-root-id <id>            Browser shell mount element id",
-        "  --host-shells                 Generate Android Activity/Web browser shells (default)",
+        "  --host-shells                 Generate Android/Web project shells (default)",
         "  --glue-only                   Generate only glue files for brownfield hosts",
     ]
     .join("\n")
@@ -691,6 +696,53 @@ fn json_escape(value: &str) -> String {
 
 fn js_string_escape(value: &str) -> String {
     json_escape(value)
+}
+
+fn kotlin_string_escape(value: &str) -> String {
+    json_escape(value)
+}
+
+fn package_name_slug(value: &str) -> String {
+    let mut slug = String::new();
+    let mut last_was_dash = false;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            last_was_dash = false;
+        } else if !last_was_dash && !slug.is_empty() {
+            slug.push('-');
+            last_was_dash = true;
+        }
+    }
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+    if slug.is_empty() {
+        "raxon-web-host".to_string()
+    } else {
+        slug
+    }
+}
+
+fn gradle_project_name(options: &GenerateOptions) -> String {
+    let mut name = options
+        .web_title
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == ' ' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim()
+        .trim_matches('-')
+        .to_string();
+    if name.is_empty() {
+        name = "Raxon App".to_string();
+    }
+    name
 }
 
 fn html_escape(value: &str) -> String {
@@ -1231,6 +1283,25 @@ fn generate_android_host_shell(
     fs::write(&styles_path, android_styles_template())?;
     files.push(styles_path);
 
+    let settings_path = android_dir.join("settings.gradle.kts");
+    fs::write(&settings_path, android_settings_gradle_template(options))?;
+    files.push(settings_path);
+
+    let root_build_path = android_dir.join("build.gradle.kts");
+    fs::write(&root_build_path, android_root_build_gradle_template())?;
+    files.push(root_build_path);
+
+    let app_build_path = android_dir.join("app/build.gradle.kts");
+    fs::write(&app_build_path, android_app_build_gradle_template(options))?;
+    files.push(app_build_path);
+
+    let wrapper_path = android_dir.join("gradle/wrapper/gradle-wrapper.properties");
+    if let Some(parent) = wrapper_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&wrapper_path, android_gradle_wrapper_properties_template())?;
+    files.push(wrapper_path);
+
     let readme_path = android_dir.join("README.md");
     fs::write(&readme_path, android_shell_readme_template(options))?;
     files.push(readme_path);
@@ -1413,6 +1484,89 @@ fn android_styles_template() -> String {
     .to_string()
 }
 
+fn android_settings_gradle_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"pluginManagement {{
+    repositories {{
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }}
+}}
+
+dependencyResolutionManagement {{
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {{
+        google()
+        mavenCentral()
+    }}
+}}
+
+rootProject.name = "{project_name}"
+include(":app")
+"#,
+        project_name = kotlin_string_escape(&gradle_project_name(options)),
+    )
+}
+
+fn android_root_build_gradle_template() -> String {
+    format!(
+        r#"plugins {{
+    id("com.android.application") version "{agp_version}" apply false
+}}
+"#,
+        agp_version = ANDROID_GRADLE_PLUGIN_VERSION,
+    )
+}
+
+fn android_app_build_gradle_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"plugins {{
+    id("com.android.application")
+}}
+
+android {{
+    namespace = "{namespace}"
+    compileSdk = {compile_sdk}
+
+    defaultConfig {{
+        applicationId = "{application_id}"
+        minSdk = {min_sdk}
+        targetSdk = {target_sdk}
+        versionCode = 1
+        versionName = "0.1.0"
+    }}
+
+    sourceSets {{
+        getByName("main") {{
+            java.srcDir("src/main/java")
+            jniLibs.srcDir("src/main/jniLibs")
+        }}
+    }}
+}}
+"#,
+        namespace = kotlin_string_escape(&options.android_package),
+        application_id = kotlin_string_escape(&options.android_package),
+        compile_sdk = ANDROID_COMPILE_SDK,
+        min_sdk = ANDROID_MIN_SDK,
+        target_sdk = ANDROID_TARGET_SDK,
+    )
+}
+
+fn android_gradle_wrapper_properties_template() -> String {
+    format!(
+        r#"distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-{gradle_version}-bin.zip
+networkTimeout=10000
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+"#,
+        gradle_version = GRADLE_WRAPPER_VERSION,
+    )
+}
+
 fn android_shell_readme_template(options: &GenerateOptions) -> String {
     format!(
         r#"# raxon Android Host Shell
@@ -1426,6 +1580,8 @@ Generated by `rax generate --target android`.
 - `app/src/main/java/{package_path}/{activity}.kt`: Activity shell that mounts the Rust app, drives `Choreographer`, handles resize, and forwards back events.
 - `app/src/main/AndroidManifest.xml`: launcher Activity declaration.
 - `app/src/main/res/values/*.xml`: minimal resources for the generated Activity.
+- `settings.gradle.kts`, `build.gradle.kts`, and `app/build.gradle.kts`: Android application project wired to AGP {agp_version}.
+- `gradle/wrapper/gradle-wrapper.properties`: Gradle {gradle_version} distribution metadata for reproducible wrapper generation.
 
 ## Rust side
 
@@ -1433,16 +1589,30 @@ Include `raxon_android_bridge.rs` from your app crate and build a `cdylib` named
 `{library}` for `aarch64-linux-android` (for example with `cargo ndk`). The
 generated Activity calls `System.loadLibrary("{library}")`.
 
+Place the built native libraries under `app/src/main/jniLibs/<abi>/lib{library}.so`
+or wire your CI to copy them there after the Rust build.
+
 ## Android side
 
-Copy the `app/src/main` tree into an Android application module, or merge these
-files into an existing module. Override `{activity}.installDefaultPlatformHandlers`
-or set hooks on `{host_class}` for platform services and custom widgets.
+This directory is a standalone Android project skeleton. If the Gradle wrapper
+scripts are not already present, run:
+
+```sh
+gradle wrapper --gradle-version {gradle_version}
+./gradlew :app:assembleDebug
+```
+
+For brownfield apps, copy the `app/src/main` tree into an Android application
+module, or merge these files into an existing module. Override
+`{activity}.installDefaultPlatformHandlers` or set hooks on `{host_class}` for
+platform services and custom widgets.
 "#,
         package_path = options.android_package.replace('.', "/"),
         host_class = options.android_class,
         activity = options.android_activity,
         library = options.android_library,
+        agp_version = ANDROID_GRADLE_PLUGIN_VERSION,
+        gradle_version = GRADLE_WRAPPER_VERSION,
     )
 }
 
@@ -1988,6 +2158,14 @@ fn generate_web_host_shell(
     fs::write(&main_path, web_main_template(options))?;
     files.push(main_path);
 
+    let package_path = web_dir.join("package.json");
+    fs::write(&package_path, web_package_json_template(options))?;
+    files.push(package_path);
+
+    let dev_server_path = web_dir.join("dev-server.mjs");
+    fs::write(&dev_server_path, web_dev_server_template())?;
+    files.push(dev_server_path);
+
     let readme_path = web_dir.join("README.md");
     fs::write(&readme_path, web_shell_readme_template(options))?;
     files.push(readme_path);
@@ -2103,6 +2281,126 @@ window.addEventListener("beforeunload", () => {{
     )
 }
 
+fn web_package_json_template(options: &GenerateOptions) -> String {
+    format!(
+        r#"{{
+  "name": "{name}",
+  "private": true,
+  "type": "module",
+  "scripts": {{
+    "dev": "node ./dev-server.mjs",
+    "preview": "node ./dev-server.mjs"
+  }}
+}}
+"#,
+        name = json_escape(&package_name_slug(&options.web_title)),
+    )
+}
+
+fn web_dev_server_template() -> String {
+    r#"import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { createServer } from "node:http";
+import { extname, join, normalize, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)));
+const host = process.env.HOST ?? "127.0.0.1";
+const port = Number.parseInt(process.env.PORT ?? "5173", 10);
+
+const contentTypes = new Map([
+  [".css", "text/css; charset=utf-8"],
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
+  [".map", "application/json; charset=utf-8"],
+  [".mjs", "text/javascript; charset=utf-8"],
+  [".wasm", "application/wasm"],
+]);
+
+function resolveRequestPath(rawUrl) {
+  const requestUrl = new URL(rawUrl ?? "/", `http://${host}:${port}`);
+  const pathname = decodeURIComponent(requestUrl.pathname);
+  const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  const filePath = resolve(rootDir, normalize(relativePath));
+  if (filePath !== rootDir && !filePath.startsWith(`${rootDir}${sep}`)) {
+    return null;
+  }
+  return filePath;
+}
+
+async function sendFile(req, res) {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405, { Allow: "GET, HEAD" });
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  let filePath;
+  try {
+    filePath = resolveRequestPath(req.url);
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Bad Request");
+    return;
+  }
+
+  if (!filePath) {
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Forbidden");
+    return;
+  }
+
+  try {
+    let info = await stat(filePath);
+    if (info.isDirectory()) {
+      filePath = join(filePath, "index.html");
+      info = await stat(filePath);
+    }
+    if (!info.isFile()) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not Found");
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Length": info.size,
+      "Content-Type": contentTypes.get(extname(filePath)) ?? "application/octet-stream",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    });
+
+    if (req.method === "HEAD") {
+      res.end();
+      return;
+    }
+
+    const stream = createReadStream(filePath);
+    stream.on("error", (error) => {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      }
+      res.end(error.message);
+    });
+    stream.pipe(res);
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not Found");
+      return;
+    }
+    res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end(error?.message ?? "Internal Server Error");
+  }
+}
+
+createServer(sendFile).listen(port, host, () => {
+  console.log(`raxon web host: http://${host}:${port}/`);
+});
+"#
+    .to_string()
+}
+
 fn web_shell_readme_template(options: &GenerateOptions) -> String {
     format!(
         r#"# raxon Web Host Shell
@@ -2115,6 +2413,7 @@ Generated by `rax generate --target web`.
 - `raxon-web-host.js`: browser host runtime that applies DOM command batches and emits raxon wire events.
 - `raxon-web-host.d.ts`: TypeScript declarations for custom host integration.
 - `index.html` and `main.js`: static browser shell that mounts `{wasm_module}`, resizes with `ResizeObserver`, and ticks with `requestAnimationFrame`.
+- `package.json` and `dev-server.mjs`: no-dependency Node dev server with wasm MIME and cross-origin isolation headers.
 
 ## Rust side
 
@@ -2125,9 +2424,10 @@ whose default export initializes the `.wasm` and whose named exports include the
 
 ## Browser side
 
-Serve this directory with any static server and open `index.html`. Customize
+Run `npm run dev` from this directory and open the printed local URL. Customize
 `main.js` to handle platform requests such as notifications, media picker,
-clipboard, and accessibility announcements for your app.
+clipboard, and accessibility announcements for your app. Set `HOST` or `PORT`
+to override the dev-server bind address.
 "#,
         wasm_module = options.wasm_module,
     )
@@ -2421,7 +2721,7 @@ mod tests {
 
         let files = generate_bindings(&options).expect("bindings generate");
 
-        assert_eq!(files.len(), 14);
+        assert_eq!(files.len(), 20);
         let android_rust =
             fs::read_to_string(out_dir.join("android/raxon_android_bridge.rs")).unwrap();
         assert!(android_rust.contains("Java_dev_raxon_demo_DemoHost_nativeMount"));
@@ -2455,6 +2755,30 @@ mod tests {
             fs::read_to_string(out_dir.join("android/app/src/main/AndroidManifest.xml")).unwrap();
         assert!(manifest.contains("android:name=\"dev.raxon.demo.DemoActivity\""));
 
+        let settings = fs::read_to_string(out_dir.join("android/settings.gradle.kts")).unwrap();
+        assert!(settings.contains("rootProject.name = \"Demo App\""));
+        assert!(settings.contains("include(\":app\")"));
+
+        let root_build = fs::read_to_string(out_dir.join("android/build.gradle.kts")).unwrap();
+        assert!(root_build.contains("com.android.application"));
+        assert!(root_build.contains(ANDROID_GRADLE_PLUGIN_VERSION));
+
+        let app_build = fs::read_to_string(out_dir.join("android/app/build.gradle.kts")).unwrap();
+        assert!(app_build.contains("namespace = \"dev.raxon.demo\""));
+        assert!(app_build.contains(&format!("compileSdk = {ANDROID_COMPILE_SDK}")));
+        assert!(app_build.contains(&format!("minSdk = {ANDROID_MIN_SDK}")));
+        assert!(app_build.contains(&format!("targetSdk = {ANDROID_TARGET_SDK}")));
+        assert!(app_build.contains("jniLibs.srcDir(\"src/main/jniLibs\")"));
+
+        let wrapper =
+            fs::read_to_string(out_dir.join("android/gradle/wrapper/gradle-wrapper.properties"))
+                .unwrap();
+        assert!(wrapper.contains(&format!("gradle-{GRADLE_WRAPPER_VERSION}-bin.zip")));
+
+        let android_readme = fs::read_to_string(out_dir.join("android/README.md")).unwrap();
+        assert!(android_readme.contains("./gradlew :app:assembleDebug"));
+        assert!(android_readme.contains("app/src/main/jniLibs/<abi>/libdemo_lib.so"));
+
         let web_rust = fs::read_to_string(out_dir.join("web/raxon_web_bridge.rs")).unwrap();
         assert!(web_rust.contains("raxon_web_handle_request"));
         assert!(web_rust.contains("mount_web(raxon::core::Size::new"));
@@ -2479,13 +2803,24 @@ mod tests {
         assert!(web_main.contains("ResizeObserver"));
         assert!(web_main.contains("window.requestAnimationFrame(frame)"));
 
+        let package_json = fs::read_to_string(out_dir.join("web/package.json")).unwrap();
+        assert!(package_json.contains("\"name\": \"demo-app\""));
+        assert!(package_json.contains("\"dev\": \"node ./dev-server.mjs\""));
+
+        let dev_server = fs::read_to_string(out_dir.join("web/dev-server.mjs")).unwrap();
+        assert!(dev_server.contains("createServer(sendFile)"));
+        assert!(dev_server.contains("\"application/wasm\""));
+        assert!(dev_server.contains("\"Cross-Origin-Embedder-Policy\""));
+
         let manifest = fs::read_to_string(out_dir.join("raxon-bindings.json")).unwrap();
         assert!(manifest.contains("\"target\": \"all\""));
         assert!(manifest.contains("\"hostShells\": true"));
         assert!(manifest.contains("\"bridgeProtocolVersion\": 1"));
         assert!(manifest.contains("\"android/raxon_android_bridge.rs\""));
         assert!(manifest.contains("\"android/app/src/main/java/dev/raxon/demo/DemoActivity.kt\""));
+        assert!(manifest.contains("\"android/app/build.gradle.kts\""));
         assert!(manifest.contains("\"web/index.html\""));
+        assert!(manifest.contains("\"web/package.json\""));
 
         let _ = fs::remove_dir_all(out_dir);
     }
@@ -2501,10 +2836,12 @@ mod tests {
 
         let files = generate_bindings(&options).expect("bindings generate");
 
-        assert_eq!(files.len(), 7);
+        assert_eq!(files.len(), 9);
         assert!(out_dir.join("web/raxon-web-host.js").exists());
         assert!(out_dir.join("web/index.html").exists());
         assert!(out_dir.join("web/main.js").exists());
+        assert!(out_dir.join("web/package.json").exists());
+        assert!(out_dir.join("web/dev-server.mjs").exists());
         assert!(!out_dir.join("android").exists());
 
         let _ = fs::remove_dir_all(out_dir);
