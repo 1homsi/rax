@@ -11,6 +11,8 @@
 //! (tap, frame tick) can reach it without storing Rust state in ivars.
 
 #![doc(html_no_source)]
+// The UIKit backend is pure-Rust objc2 FFI, which is inherently unsafe.
+#![allow(unsafe_code)]
 
 #[cfg(target_os = "ios")]
 mod ios;

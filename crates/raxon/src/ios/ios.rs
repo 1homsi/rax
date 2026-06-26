@@ -950,9 +950,9 @@ fn new_instance<T: ClassType>() -> Retained<T> {
 
 fn setup(mtm: MainThreadMarker) {
     // Install the ureq-backed HTTP client for the main thread.
-    crate::net::set_client(crate::http::UreqClient);
+    crate::net::set_client(super::http::UreqClient);
     // Persist rax-store keys to NSUserDefaults across launches.
-    crate::store::set_storage(crate::storage::UiKitStorage);
+    crate::store::set_storage(super::storage::UiKitStorage);
 
     let screen = UIScreen::mainScreen(mtm);
     let bounds = screen.bounds();

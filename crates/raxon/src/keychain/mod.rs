@@ -17,7 +17,9 @@
 // iOS implementation — wraps Security.framework SecItem* APIs.
 // ---------------------------------------------------------------------------
 
+// The iOS path is Security.framework FFI, which is inherently unsafe.
 #[cfg(target_os = "ios")]
+#[allow(unsafe_code)]
 mod ios_impl {
     use std::os::raw::{c_char, c_void};
 

@@ -19,7 +19,9 @@
 //! }
 //! ```
 
-#![forbid(unsafe_code)]
+// The pure-Rust subsystems are unsafe-free; `deny` (not `forbid`) so the iOS
+// backend module can locally `allow` the objc2 FFI it necessarily requires.
+#![deny(unsafe_code)]
 #![warn(missing_docs)]
 
 // --- subsystems, namespaced ------------------------------------------------
