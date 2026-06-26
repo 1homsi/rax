@@ -7,11 +7,11 @@
 //! builder code. You can always drop to this layer.
 //!
 //! ```
-//! use crate::view::{column, text, button, mount, View};
-//! use crate::dom::{Host, RecordingBackend, Tree};
-//! use crate::reactive::create_signal;
+//! use raxon::view::{column, text, button, mount, View};
+//! use raxon::dom::{Host, RecordingBackend, Tree};
+//! use raxon::reactive::create_signal;
 //!
-//! fn counter(count: crate::reactive::Signal<i32>) -> impl View {
+//! fn counter(count: raxon::reactive::Signal<i32>) -> impl View {
 //!     column((
 //!         text(move || format!("Count: {}", count.get())),
 //!         button("+1", move || count.update(|c| *c += 1)),

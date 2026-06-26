@@ -5,7 +5,7 @@
 //!
 //! # Example
 //! ```
-//! use crate::reactive::add_signal_middleware;
+//! use raxon::reactive::add_signal_middleware;
 //! add_signal_middleware(|key, value| {
 //!     println!("[signal] {key} = {value}");
 //! });

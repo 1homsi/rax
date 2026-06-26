@@ -4,7 +4,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use crate::sqlite::Database;
+//! use raxon::sqlite::Database;
 //!
 //! let db = Database::open("app.db").unwrap();
 //! db.execute("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, body TEXT)").unwrap();
@@ -123,10 +123,13 @@ impl Database {
     /// from `rax-reactive`:
     ///
     /// ```no_run
-    /// # use crate::sqlite::Database;
-    /// # use crate::reactive::create_memo;
+    /// # use raxon::sqlite::Database;
+    /// # use raxon::reactive::create_memo;
     /// # let db = Database::open(":memory:").unwrap();
-    /// let notes = create_memo(move || db.query("SELECT body FROM notes", |r| r.get(0)).unwrap_or_default::<Vec<String>>());
+    /// let notes = create_memo(move || {
+    ///     db.query("SELECT body FROM notes", |r| r.get::<usize, String>(0))
+    ///         .unwrap_or_default()
+    /// });
     /// ```
     ///
     /// # Errors
@@ -136,7 +139,7 @@ impl Database {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use crate::sqlite::Database;
+    /// use raxon::sqlite::Database;
     ///
     /// let db = Database::open("app.db").unwrap();
     /// db.migrate(&[

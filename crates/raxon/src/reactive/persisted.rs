@@ -4,7 +4,7 @@
 //!
 //! # Example
 //! ```no_run
-//! use crate::reactive::persisted_signal;
+//! use raxon::reactive::persisted_signal;
 //! // Creates a signal backed by persistent storage under key "theme_mode":
 //! let theme = persisted_signal("theme_mode", "light");
 //! // When changed, the new value is saved immediately.

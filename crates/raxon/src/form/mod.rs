@@ -2,7 +2,7 @@
 //!
 //! # Example
 //! ```no_run
-//! use crate::form::{use_form_field, use_form, Validator};
+//! use raxon::form::{use_form_field, use_form, Validator};
 //!
 //! static EMAIL_RULES: &[Validator] = &[Validator::Required, Validator::Email];
 //! static PASSWORD_RULES: &[Validator] = &[Validator::Required, Validator::MinLength(8)];
@@ -40,7 +40,10 @@ pub enum Validator {
     /// Value must contain the given substring.
     Contains(&'static str),
     /// Custom validation — returns `Some(error_message)` on failure.
-    Custom(Box<dyn Fn(&str) -> Option<String>>),
+    ///
+    /// The closure must be `Send + Sync` so a `&[Validator]` can be declared
+    /// as a `static` (form-field handles store a `&'static [Validator]`).
+    Custom(Box<dyn Fn(&str) -> Option<String> + Send + Sync>),
 }
 
 impl Validator {
@@ -164,7 +167,7 @@ impl FormField {
 /// `Copy`. Declare the rules as a `static`:
 ///
 /// ```no_run
-/// use crate::form::{use_form_field, Validator};
+/// use raxon::form::{use_form_field, Validator};
 ///
 /// static RULES: &[Validator] = &[Validator::Required, Validator::Email];
 /// let email = use_form_field("", RULES);
@@ -216,7 +219,7 @@ impl Form {
 /// Create a [`Form`] aggregating the given fields.
 ///
 /// ```no_run
-/// use crate::form::{use_form_field, use_form, Validator};
+/// use raxon::form::{use_form_field, use_form, Validator};
 ///
 /// static EMAIL_RULES: &[Validator] = &[Validator::Required, Validator::Email];
 /// static PW_RULES: &[Validator] = &[Validator::Required, Validator::MinLength(8)];

@@ -9,8 +9,8 @@
 //! compile-checked.
 //!
 //! ```
-//! use crate::nav::{create_navigator, routes};
-//! use crate::view::{boxed, text, View};
+//! use raxon::nav::{create_navigator, routes};
+//! use raxon::view::{boxed, text, View};
 //!
 //! #[derive(Clone)]
 //! enum Screen { Home, Details(u32) }
@@ -460,7 +460,7 @@ pub fn handle_back() -> bool {
 ///
 /// # Example
 /// ```
-/// use crate::nav::match_route;
+/// use raxon::nav::match_route;
 /// let params = match_route("/user/:id/post/:postId", "/user/42/post/7").unwrap();
 /// assert_eq!(params["id"], "42");
 /// assert_eq!(params["postId"], "7");
@@ -543,7 +543,7 @@ pub fn modal_stack() -> Vec<String> {
 ///
 /// # Example
 /// ```
-/// use crate::nav::parse_deep_link;
+/// use raxon::nav::parse_deep_link;
 /// let (path, params) = parse_deep_link("myapp://profile/42?tab=posts");
 /// assert_eq!(path, "/profile/42");
 /// assert_eq!(params["tab"], "posts");
@@ -596,8 +596,8 @@ pub fn try_navigate(route: &str) -> bool {
 ///
 /// # Example
 /// ```rust
-/// use crate::nav::{create_navigator, transition_routes, NavigationTransition};
-/// use crate::view::{boxed, text, View};
+/// use raxon::nav::{create_navigator, transition_routes, NavigationTransition};
+/// use raxon::view::{boxed, text, View};
 ///
 /// #[derive(Clone)]
 /// enum Screen { Home, Details }

@@ -9,8 +9,8 @@
 //!   views that read the changed tokens re-render (fine-grained, no tree diff).
 //!
 //! ```
-//! use crate::style::{provide_theme, theme, Theme};
-//! use crate::reactive::create_root;
+//! use raxon::style::{provide_theme, theme, Theme};
+//! use raxon::reactive::create_root;
 //!
 //! let (_, scope) = create_root(|| {
 //!     let t = provide_theme(Theme::light());

@@ -42,8 +42,8 @@ pub struct Checkbox<S, F> {
 /// `on_change` with the toggled value when tapped.
 ///
 /// ```
-/// use super::view::checkbox;
-/// use crate::reactive::create_signal;
+/// use raxon::view::checkbox;
+/// use raxon::reactive::create_signal;
 ///
 /// let agreed = create_signal(false);
 /// let view = checkbox(move || agreed.get(), move |v| agreed.set(v))
@@ -126,8 +126,8 @@ pub struct Radio<S, F> {
 /// sets the signal — to get single-selection behaviour.
 ///
 /// ```
-/// use super::view::radio;
-/// use crate::reactive::create_signal;
+/// use raxon::view::radio;
+/// use raxon::reactive::create_signal;
 ///
 /// let choice = create_signal(0u32);
 /// let first = radio(move || choice.get() == 0, move || choice.set(0)).label("One");
@@ -212,7 +212,7 @@ pub struct Card<C> {
 /// Creates a card grouping `children`.
 ///
 /// ```
-/// use super::view::{card, text};
+/// use raxon::view::{card, text};
 ///
 /// let view = card((
 ///     text("Title").font_size(18.0),
@@ -281,7 +281,7 @@ pub struct Badge {
 /// Creates a badge showing `label` (e.g. a count or short status).
 ///
 /// ```
-/// use super::view::badge;
+/// use raxon::view::badge;
 ///
 /// let unread = badge("9+");
 /// ```
@@ -335,7 +335,7 @@ pub struct Avatar {
 /// Creates a circular avatar from an asset/symbol `source`.
 ///
 /// ```
-/// use super::view::avatar;
+/// use raxon::view::avatar;
 ///
 /// let pic = avatar("person.crop.circle.fill").size(48.0);
 /// ```
@@ -378,8 +378,8 @@ pub struct Chip<F> {
 /// when pressed.
 ///
 /// ```
-/// use super::view::chip;
-/// use crate::reactive::create_signal;
+/// use raxon::view::chip;
+/// use raxon::reactive::create_signal;
 ///
 /// let on = create_signal(false);
 /// let view = chip("Spicy", on.get(), move || on.update(|v| *v = !*v));
@@ -518,11 +518,11 @@ pub fn alert(
 /// when shown it expands (flex-grow 1) and covers the parent container.
 ///
 /// ```
-/// use super::view::modal;
-/// use crate::reactive::create_signal;
+/// use raxon::view::modal;
+/// use raxon::reactive::create_signal;
 ///
 /// let open = create_signal(false);
-/// let v = modal(open, move || open.set(false), || super::view::text("Hello"));
+/// let v = modal(open, move || open.set(false), || raxon::view::text("Hello"));
 /// ```
 pub fn modal<V: View + 'static>(
     show: Signal<bool>,
@@ -562,8 +562,8 @@ pub fn modal<V: View + 'static>(
 ///
 /// # Example
 /// ```rust
-/// use super::view::{fade_transition, text};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{fade_transition, text};
+/// use raxon::reactive::create_signal;
 ///
 /// let visible = create_signal(true);
 /// let v = fade_transition(visible, || text("Hello, world!"));
@@ -600,11 +600,11 @@ pub fn fade_transition<V: View + 'static>(
 /// Tapping the translucent dim area above the panel calls `on_dismiss`.
 ///
 /// ```
-/// use super::view::bottom_sheet;
-/// use crate::reactive::create_signal;
+/// use raxon::view::bottom_sheet;
+/// use raxon::reactive::create_signal;
 ///
 /// let open = create_signal(false);
-/// let v = bottom_sheet(open, move || open.set(false), || super::view::text("Sheet body"));
+/// let v = bottom_sheet(open, move || open.set(false), || raxon::view::text("Sheet body"));
 /// ```
 pub fn bottom_sheet<V: View + 'static>(
     show: Signal<bool>,
@@ -643,10 +643,10 @@ pub fn bottom_sheet<V: View + 'static>(
 /// `stack` overlay pinned to the bottom with margin).
 ///
 /// ```
-/// use super::view::toast;
-/// use crate::reactive::create_signal;
+/// use raxon::view::toast;
+/// use raxon::reactive::create_signal;
 ///
-/// let msg: crate::reactive::Signal<Option<String>> = create_signal(None);
+/// let msg: raxon::reactive::Signal<Option<String>> = create_signal(None);
 /// let v = toast(msg);
 /// ```
 pub fn toast(message: Signal<Option<String>>) -> impl View {
@@ -673,8 +673,8 @@ pub fn toast(message: Signal<Option<String>>) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::item_separator;
-/// use crate::core::Color;
+/// use raxon::view::item_separator;
+/// use raxon::core::Color;
 ///
 /// let sep = item_separator(Color::rgba(0, 0, 0, 51), 16.0);
 /// ```
@@ -693,7 +693,7 @@ pub fn item_separator(color: Color, inset: f32) -> impl View {
 /// highlighted with a checkmark.
 ///
 /// ```
-/// use super::view::picker;
+/// use raxon::view::picker;
 ///
 /// let view = picker(
 ///     vec!["Apple".to_string(), "Banana".to_string()],
@@ -742,7 +742,7 @@ pub fn picker(
 ///
 /// # Example
 /// ```rust
-/// use super::view::{grid, text, boxed};
+/// use raxon::view::{grid, text, boxed};
 ///
 /// let cells: Vec<_> = (0..9).map(|i| boxed(text(format!("Cell {i}")))).collect();
 /// let view = grid(3, 8.0, cells);
@@ -772,10 +772,10 @@ pub fn grid(columns: usize, gap: f32, items: Vec<BoxedView>) -> impl View {
 /// An image that loads from a URL via the HTTP client. Shows `placeholder` (an
 /// SF Symbol name or asset name) while loading, then displays the fetched image.
 ///
-/// Requires `rax-net` to be configured (automatically done on iOS via `rax::run`).
+/// Requires `rax-net` to be configured (automatically done on iOS via `raxon::run`).
 ///
 /// ```
-/// use super::view::network_image;
+/// use raxon::view::network_image;
 ///
 /// let img = network_image("https://example.com/photo.jpg", "photo");
 /// ```
@@ -810,8 +810,8 @@ pub fn network_image(url: impl Into<String>, placeholder: impl Into<String>) -> 
 ///
 /// # Example
 /// ```rust
-/// use super::view::{app_bar, text};
-/// use crate::core::Color;
+/// use raxon::view::{app_bar, text};
+/// use raxon::core::Color;
 ///
 /// let bar = app_bar(
 ///     "Settings",
@@ -875,8 +875,8 @@ pub fn app_bar(
 ///
 /// # Example
 /// ```rust
-/// use super::view::action_sheet;
-/// use crate::reactive::create_signal;
+/// use raxon::view::action_sheet;
+/// use raxon::reactive::create_signal;
 /// use std::sync::Arc;
 ///
 /// let open = create_signal(false);
@@ -985,10 +985,10 @@ pub fn drawer<V: View + 'static>(
 /// always renders above your other content:
 ///
 /// ```no_run
-/// use super::view::{error_overlay, stack};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{error_overlay, stack};
+/// use raxon::reactive::create_signal;
 ///
-/// // let msg = create_signal(crate::runtime::last_panic());
+/// // let msg = create_signal(raxon::runtime::last_panic());
 /// // let view = stack((your_app_view, error_overlay(msg)));
 /// ```
 pub fn error_overlay(message: crate::reactive::Signal<Option<String>>) -> impl View {
@@ -1027,13 +1027,13 @@ pub fn error_overlay(message: crate::reactive::Signal<Option<String>>) -> impl V
 /// so it can be rebuilt inside a reactive `dynamic`.
 ///
 /// # Example
-/// ```rust
-/// use super::view::swipe_actions;
-/// use crate::core::Color;
+/// ```no_run
+/// use raxon::view::{swipe_actions, boxed, text};
+/// use raxon::core::Color;
 /// use std::sync::Arc;
 ///
 /// let view = swipe_actions(
-///     || super::view::text("My item"),
+///     || boxed(text("My item")),
 ///     vec![
 ///         ("Delete".to_string(), Color::rgb(255, 51, 51), Arc::new(|| println!("deleted")) as Arc<dyn Fn() + Send + Sync>),
 ///     ],
@@ -1124,7 +1124,7 @@ pub fn swipe_actions(
 /// Place inside a `stack()` over your app content:
 ///
 /// ```rust
-/// use super::view::{dev_tools, stack, text};
+/// use raxon::view::{dev_tools, stack, text};
 ///
 /// let v = stack((text("App content"), dev_tools()));
 /// ```
@@ -1181,8 +1181,8 @@ impl Section {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{section_list, Section, text, boxed, row, spacer};
-/// use crate::core::Color;
+/// use raxon::view::{section_list, Section, text, boxed, row, spacer};
+/// use raxon::core::Color;
 ///
 /// section_list(
 ///     vec![
@@ -1240,7 +1240,7 @@ pub fn section_list(
 ///
 /// # Example
 /// ```rust
-/// use super::view::{lazy_column, text, boxed};
+/// use raxon::view::{lazy_column, text, boxed};
 ///
 /// let v = lazy_column(100, |i| boxed(text(format!("Item {}", i))));
 /// ```
@@ -1263,8 +1263,8 @@ pub fn lazy_row(count: usize, item_builder: impl Fn(usize) -> BoxedView + 'stati
 ///
 /// # Example
 /// ```rust
-/// use super::view::{reactive_list, text, boxed};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{reactive_list, text, boxed};
+/// use raxon::reactive::create_signal;
 ///
 /// let items = create_signal(vec!["Alice".to_string(), "Bob".to_string()]);
 /// let v = reactive_list(items, |_i, name| boxed(text(name)));
@@ -1291,11 +1291,13 @@ pub fn reactive_list<T: Clone + 'static>(
 /// signals animate back to `0.0` (via a spring) when the gesture ends.
 ///
 /// # Example
-/// ```rust
+/// ```no_run
+/// # use raxon::view::{column, text, pan_animation, ViewExt};
+/// # use raxon::dom::Transform;
 /// let (offset_x, offset_y, pan_handler) = pan_animation(true);
-/// column(content())
+/// column((text("Drag me"),))
 ///     .on_pan(pan_handler)
-///     .translate(move || offset_x.get(), move || offset_y.get())
+///     .transform_fn(move || Transform::IDENTITY.translate(offset_x.get(), offset_y.get()));
 /// ```
 pub fn pan_animation(spring_back: bool) -> (Signal<f32>, Signal<f32>, impl FnMut(PanInfo)) {
     let x = create_signal(0.0f32);
@@ -1328,12 +1330,12 @@ pub fn pan_animation(spring_back: bool) -> (Signal<f32>, Signal<f32>, impl FnMut
 ///
 /// # Example
 /// ```rust
-/// use super::view::{wrap, chip};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{wrap, chip};
+/// use raxon::reactive::create_signal;
 ///
 /// let selected = create_signal(0usize);
 /// let tags: Vec<_> = (0..8)
-///     .map(|i| super::view::boxed(chip(format!("Tag {i}"), selected.get() == i, move || selected.set(i))))
+///     .map(|i| raxon::view::boxed(chip(format!("Tag {i}"), selected.get() == i, move || selected.set(i))))
 ///     .collect();
 /// let v = wrap(8.0, tags);
 /// ```
@@ -1353,7 +1355,7 @@ pub fn wrap(gap: f32, items: Vec<BoxedView>) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{pressable, text};
+/// use raxon::view::{pressable, text};
 ///
 /// let v = pressable(text("Tap me"), || println!("pressed"));
 /// ```
@@ -1393,7 +1395,7 @@ pub fn pressable<V: View + 'static>(content: V, on_press: impl Fn() + 'static) -
 ///
 /// # Example
 /// ```rust
-/// use super::view::skeleton;
+/// use raxon::view::skeleton;
 ///
 /// let placeholder = skeleton(200.0, 20.0);
 /// ```
@@ -1484,8 +1486,8 @@ pub enum BannerKind {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{banner, BannerKind};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{banner, BannerKind};
+/// use raxon::reactive::create_signal;
 ///
 /// let visible = create_signal(true);
 /// let v = banner(visible, "Your changes were saved.", BannerKind::Success);
@@ -1535,8 +1537,8 @@ pub fn banner(
 ///
 /// # Example
 /// ```rust
-/// use super::view::{collapsible, text};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{collapsible, text};
+/// use raxon::reactive::create_signal;
 ///
 /// let open = create_signal(false);
 /// let v = collapsible(
@@ -1590,8 +1592,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use super::view::{carousel, text, boxed};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{carousel, text, boxed};
+/// use raxon::reactive::create_signal;
 ///
 /// let pages = create_signal(vec!["Page 1".to_string(), "Page 2".to_string()]);
 /// let v = carousel(pages, 12.0, |page| boxed(text(page)));
@@ -1629,8 +1631,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use super::view::{keyboard_avoiding_view, text_input};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{keyboard_avoiding_view, text_input};
+/// use raxon::reactive::create_signal;
 ///
 /// let query = create_signal(String::new());
 /// let v = keyboard_avoiding_view(
@@ -1656,8 +1658,8 @@ pub fn keyboard_avoiding_view<V: View>(content: V) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{infinite_scroll, text, boxed};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{infinite_scroll, text, boxed};
+/// use raxon::reactive::create_signal;
 ///
 /// let loading = create_signal(false);
 /// let v = infinite_scroll(
@@ -1705,11 +1707,11 @@ where
 ///
 /// # Example
 /// ```rust
-/// use super::view::{status_bar_spacer, column, text};
+/// use raxon::view::{status_bar_spacer, column, text};
 ///
 /// let v = column((
-///     super::view::boxed(status_bar_spacer()),
-///     super::view::boxed(text("Content below status bar")),
+///     raxon::view::boxed(status_bar_spacer()),
+///     raxon::view::boxed(text("Content below status bar")),
 /// ));
 /// ```
 pub fn status_bar_spacer() -> impl View {
@@ -1731,10 +1733,10 @@ pub fn status_bar_spacer() -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{list_with_header, text, boxed};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{list_with_header, text, boxed};
+/// use raxon::reactive::create_signal;
 ///
-/// let items: crate::reactive::Signal<Vec<String>> = create_signal(vec![]);
+/// let items: raxon::reactive::Signal<Vec<String>> = create_signal(vec![]);
 /// let v = list_with_header(
 ///     || boxed(text("My List")),
 ///     || boxed(text("End of list")),
@@ -1768,7 +1770,7 @@ pub fn list_with_header(
 ///
 /// # Example
 /// ```rust
-/// use super::view::empty_state;
+/// use raxon::view::empty_state;
 ///
 /// let v = empty_state("No results found");
 /// ```
@@ -1794,7 +1796,7 @@ pub fn empty_state(message: &'static str) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{sticky_header, text};
+/// use raxon::view::{sticky_header, text};
 ///
 /// let v = sticky_header(text("SECTION A"));
 /// ```
@@ -1851,9 +1853,9 @@ pub fn tooltip<V: View + 'static>(content: V, message: &'static str) -> impl Vie
 ///
 /// # Example
 /// ```rust
-/// use super::view::color_picker;
-/// use crate::reactive::create_signal;
-/// use crate::core::Color;
+/// use raxon::view::color_picker;
+/// use raxon::reactive::create_signal;
+/// use raxon::core::Color;
 ///
 /// let color = create_signal(Color::hex(0xFF0000ff));
 /// let v = color_picker(color, "Pick a color");
@@ -1898,8 +1900,8 @@ pub fn color_picker(color: Signal<Color>, label: &'static str) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::rating_bar;
-/// use crate::reactive::create_signal;
+/// use raxon::view::rating_bar;
+/// use raxon::reactive::create_signal;
 ///
 /// let rating = create_signal(3.0f32);
 /// let v = rating_bar(rating, 5, move |v| rating.set(v));
@@ -2030,7 +2032,7 @@ pub fn tab_bar(tabs: Vec<TabItem>, selected: Signal<usize>) -> impl View {
 /// terse form used with [`tabs`].
 ///
 /// ```
-/// use super::view::{tab, text};
+/// use raxon::view::{tab, text};
 /// let t = tab("Home", "house", text("Welcome"));
 /// ```
 pub fn tab(
@@ -2047,7 +2049,7 @@ pub fn tab(
 /// index yourself.
 ///
 /// ```
-/// use super::view::{tabs, tab, text};
+/// use raxon::view::{tabs, tab, text};
 ///
 /// let view = tabs(vec![
 ///     tab("Sell", "creditcard", text("Sell")),
@@ -2203,8 +2205,8 @@ pub fn accordion(sections: Vec<AccordionSection>) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::multi_select;
-/// use crate::reactive::create_signal;
+/// use raxon::view::multi_select;
+/// use raxon::reactive::create_signal;
 ///
 /// let chosen = create_signal(std::collections::HashSet::<usize>::new());
 /// let view = multi_select(
@@ -2265,7 +2267,7 @@ pub fn multi_select(
 ///
 /// # Example
 /// ```rust
-/// use super::view::{reorderable_list, boxed, text};
+/// use raxon::view::{reorderable_list, boxed, text};
 ///
 /// let view = reorderable_list(
 ///     3,
@@ -2339,8 +2341,8 @@ pub fn reorderable_list(
 ///
 /// # Example
 /// ```rust
-/// use super::view::{error_boundary, boxed, text, button};
-/// use crate::reactive::create_signal;
+/// use raxon::view::{error_boundary, boxed, text, button};
+/// use raxon::reactive::create_signal;
 ///
 /// let err = create_signal::<Option<String>>(None);
 /// let view = error_boundary(
@@ -2370,7 +2372,7 @@ pub fn error_boundary(
 ///
 /// # Example
 /// ```rust
-/// use super::view::pdf_view;
+/// use raxon::view::pdf_view;
 ///
 /// let view = pdf_view("https://example.com/invoice.pdf");
 /// ```
@@ -2415,8 +2417,8 @@ fn weekday(year: i32, month: u32, day: u32) -> u32 {
 ///
 /// # Example
 /// ```rust
-/// use super::view::calendar;
-/// use crate::reactive::create_signal;
+/// use raxon::view::calendar;
+/// use raxon::reactive::create_signal;
 ///
 /// let day = create_signal::<Option<u32>>(Some(15));
 /// let view = calendar(2026, 6, day, move |d| day.set(Some(d)));

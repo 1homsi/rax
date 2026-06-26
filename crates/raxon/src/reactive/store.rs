@@ -7,7 +7,10 @@ use super::{create_memo, create_signal, Memo, Signal};
 /// Provides `select` to create memos over sub-fields.
 ///
 /// # Example
-/// ```
+/// ```no_run
+/// # use raxon::reactive::Store;
+/// # #[derive(Clone)]
+/// # struct AppState { count: i32, name: String }
 /// let store = Store::new(AppState { count: 0, name: "".to_string() });
 /// let count = store.select(|s| s.count);
 /// store.update(|s| s.count += 1);

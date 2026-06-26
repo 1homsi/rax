@@ -6,8 +6,8 @@
 //! tree diff. [`t_args`] does simple `{name}` interpolation.
 //!
 //! ```
-//! use crate::intl::{provide_locale, t, Catalog};
-//! use crate::reactive::create_root;
+//! use raxon::intl::{provide_locale, t, Catalog};
+//! use raxon::reactive::create_root;
 //!
 //! let (_, scope) = create_root(|| {
 //!     let loc = provide_locale(Catalog::from([("hi", "Hello")]));
@@ -101,8 +101,8 @@ pub fn t_args(key: &str, args: &[(&str, &str)]) -> String {
 /// `key`. (Per-locale ICU plural rules are a planned refinement.)
 ///
 /// ```
-/// use crate::intl::{provide_locale, t_plural, Catalog};
-/// use crate::reactive::create_root;
+/// use raxon::intl::{provide_locale, t_plural, Catalog};
+/// use raxon::reactive::create_root;
 ///
 /// let (_, scope) = create_root(|| {
 ///     provide_locale(Catalog::from([

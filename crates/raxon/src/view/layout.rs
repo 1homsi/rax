@@ -54,7 +54,7 @@ thread_local! {
 ///
 /// # Example
 /// ```rust
-/// use super::view::layout::{use_layout_direction, LayoutDirection};
+/// use raxon::view::layout::{use_layout_direction, LayoutDirection};
 ///
 /// let dir = use_layout_direction();
 /// // Inside a dynamic() closure:
@@ -79,7 +79,7 @@ pub fn use_layout_direction() -> Signal<LayoutDirection> {
 ///
 /// # Example (platform bootstrap)
 /// ```rust
-/// use super::view::layout::{update_layout_direction, LayoutDirection};
+/// use raxon::view::layout::{update_layout_direction, LayoutDirection};
 ///
 /// // Detected Arabic locale → RTL.
 /// update_layout_direction(LayoutDirection::Rtl);
@@ -102,7 +102,7 @@ pub fn update_layout_direction(dir: LayoutDirection) {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{column, text, layout::expanded};
+/// use raxon::view::{column, text, layout::expanded};
 ///
 /// let v = column((
 ///     text("Header"),
@@ -121,7 +121,7 @@ pub fn expanded<V: View>(child: V) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{row, text, layout::flexible};
+/// use raxon::view::{row, text, layout::flexible};
 ///
 /// // Left column takes 2× as much space as the right column.
 /// let v = row((
@@ -146,7 +146,7 @@ pub fn flexible<V: View>(child: V, factor: f32) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{image, layout::aspect_ratio};
+/// use raxon::view::{image, layout::aspect_ratio};
 ///
 /// // Force a banner image to always be 16:9.
 /// let v = aspect_ratio(image("banner"), 16.0 / 9.0);
@@ -167,7 +167,7 @@ pub fn aspect_ratio<V: View>(child: V, ratio: f32) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{text, layout::center};
+/// use raxon::view::{text, layout::center};
 ///
 /// let v = center(text("I'm centered!"));
 /// ```
@@ -191,12 +191,12 @@ pub fn center<V: View>(child: V) -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{column, text, layout::{safe_area_top, safe_area_bottom}};
+/// use raxon::view::{column, text, layout::{safe_area_top, safe_area_bottom}};
 ///
 /// let v = column((
-///     super::view::boxed(safe_area_top()),
-///     super::view::boxed(text("Content")),
-///     super::view::boxed(safe_area_bottom()),
+///     raxon::view::boxed(safe_area_top()),
+///     raxon::view::boxed(text("Content")),
+///     raxon::view::boxed(safe_area_bottom()),
 /// ));
 /// ```
 pub fn safe_area_top() -> impl View {
@@ -218,7 +218,7 @@ pub fn safe_area_bottom() -> impl View {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{text, layout::safe_area_view};
+/// use raxon::view::{text, layout::safe_area_view};
 ///
 /// let v = safe_area_view(text("Full-screen content"));
 /// ```
@@ -271,7 +271,7 @@ thread_local! {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{dynamic, text, boxed, layout::{use_orientation, Orientation}};
+/// use raxon::view::{dynamic, text, boxed, layout::{use_orientation, Orientation}};
 ///
 /// let v = dynamic(move || {
 ///     let label = if use_orientation().get() == Orientation::Landscape {
@@ -300,7 +300,7 @@ pub fn use_orientation() -> Signal<Orientation> {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{dynamic, text, boxed, layout::use_window_width};
+/// use raxon::view::{dynamic, text, boxed, layout::use_window_width};
 ///
 /// let v = dynamic(move || {
 ///     let w = use_window_width().get();
@@ -326,7 +326,7 @@ pub fn use_window_width() -> Signal<f32> {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{dynamic, text, boxed, layout::{use_size_class, SizeClass}};
+/// use raxon::view::{dynamic, text, boxed, layout::{use_size_class, SizeClass}};
 ///
 /// let v = dynamic(move || {
 ///     let label = if use_size_class().get() == SizeClass::Regular {
@@ -357,7 +357,7 @@ pub fn use_size_class() -> Memo<SizeClass> {
 ///
 /// # Example (platform backend)
 /// ```rust
-/// use super::view::layout::update_window_size;
+/// use raxon::view::layout::update_window_size;
 ///
 /// // Called by UIKit / AppKit / the web runtime on every resize event.
 /// fn on_window_resize(width: f32, height: f32) {
@@ -391,7 +391,7 @@ pub fn update_window_size(width: f32, height: f32) {
 ///
 /// # Example
 /// ```rust
-/// use super::view::{text, boxed, layout::{responsive, SizeClass, Orientation}};
+/// use raxon::view::{text, boxed, layout::{responsive, SizeClass, Orientation}};
 ///
 /// let v = responsive(|size_class, orientation| {
 ///     let label = match (size_class, orientation) {

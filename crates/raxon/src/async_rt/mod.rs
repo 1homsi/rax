@@ -11,8 +11,8 @@
 //! inside a running task.
 //!
 //! ```
-//! use crate::async_rt::{create_resource, run_until_stalled, ResourceState};
-//! use crate::reactive::create_root;
+//! use raxon::async_rt::{create_resource, run_until_stalled, ResourceState};
+//! use raxon::reactive::create_root;
 //!
 //! let (res, scope) = create_root(|| create_resource(async { Ok::<i32, String>(42) }));
 //! assert!(matches!(res.get(), ResourceState::Loading));

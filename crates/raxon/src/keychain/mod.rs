@@ -6,7 +6,7 @@
 //!
 //! # Example
 //! ```rust
-//! use crate::keychain::{set_secret, get_secret, delete_secret};
+//! use raxon::keychain::{set_secret, get_secret, delete_secret};
 //!
 //! set_secret("auth_token", "my-secret-value").unwrap();
 //! let token = get_secret("auth_token").unwrap(); // Some("my-secret-value")

@@ -10,8 +10,8 @@
 //! it directly with a fixed delta for determinism.
 //!
 //! ```
-//! use crate::anim::{animate, tick, Easing};
-//! use crate::reactive::create_root;
+//! use raxon::anim::{animate, tick, Easing};
+//! use raxon::reactive::create_root;
 //!
 //! let (a, scope) = create_root(|| animate(0.0, 100.0, 1.0, Easing::Linear));
 //! assert_eq!(a.get(), 0.0);
@@ -319,8 +319,8 @@ pub fn animate(from: f32, to: f32, duration: f32, easing: Easing) -> Signal<f32>
 /// spring has no fixed duration — it settles naturally and may overshoot.
 ///
 /// ```
-/// use crate::anim::{spring, tick, Spring};
-/// use crate::reactive::create_root;
+/// use raxon::anim::{spring, tick, Spring};
+/// use raxon::reactive::create_root;
 ///
 /// let (s, scope) = create_root(|| spring(0.0, 100.0, Spring::default()));
 /// assert_eq!(s.get(), 0.0);
@@ -348,8 +348,8 @@ pub fn spring(from: f32, to: f32, spring: Spring) -> Signal<f32> {
 /// Returns a signal carrying the position.
 ///
 /// ```
-/// use crate::anim::{decay, tick};
-/// use crate::reactive::create_root;
+/// use raxon::anim::{decay, tick};
+/// use raxon::reactive::create_root;
 ///
 /// let (p, scope) = create_root(|| decay(0.0, 1200.0, 0.998));
 /// for _ in 0..600 { tick(1.0 / 60.0); }
@@ -402,8 +402,8 @@ pub fn is_animating() -> bool {
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::{animate, parallel, Easing};
-/// use crate::reactive::create_root;
+/// use raxon::anim::{animate, parallel, Easing};
+/// use raxon::reactive::create_root;
 ///
 /// let ((x, y), scope) = create_root(|| {
 ///     parallel(
@@ -431,8 +431,8 @@ pub fn parallel<A: 'static, B: 'static>(a: Signal<A>, b: Signal<B>) -> (Signal<A
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::{animate, sequence, tick, Easing};
-/// use crate::reactive::{create_root, create_signal};
+/// use raxon::anim::{animate, sequence, tick, Easing};
+/// use raxon::reactive::{create_root, create_signal};
 ///
 /// let (second_started, scope) = create_root(|| {
 ///     let flag = create_signal(false);
@@ -474,8 +474,8 @@ pub fn sequence(first: Signal<f32>, to: f32, second: impl FnOnce() + 'static) {
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::{stagger, animate, Easing};
-/// use crate::reactive::create_root;
+/// use raxon::anim::{stagger, animate, Easing};
+/// use raxon::reactive::create_root;
 ///
 /// let (signals, scope) = create_root(|| {
 ///     stagger(3, 50, |i| animate(0.0, 100.0, 0.3, Easing::EaseOut))
@@ -505,8 +505,8 @@ where
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::{oscillate, tick, Easing};
-/// use crate::reactive::create_root;
+/// use raxon::anim::{oscillate, tick, Easing};
+/// use raxon::reactive::create_root;
 ///
 /// let (v, scope) = create_root(|| oscillate(0.0, 100.0, 1.0, Easing::Linear));
 /// tick(0.6);          // approaching 60
@@ -547,8 +547,8 @@ pub fn oscillate(from: f32, to: f32, duration: f32, easing: Easing) -> Signal<f3
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::{delayed, tick, Easing};
-/// use crate::reactive::{create_root, create_signal};
+/// use raxon::anim::{delayed, tick, Easing};
+/// use raxon::reactive::{create_root, create_signal};
 ///
 /// let (val, scope) = create_root(|| {
 ///     let trigger = create_signal(false);
@@ -656,7 +656,7 @@ impl OffThreadAnimatable for OffThreadTimingAnim {
 ///
 /// # Example
 /// ```
-/// use crate::anim::{OffThreadValue, animate_offthread, Easing};
+/// use raxon::anim::{OffThreadValue, animate_offthread, Easing};
 ///
 /// let v = OffThreadValue::new(0.0);
 /// animate_offthread(&v, 1.0, 300, Easing::EaseOut);
@@ -686,7 +686,7 @@ pub fn animate_offthread(value: &OffThreadValue, target: f32, duration_ms: u32, 
 ///
 /// # Example
 /// ```no_run
-/// use crate::anim::start_animation_thread;
+/// use raxon::anim::start_animation_thread;
 ///
 /// let _handle = start_animation_thread();
 /// ```
@@ -731,8 +731,8 @@ thread_local! {
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::use_reduced_motion;
-/// use crate::reactive::create_root;
+/// use raxon::anim::use_reduced_motion;
+/// use raxon::reactive::create_root;
 ///
 /// let (reduced, scope) = create_root(|| use_reduced_motion());
 /// assert!(!reduced.get());
@@ -755,7 +755,7 @@ pub fn use_reduced_motion() -> crate::reactive::Signal<bool> {
 ///
 /// # Example (platform backend)
 /// ```rust
-/// use crate::anim::set_reduced_motion;
+/// use raxon::anim::set_reduced_motion;
 ///
 /// fn on_accessibility_changed(reduced: bool) {
 ///     set_reduced_motion(reduced);
@@ -784,8 +784,8 @@ pub fn set_reduced_motion(enabled: bool) {
 ///
 /// # Example
 /// ```rust
-/// use crate::anim::{animate_unless_reduced, use_reduced_motion, Easing};
-/// use crate::reactive::{create_root, create_signal};
+/// use raxon::anim::{animate_unless_reduced, use_reduced_motion, Easing};
+/// use raxon::reactive::{create_root, create_signal};
 ///
 /// let (sig, scope) = create_root(|| {
 ///     let sig = create_signal(0.0f32);
@@ -818,7 +818,7 @@ pub fn animate_unless_reduced(
 ///
 /// # Example
 /// ```
-/// use crate::anim::lerp;
+/// use raxon::anim::lerp;
 /// assert!((lerp(0.0, 100.0, 0.5) - 50.0).abs() < 0.001);
 /// assert_eq!(lerp(0.0, 100.0, 0.0), 0.0);
 /// assert_eq!(lerp(0.0, 100.0, 1.0), 100.0);
@@ -834,7 +834,7 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
 ///
 /// # Example
 /// ```
-/// use crate::anim::smooth_step;
+/// use raxon::anim::smooth_step;
 /// assert_eq!(smooth_step(0.0), 0.0);
 /// assert_eq!(smooth_step(1.0), 1.0);
 /// assert!((smooth_step(0.5) - 0.5).abs() < 0.001); // midpoint is symmetric
@@ -852,7 +852,7 @@ pub fn smooth_step(t: f32) -> f32 {
 ///
 /// # Example
 /// ```
-/// use crate::anim::remap;
+/// use raxon::anim::remap;
 /// // Map scroll offset 0–200 → opacity 0.0–1.0
 /// assert!((remap(100.0, 0.0, 200.0, 0.0, 1.0) - 0.5).abs() < 0.001);
 /// ```
@@ -875,7 +875,7 @@ pub fn remap(value: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -
 ///
 /// # Example
 /// ```
-/// use crate::anim::rubber_band;
+/// use raxon::anim::rubber_band;
 /// // Inside range — no effect.
 /// assert_eq!(rubber_band(50.0, 0.0, 100.0), 50.0);
 /// // Below min — value is pulled back toward min with resistance.
@@ -915,8 +915,8 @@ pub fn rubber_band(value: f32, min: f32, max: f32) -> f32 {
 ///
 /// # Example
 /// ```no_run
-/// use crate::anim::use_transition;
-/// use crate::reactive::{create_root, create_signal};
+/// use raxon::anim::use_transition;
+/// use raxon::reactive::{create_root, create_signal};
 ///
 /// let (fade, scope) = create_root(|| {
 ///     let current_screen = create_signal(0u32);

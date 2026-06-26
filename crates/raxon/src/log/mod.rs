@@ -5,6 +5,8 @@
 //!
 //! # Example
 //! ```
+//! # use raxon::{rax_debug, rax_info, rax_warn, rax_error};
+//! # let (result, elapsed, err) = (true, 12u32, "timeout");
 //! rax_debug!(target: "auth", "Biometric result: {}", result);
 //! rax_info!("App started");
 //! rax_warn!(target: "network", "Slow response: {}ms", elapsed);

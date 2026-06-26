@@ -5,7 +5,7 @@
 //!
 //! # Example
 //! ```rust
-//! use crate::plugin::Plugin;
+//! use raxon::plugin::Plugin;
 //!
 //! struct MyPlugin;
 //!
@@ -16,7 +16,7 @@
 //! }
 //! ```
 //!
-//! Register plugins via `crate::plugin::register_plugin(MyPlugin)` before calling `rax::run`.
+//! Register plugins via `crate::plugin::register_plugin(MyPlugin)` before calling `raxon::run`.
 
 use std::any::Any;
 
@@ -135,7 +135,7 @@ pub fn tick_plugins() {
     PLUGIN_REGISTRY.with(|r| r.borrow_mut().tick_all());
 }
 
-/// Start all plugins. Called once by `rax::run` at startup.
+/// Start all plugins. Called once by `raxon::run` at startup.
 pub fn start_plugins() {
     PLUGIN_REGISTRY.with(|r| r.borrow_mut().start_all());
 }

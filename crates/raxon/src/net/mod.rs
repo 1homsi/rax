@@ -7,9 +7,9 @@
 //! flips from `Loading` to `Ready`/`Failed` when the response arrives.
 //!
 //! ```
-//! use crate::net::{get, set_client, MockClient, Response};
-//! use crate::async_rt::run_until_stalled;
-//! use crate::reactive::create_root;
+//! use raxon::net::{get, set_client, MockClient, Response};
+//! use raxon::async_rt::run_until_stalled;
+//! use raxon::reactive::create_root;
 //!
 //! set_client(MockClient::new(|_req| Ok(Response::ok("pong"))));
 //! let (res, scope) = create_root(|| get("https://example.com/ping"));
@@ -263,7 +263,7 @@ impl WsHandle {
 /// Returns immediately with a [`WsHandle`]. Dropping the handle disconnects.
 ///
 /// ```no_run
-/// use crate::net::{connect_ws, WsMessage};
+/// use raxon::net::{connect_ws, WsMessage};
 ///
 /// let handle = connect_ws("ws://echo.websocket.org", |msg| {
 ///     if let WsMessage::Text(t) = msg {
@@ -770,8 +770,8 @@ impl<T: Clone + 'static> Paginated<T> {
 /// moved freely into closures on the same thread.
 ///
 /// ```rust,ignore
-/// use crate::reactive::create_root;
-/// use crate::net::use_paginated;
+/// use raxon::reactive::create_root;
+/// use raxon::net::use_paginated;
 ///
 /// let (paged, _scope) = create_root(|| use_paginated::<String>(vec![]));
 /// paged.load_next(|page| fetch_page(page));
@@ -806,9 +806,9 @@ thread_local! {
 ///
 /// # Example
 /// ```
-/// use crate::net::{use_query, set_client, MockClient, Response};
-/// use crate::async_rt::run_until_stalled;
-/// use crate::reactive::create_root;
+/// use raxon::net::{use_query, set_client, MockClient, Response};
+/// use raxon::async_rt::run_until_stalled;
+/// use raxon::reactive::create_root;
 ///
 /// set_client(MockClient::new(|_| Ok(Response::ok("[]"))));
 /// let (res, scope) = create_root(|| use_query("https://api.example.com/items"));
@@ -849,9 +849,9 @@ pub fn invalidate_query(url: impl Into<String>) {
 ///
 /// # Example
 /// ```
-/// use crate::net::{use_query_stale, set_client, MockClient, Response};
-/// use crate::async_rt::run_until_stalled;
-/// use crate::reactive::create_root;
+/// use raxon::net::{use_query_stale, set_client, MockClient, Response};
+/// use raxon::async_rt::run_until_stalled;
+/// use raxon::reactive::create_root;
 ///
 /// set_client(MockClient::new(|_| Ok(Response::ok("[]"))));
 /// let (res, scope) = create_root(|| use_query_stale("https://api.example.com/items", 60));
@@ -922,7 +922,7 @@ pub struct SseEvent {
 /// thread will exit on the next failed read once the server closes the stream).
 ///
 /// ```no_run
-/// use crate::net::{connect_sse, SseEvent};
+/// use raxon::net::{connect_sse, SseEvent};
 ///
 /// let _handle = connect_sse("https://example.com/events", |ev| {
 ///     println!("[{}] {}", ev.event, ev.data);
@@ -1037,8 +1037,8 @@ pub fn parse_json<T: serde::de::DeserializeOwned>(response: &Response) -> Result
 ///
 /// # Example
 /// ```rust,ignore
-/// use crate::reactive::create_root;
-/// use crate::net::{get_json, set_client, MockClient, Response};
+/// use raxon::reactive::create_root;
+/// use raxon::net::{get_json, set_client, MockClient, Response};
 ///
 /// #[derive(Clone, serde::Deserialize)]
 /// struct Item { id: u32 }
@@ -1089,7 +1089,7 @@ pub struct DownloadProgress {
 ///
 /// # Example
 /// ```rust,ignore
-/// use crate::net::{download_with_progress, DownloadProgress};
+/// use raxon::net::{download_with_progress, DownloadProgress};
 ///
 /// let response = download_with_progress("https://example.com/file.bin", |p| {
 ///     if let Some(f) = p.fraction {
@@ -1183,7 +1183,7 @@ pub fn clear_image_cache() {
 ///
 /// # Example
 /// ```rust,ignore
-/// use crate::net::fetch_image;
+/// use raxon::net::fetch_image;
 ///
 /// let bytes = fetch_image("https://example.com/photo.jpg")?;
 /// println!("downloaded {} bytes", bytes.len());

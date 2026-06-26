@@ -196,8 +196,10 @@ pub struct ShadowToken {
 ///
 /// # Example
 /// ```no_run
+/// # use raxon::view::{Theme, text, ViewExt};
+/// # let theme = Theme::light();
 /// let token = theme.shadows.md;
-/// card.shadow(token.color, token.blur, token.offset_x, token.offset_y)
+/// let card = text("Card").shadow(token.color, token.blur, token.offset_x, token.offset_y);
 /// ```
 #[derive(Clone, Debug)]
 pub struct ShadowTokens {
@@ -235,10 +237,12 @@ impl Default for ShadowTokens {
 ///
 /// # Example
 /// ```no_run
-/// use super::view::theme::{Theme, CustomTokens};
+/// use raxon::view::{Theme, ThemeBuilder, CustomTokens};
 ///
 /// let theme = Theme::light();
+/// let _: &CustomTokens = &theme.custom;
 /// let theme = ThemeBuilder::from(theme)
+///     .custom_token("brand-shadow", "0 2px 8px rgba(0,0,0,0.2)")
 ///     .build();
 /// ```
 #[derive(Clone, Debug, Default)]
@@ -316,8 +320,8 @@ impl Theme {
 /// Start from a base light or dark theme and override individual tokens:
 ///
 /// ```no_run
-/// use crate::core::Color;
-/// use super::view::theme::{Theme, ThemeBuilder};
+/// use raxon::core::Color;
+/// use raxon::view::{Theme, ThemeBuilder};
 ///
 /// let brand_theme = ThemeBuilder::from(Theme::light())
 ///     .primary(Color::hex(0xFF5722FF))
@@ -377,6 +381,7 @@ impl ThemeBuilder {
 /// Provide a reactive theme to the subtree. Call near the app root.
 ///
 /// ```no_run
+/// # use raxon::view::{provide_theme, Theme};
 /// provide_theme(Theme::light());
 /// ```
 pub fn provide_theme(theme: Theme) -> Signal<Theme> {

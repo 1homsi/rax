@@ -5,10 +5,14 @@
 //!
 //! # Example
 //! ```no_run
+//! # use raxon::fs::{app_documents_dir, write_text, read_text};
+//! # fn main() -> Result<(), String> {
 //! let docs = app_documents_dir();
 //! let path = docs.join("notes.txt");
 //! write_text(&path, "Hello")?;
 //! let text = read_text(&path)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use std::path::{Path, PathBuf};

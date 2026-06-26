@@ -3,7 +3,7 @@
 //! # Quick start
 //!
 //! ```no_run
-//! use crate::i18n::{provide_i18n, use_t, system_locale};
+//! use raxon::i18n::{provide_i18n, use_t, system_locale};
 //!
 //! // At app start, provide the context with the initial locale.
 //! let i18n = provide_i18n("en");
@@ -77,7 +77,7 @@ impl I18n {
     /// overwrite earlier ones.
     ///
     /// ```no_run
-    /// # use crate::i18n::provide_i18n;
+    /// # use raxon::i18n::provide_i18n;
     /// let i18n = provide_i18n("en");
     /// i18n.add_locale("en", &[("hello", "Hello!")]);
     /// i18n.add_locale("fr", &[("hello", "Bonjour!")]);
@@ -101,7 +101,7 @@ impl I18n {
     /// and returns `key` unchanged if neither catalog contains it.
     ///
     /// ```no_run
-    /// # use crate::i18n::provide_i18n;
+    /// # use raxon::i18n::provide_i18n;
     /// let i18n = provide_i18n("en");
     /// i18n.add_locale("en", &[("greeting", "Hello, {name}!")]);
     /// assert_eq!(i18n.t("greeting", &[("name", "Alice")]), "Hello, Alice!");
@@ -120,7 +120,7 @@ impl I18n {
     /// substituted.
     ///
     /// ```no_run
-    /// # use crate::i18n::provide_i18n;
+    /// # use raxon::i18n::provide_i18n;
     /// let i18n = provide_i18n("en");
     /// i18n.add_locale("en", &[("items", "{count} item|{count} items")]);
     /// assert_eq!(i18n.t_plural("items", 1, &[]), "1 item");
@@ -174,7 +174,7 @@ impl I18n {
     /// grouping separators.  For full ICU number formatting, see the `icu` crate.
     ///
     /// ```no_run
-    /// # use crate::i18n::provide_i18n;
+    /// # use raxon::i18n::provide_i18n;
     /// let i18n = provide_i18n("en");
     /// assert_eq!(i18n.format_number(1234.5, 2), "1234.50");
     /// ```
@@ -185,7 +185,7 @@ impl I18n {
     /// Format `amount` as a currency string with the given symbol prefix.
     ///
     /// ```no_run
-    /// # use crate::i18n::provide_i18n;
+    /// # use raxon::i18n::provide_i18n;
     /// let i18n = provide_i18n("en");
     /// assert_eq!(i18n.format_currency(9.99, "$"), "$9.99");
     /// ```
@@ -250,7 +250,7 @@ fn plural_form(template: &str, count: u32) -> &str {
 /// [`create_root`](crate::reactive::create_root) or effect).
 ///
 /// ```no_run
-/// use crate::i18n::provide_i18n;
+/// use raxon::i18n::provide_i18n;
 ///
 /// let i18n = provide_i18n("en");
 /// i18n.add_locale("en", &[("hi", "Hi!")]);
@@ -275,7 +275,7 @@ pub fn use_i18n() -> I18n {
 /// Designed for ergonomic use inside reactive `move ||` view closures:
 ///
 /// ```no_run
-/// use crate::i18n::use_t;
+/// use raxon::i18n::use_t;
 ///
 /// let t = use_t();
 /// // text(move || t("welcome", &[("name", "Alice")]))
@@ -548,7 +548,7 @@ pub fn format_list(i18n: &I18n, items: &[&str]) -> String {
 /// `"en"` if the variable is absent or empty.
 ///
 /// ```no_run
-/// use crate::i18n::{provide_i18n, system_locale};
+/// use raxon::i18n::{provide_i18n, system_locale};
 ///
 /// let i18n = provide_i18n(&system_locale());
 /// ```

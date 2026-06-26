@@ -5,7 +5,7 @@
 //!
 //! # Example
 //! ```rust
-//! use rax::platform::{IS_IOS, IS_MACOS, PLATFORM};
+//! use raxon::platform::{IS_IOS, IS_MACOS, PLATFORM};
 //!
 //! if IS_IOS {
 //!     println!("Running on iOS");
@@ -44,7 +44,7 @@ pub const PLATFORM: &str = if cfg!(target_os = "ios") {
 ///
 /// # Example
 /// ```rust
-/// use rax::platform::platform_value;
+/// use raxon::platform::platform_value;
 ///
 /// let padding: f32 = platform_value(16.0, 12.0); // 16 on iOS, 12 elsewhere
 /// ```

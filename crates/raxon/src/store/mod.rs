@@ -6,8 +6,8 @@
 //! signal seeded from storage that writes itself back whenever it changes.
 //!
 //! ```
-//! use crate::store::{persisted, store_get};
-//! use crate::reactive::create_root;
+//! use raxon::store::{persisted, store_get};
+//! use raxon::reactive::create_root;
 //!
 //! let (_, scope) = create_root(|| {
 //!     let name = persisted("user.name", "Guest");

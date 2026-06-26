@@ -10,13 +10,11 @@
 //!
 //! # Example
 //! ```no_run
-//! use super::view::{register_component, ComponentProps};
-//! use super::view::text;
-//! use super::view::modifier::ViewExt;
+//! use raxon::view::{boxed, column, register_component, text, ComponentProps};
 //!
 //! // Register a custom button factory at startup (before any widgets build):
 //! register_component("Button", |props: &ComponentProps| {
-//!     super::view::boxed(text(props.label.clone()).padding(8.0))
+//!     boxed(column((text(props.label.clone()),)).padding(8.0))
 //! });
 //! ```
 
@@ -33,7 +31,7 @@ use super::view::BoxedView;
 ///
 /// Built with a fluent builder:
 /// ```no_run
-/// use super::view::ComponentProps;
+/// use raxon::view::ComponentProps;
 /// let props = ComponentProps::new()
 ///     .label("Confirm")
 ///     .variant("primary")
@@ -99,8 +97,9 @@ thread_local! {
 ///
 /// # Example
 /// ```no_run
+/// # use raxon::view::register_component;
 /// register_component("Button", |props| {
-///     super::view::boxed(super::view::text(props.label.clone()))
+///     raxon::view::boxed(raxon::view::text(props.label.clone()))
 /// });
 /// ```
 pub fn register_component(
@@ -133,14 +132,14 @@ pub fn is_registered(name: &str) -> bool {
 ///
 /// # Example
 /// ```no_run
-/// use super::view::{resolve_component, ComponentProps, button};
+/// use raxon::view::{resolve_component, ComponentProps, button};
 ///
-/// fn my_button(label: &str, on_press: impl Fn() + 'static) -> impl super::view::View {
+/// fn my_button(label: &str, on_press: impl Fn() + 'static) -> impl raxon::view::View {
 ///     let props = ComponentProps::new().label(label);
 ///     if let Some(custom) = resolve_component("Button", &props) {
 ///         return custom;
 ///     }
-///     super::view::boxed(button(label, on_press))
+///     raxon::view::boxed(button(label, on_press))
 /// }
 /// ```
 pub fn resolve_component(name: &str, props: &ComponentProps) -> Option<BoxedView> {

@@ -69,7 +69,7 @@ thread_local! {
         const { RefCell::new(false) };
 
     /// In-process UI state (session lifetime only). Cross-restart persistence
-    /// should be done via `rax::store::store_set` / `store_get`.
+    /// should be done via `raxon::store::store_set` / `store_get`.
     static UI_STATE: RefCell<std::collections::HashMap<String, String>> =
         RefCell::new(std::collections::HashMap::new());
 
@@ -165,7 +165,7 @@ static PANIC_MESSAGE: Mutex<Option<String>> = Mutex::new(None);
 /// appear in the Xcode console).
 ///
 /// ```no_run
-/// use crate::runtime::install_error_overlay;
+/// use raxon::runtime::install_error_overlay;
 ///
 /// install_error_overlay();
 /// ```
@@ -186,8 +186,8 @@ pub fn install_error_overlay() {
 /// Pair with a reactive signal to drive [`crate::view::error_overlay`]:
 ///
 /// ```no_run
-/// use crate::runtime::last_panic;
-/// use crate::reactive::create_signal;
+/// use raxon::runtime::last_panic;
+/// use raxon::reactive::create_signal;
 ///
 /// let msg = create_signal(last_panic());
 /// ```
@@ -199,7 +199,7 @@ pub fn last_panic() -> Option<String> {
 /// gesture handlers, etc.). The pulse is delivered on the next frame tick.
 ///
 /// ```no_run
-/// use crate::runtime::{haptic, HapticStyle};
+/// use raxon::runtime::{haptic, HapticStyle};
 ///
 /// haptic(HapticStyle::Medium);
 /// ```
@@ -211,7 +211,7 @@ pub fn haptic(style: HapticStyle) {
 /// opens via a URL scheme or universal link.
 ///
 /// ```no_run
-/// use crate::runtime::on_deep_link;
+/// use raxon::runtime::on_deep_link;
 ///
 /// on_deep_link(|url| println!("opened with: {url}"));
 /// ```
@@ -223,7 +223,7 @@ pub fn on_deep_link(handler: impl Fn(String) + 'static) {
 /// frame tick.
 ///
 /// ```no_run
-/// use crate::runtime::{schedule_notification, LocalNotification};
+/// use raxon::runtime::{schedule_notification, LocalNotification};
 ///
 /// schedule_notification(LocalNotification {
 ///     id: "reminder".to_string(),
@@ -239,7 +239,7 @@ pub fn schedule_notification(notif: LocalNotification) {
 /// Cancels a pending local notification by its identifier.
 ///
 /// ```no_run
-/// use crate::runtime::cancel_notification;
+/// use raxon::runtime::cancel_notification;
 ///
 /// cancel_notification("reminder");
 /// ```
@@ -251,7 +251,7 @@ pub fn cancel_notification(id: impl Into<String>) {
 /// is delivered as a global `Event::BiometricResult`.
 ///
 /// ```no_run
-/// use crate::runtime::authenticate_biometric;
+/// use raxon::runtime::authenticate_biometric;
 ///
 /// authenticate_biometric("Confirm your identity");
 /// ```
@@ -401,7 +401,7 @@ pub fn update_gyroscope(data: GyroscopeData) {
 /// frame tick so it is safe to call from within reactive closures or event handlers.
 ///
 /// ```no_run
-/// use crate::runtime::set_torch;
+/// use raxon::runtime::set_torch;
 ///
 /// set_torch(true); // torch on
 /// set_torch(false); // torch off
@@ -455,7 +455,7 @@ pub fn clear_push_token() {
 /// The registration request is applied on the next frame tick.
 ///
 /// ```no_run
-/// use crate::runtime::register_for_push;
+/// use raxon::runtime::register_for_push;
 ///
 /// register_for_push();
 /// ```
@@ -467,7 +467,7 @@ pub fn register_for_push() {
 /// the badge. Applied on the next frame tick.
 ///
 /// ```no_run
-/// use crate::runtime::set_app_badge;
+/// use raxon::runtime::set_app_badge;
 ///
 /// set_app_badge(3); // show "3"
 /// set_app_badge(0); // clear badge
@@ -480,7 +480,7 @@ pub fn set_app_badge(count: u32) {
 /// tick so it is safe to call from within reactive closures or event handlers.
 ///
 /// ```no_run
-/// use crate::runtime::set_clipboard;
+/// use raxon::runtime::set_clipboard;
 ///
 /// set_clipboard("Hello, clipboard!");
 /// ```
@@ -492,7 +492,7 @@ pub fn set_clipboard(text: impl Into<String>) {
 /// frame tick so it is safe to call from within reactive closures or event handlers.
 ///
 /// ```no_run
-/// use crate::runtime::share_text;
+/// use raxon::runtime::share_text;
 ///
 /// share_text("Check out this link: https://example.com");
 /// ```
@@ -508,7 +508,7 @@ pub fn share_text(text: impl Into<String>) {
 /// Must be called while building views under a running [`App`].
 ///
 /// ```no_run
-/// use crate::runtime::use_battery_level;
+/// use raxon::runtime::use_battery_level;
 ///
 /// let level = use_battery_level();
 /// // level.get() → e.g. 0.85
@@ -531,7 +531,7 @@ pub fn use_battery_level() -> Signal<f32> {
 /// Must be called while building views under a running [`App`].
 ///
 /// ```no_run
-/// use crate::runtime::use_battery_charging;
+/// use raxon::runtime::use_battery_charging;
 ///
 /// let charging = use_battery_charging();
 /// // charging.get() → true / false
@@ -570,7 +570,7 @@ pub fn update_battery(level: f32, charging: bool) {
 /// Must be called while building views under a running [`App`].
 ///
 /// ```no_run
-/// use crate::runtime::{use_network_status, NetworkStatus};
+/// use raxon::runtime::{use_network_status, NetworkStatus};
 ///
 /// let status = use_network_status();
 /// // status.get() → NetworkStatus::WiFi
@@ -608,7 +608,7 @@ pub fn update_network_status(status: NetworkStatus) {
 /// Must be called while building views under a running [`App`].
 ///
 /// ```no_run
-/// use crate::runtime::use_keyboard_height;
+/// use raxon::runtime::use_keyboard_height;
 ///
 /// let kbd = use_keyboard_height();
 /// // kbd.get() → 0.0 when hidden, ~336.0 when the default keyboard is up
@@ -647,7 +647,7 @@ pub fn update_keyboard_height(height: f32) {
 /// Must be called while building views under a running [`App`].
 ///
 /// ```no_run
-/// use crate::runtime::use_safe_area_insets;
+/// use raxon::runtime::use_safe_area_insets;
 ///
 /// let insets = use_safe_area_insets();
 /// // insets.get().top → e.g. 47.0 on a notched iPhone
@@ -724,8 +724,8 @@ struct HighContrastCtx(Signal<bool>);
 /// Use [`Backdrop::System`] to auto-follow the OS light/dark appearance.
 ///
 /// ```no_run
-/// use crate::runtime::{set_backdrop, Backdrop};
-/// use crate::core::Color;
+/// use raxon::runtime::{set_backdrop, Backdrop};
+/// use raxon::core::Color;
 ///
 /// set_backdrop(Backdrop::System {
 ///     light: Color::rgb(247, 248, 251),
@@ -776,7 +776,7 @@ pub fn stop_location() {
 /// Results arrive as global `Event::MotionUpdated` on each frame tick (~60 Hz).
 ///
 /// ```no_run
-/// use crate::runtime::start_motion;
+/// use raxon::runtime::start_motion;
 ///
 /// start_motion(true, true); // enable both accelerometer and gyroscope
 /// ```
@@ -787,7 +787,7 @@ pub fn start_motion(accelerometer: bool, gyroscope: bool) {
 /// Stops CoreMotion sensor updates.
 ///
 /// ```no_run
-/// use crate::runtime::stop_motion;
+/// use raxon::runtime::stop_motion;
 ///
 /// stop_motion();
 /// ```
@@ -802,7 +802,7 @@ pub fn stop_motion() {
 /// in your app's Info.plist.
 ///
 /// ```no_run
-/// use crate::runtime::register_background_task;
+/// use raxon::runtime::register_background_task;
 ///
 /// register_background_task("com.example.app.refresh");
 /// ```
@@ -816,7 +816,7 @@ pub fn register_background_task(identifier: impl Into<String>) {
 /// system will run the task. The system may run it later.
 ///
 /// ```no_run
-/// use crate::runtime::schedule_background_task;
+/// use raxon::runtime::schedule_background_task;
 ///
 /// schedule_background_task("com.example.app.refresh", 3600.0);
 /// ```
@@ -829,10 +829,10 @@ pub fn schedule_background_task(identifier: impl Into<String>, earliest_seconds:
 /// Use this to persist navigation state (current tab, stack depth, scroll
 /// position, etc.) so it can be restored within a single app session.
 ///
-/// For persistence across app restarts, use `rax::store::store_set`.
+/// For persistence across app restarts, use `raxon::store::store_set`.
 ///
 /// ```no_run
-/// use crate::runtime::save_ui_state;
+/// use raxon::runtime::save_ui_state;
 ///
 /// save_ui_state("selected_tab", "2");
 /// ```
@@ -847,7 +847,7 @@ pub fn save_ui_state(key: impl Into<String>, value: impl Into<String>) {
 /// Returns `None` if the key was never set or was cleared.
 ///
 /// ```no_run
-/// use crate::runtime::restore_ui_state;
+/// use raxon::runtime::restore_ui_state;
 ///
 /// let tab = restore_ui_state("selected_tab").unwrap_or_else(|| "0".to_string());
 /// ```
@@ -858,7 +858,7 @@ pub fn restore_ui_state(key: impl Into<String>) -> Option<String> {
 /// Clears a UI state value saved by [`save_ui_state`].
 ///
 /// ```no_run
-/// use crate::runtime::clear_ui_state;
+/// use raxon::runtime::clear_ui_state;
 ///
 /// clear_ui_state("selected_tab");
 /// ```
@@ -1224,7 +1224,7 @@ impl App {
 /// Useful for debug overlays or crash reports.
 ///
 /// ```
-/// use crate::runtime::rax_version;
+/// use raxon::runtime::rax_version;
 ///
 /// println!("rax {}", rax_version());
 /// ```
@@ -1242,7 +1242,7 @@ pub fn rax_version() -> &'static str {
 /// e.g. throttling work to every N frames inside an effect.
 ///
 /// ```no_run
-/// use crate::runtime::current_frame;
+/// use raxon::runtime::current_frame;
 ///
 /// let frame = current_frame();
 /// if frame % 60 == 0 {
@@ -1261,7 +1261,7 @@ pub fn current_frame() -> u64 {
 /// Must be called while building views under a running [`App`].
 ///
 /// ```no_run
-/// use crate::runtime::use_frame_counter;
+/// use raxon::runtime::use_frame_counter;
 ///
 /// let frame = use_frame_counter();
 /// // frame.get() increases by 1 each tick
@@ -1288,8 +1288,8 @@ pub fn use_frame_counter() -> Signal<u64> {
 /// until `sig` has held the same value for `frames` ticks.
 ///
 /// ```no_run
-/// use crate::runtime::{debounce, use_frame_counter};
-/// use crate::reactive::create_signal;
+/// use raxon::runtime::{debounce, use_frame_counter};
+/// use raxon::reactive::create_signal;
 ///
 /// let query = create_signal(String::new());
 /// let debounced = debounce(query, 18); // ~300 ms at 60 fps
@@ -1334,8 +1334,8 @@ pub fn debounce<T: Clone + PartialEq + 'static>(sig: Signal<T>, frames: u32) -> 
 /// `frames = 6` allows at most ~10 updates per second.
 ///
 /// ```no_run
-/// use crate::runtime::throttle;
-/// use crate::reactive::create_signal;
+/// use raxon::runtime::throttle;
+/// use raxon::reactive::create_signal;
 ///
 /// let scroll = create_signal(0.0f32);
 /// let throttled = throttle(scroll, 6); // at most 10 fps of propagation

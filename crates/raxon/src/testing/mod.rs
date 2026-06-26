@@ -30,8 +30,8 @@ pub fn with_test_scope<F: FnOnce()>(f: F) {
 ///
 /// # Example
 /// ```rust,ignore
-/// use crate::reactive::create_signal;
-/// use crate::testing::assert_after_updates;
+/// use raxon::reactive::create_signal;
+/// use raxon::testing::assert_after_updates;
 ///
 /// let count = create_signal(0i32);
 /// assert_after_updates(count, vec![1, 2, 3], 3);

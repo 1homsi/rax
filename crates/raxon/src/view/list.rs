@@ -13,10 +13,10 @@ use super::view::{boxed, BoxedView, View};
 /// Rebuilds whenever `items` (the signals it reads) changes.
 ///
 /// ```
-/// # use super::view::each;
-/// # use crate::reactive::create_signal;
+/// # use raxon::view::each;
+/// # use raxon::reactive::create_signal;
 /// let items = create_signal(vec![1, 2, 3]);
-/// let _list = each(move || items.get(), |n| super::view::boxed(super::view::text(n.to_string())));
+/// let _list = each(move || items.get(), |n| raxon::view::boxed(raxon::view::text(n.to_string())));
 /// ```
 pub fn each<T, I, F>(items: I, mut render: F) -> Dynamic<impl FnMut() -> BoxedView + 'static>
 where

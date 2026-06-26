@@ -57,7 +57,7 @@ impl Color {
     ///
     /// # Example
     /// ```
-    /// use crate::core::Color;
+    /// use raxon::core::Color;
     /// let c = Color::hex(0x6750A4FF); // r=0x67, g=0x50, b=0xA4, a=0xFF
     /// ```
     pub const fn hex(rrggbbaa: u32) -> Self {

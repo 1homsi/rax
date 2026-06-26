@@ -471,7 +471,10 @@ pub trait ViewExt: View + Sized {
     ///
     /// # Example
     /// ```no_run
-    /// button("Save", on_save).disabled_opacity(move || is_saving.get())
+    /// # use raxon::prelude::*;
+    /// # let is_saving = create_signal(false);
+    /// # let on_save = || {};
+    /// button("Save", on_save).disabled_opacity(move || is_saving.get());
     /// ```
     fn disabled_opacity(
         self,
@@ -488,7 +491,10 @@ pub trait ViewExt: View + Sized {
     ///
     /// # Example
     /// ```no_run
-    /// error_label.visible_when(move || has_error.get())
+    /// # use raxon::prelude::*;
+    /// # let has_error = create_signal(false);
+    /// # let error_label = text("Something went wrong");
+    /// error_label.visible_when(move || has_error.get());
     /// ```
     fn visible_when(
         self,
@@ -507,7 +513,10 @@ pub trait ViewExt: View + Sized {
     ///
     /// # Example
     /// ```no_run
-    /// placeholder_text.hidden_when(move || has_content.get())
+    /// # use raxon::prelude::*;
+    /// # let has_content = create_signal(false);
+    /// # let placeholder_text = text("Type here…");
+    /// placeholder_text.hidden_when(move || has_content.get());
     /// ```
     fn hidden_when(
         self,
@@ -683,10 +692,14 @@ pub trait ViewExt: View + Sized {
     ///
     /// # Example
     /// ```no_run
-    /// view.style_if(move || is_selected.get(), |t, id| {
+    /// # use raxon::prelude::*;
+    /// # use raxon::dom::{Attribute, Tree, WidgetId};
+    /// # let is_selected = create_signal(false);
+    /// # let view = text("Tab");
+    /// view.style_if(move || is_selected.get(), |t: &mut Tree, id: WidgetId| {
     ///     t.set(id, Attribute::BorderWidth(2.0));
-    ///     t.set(id, Attribute::BorderColor(Color::BLUE));
-    /// })
+    ///     t.set(id, Attribute::BorderColor(Color::hex(0x4583C4ff)));
+    /// });
     /// ```
     fn style_if(
         self,
@@ -709,7 +722,12 @@ pub trait ViewExt: View + Sized {
     ///
     /// # Example
     /// ```no_run
-    /// card.dark_mode_style(|t, id| t.set(id, Attribute::BackgroundColor(Color::hex(0x1C1B1Fff))))
+    /// # use raxon::prelude::*;
+    /// # use raxon::dom::{Attribute, Tree, WidgetId};
+    /// # let card = text("Card");
+    /// card.dark_mode_style(|t: &mut Tree, id: WidgetId| {
+    ///     t.set(id, Attribute::BackgroundColor(Color::hex(0x1C1B1Fff)))
+    /// });
     /// ```
     fn dark_mode_style(
         self,

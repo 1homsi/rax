@@ -6,8 +6,8 @@
 //! lets the whole pipeline be tested on the host.
 //!
 //! ```
-//! use crate::dom::{Tree, Host, RecordingBackend, Attribute, Mutation, WidgetKind};
-//! use crate::reactive::create_signal;
+//! use raxon::dom::{Tree, Host, RecordingBackend, Attribute, Mutation, WidgetKind};
+//! use raxon::reactive::create_signal;
 //!
 //! let backend = RecordingBackend::new();
 //! let log = backend.log();
