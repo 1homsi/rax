@@ -817,8 +817,64 @@ pub enum DomWireAttribute {
     KeyboardDismissMode(String),
     ImageResizeMode(String),
     ContextMenu(Vec<DomWireMenuItem>),
+    DrawList(Vec<DomWireDrawCmd>),
     Unsupported {
         name: String,
+    },
+}
+
+/// A stroke (outline) for a [`DomWireDrawCmd`]: width + CSS color.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomWireStroke {
+    pub width: f32,
+    pub color: String,
+}
+
+/// One vector drawing command for a canvas widget, with colors as CSS strings
+/// so the JS host can paint it directly onto a `<canvas>` 2D context.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum DomWireDrawCmd {
+    Line {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        width: f32,
+        color: String,
+    },
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        fill: Option<String>,
+        stroke: Option<DomWireStroke>,
+    },
+    Circle {
+        cx: f32,
+        cy: f32,
+        r: f32,
+        fill: Option<String>,
+        stroke: Option<DomWireStroke>,
+    },
+    Path {
+        points: Vec<[f32; 2]>,
+        closed: bool,
+        fill: Option<String>,
+        stroke: Option<DomWireStroke>,
+    },
+    Text {
+        x: f32,
+        y: f32,
+        text: String,
+        size: f32,
+        color: String,
+        align: String,
     },
 }
 
@@ -1036,9 +1092,9 @@ fn dom_wire_attribute(attr: Attribute) -> DomWireAttribute {
         Attribute::ImageOnError(_) => DomWireAttribute::EventListener {
             event: "image_error".to_string(),
         },
-        Attribute::DrawList(_) => DomWireAttribute::Unsupported {
-            name: "draw_list".to_string(),
-        },
+        Attribute::DrawList(cmds) => {
+            DomWireAttribute::DrawList(cmds.into_iter().map(dom_wire_draw_cmd).collect())
+        }
         Attribute::ContextMenu(items) => {
             DomWireAttribute::ContextMenu(items.into_iter().map(dom_wire_menu_item).collect())
         }
@@ -1063,6 +1119,65 @@ fn dom_wire_menu_item(item: crate::dom::MenuItem) -> DomWireMenuItem {
         title: item.title,
         icon: item.icon,
         destructive: item.destructive,
+    }
+}
+
+fn dom_wire_stroke(stroke: crate::dom::Stroke) -> DomWireStroke {
+    DomWireStroke {
+        width: stroke.width,
+        color: color_to_css(stroke.color),
+    }
+}
+
+fn dom_wire_draw_cmd(cmd: crate::dom::DrawCmd) -> DomWireDrawCmd {
+    use crate::dom::DrawCmd;
+    match cmd {
+        DrawCmd::Line { x1, y1, x2, y2, width, color } => DomWireDrawCmd::Line {
+            x1,
+            y1,
+            x2,
+            y2,
+            width,
+            color: color_to_css(color),
+        },
+        DrawCmd::Rect { x, y, w, h, radius, fill, stroke } => DomWireDrawCmd::Rect {
+            x,
+            y,
+            w,
+            h,
+            radius,
+            fill: fill.map(color_to_css),
+            stroke: stroke.map(dom_wire_stroke),
+        },
+        DrawCmd::Circle { cx, cy, r, fill, stroke } => DomWireDrawCmd::Circle {
+            cx,
+            cy,
+            r,
+            fill: fill.map(color_to_css),
+            stroke: stroke.map(dom_wire_stroke),
+        },
+        DrawCmd::Path { points, closed, fill, stroke } => DomWireDrawCmd::Path {
+            points: points.into_iter().map(|(x, y)| [x, y]).collect(),
+            closed,
+            fill: fill.map(color_to_css),
+            stroke: stroke.map(dom_wire_stroke),
+        },
+        DrawCmd::Text { x, y, text, size, color, align } => DomWireDrawCmd::Text {
+            x,
+            y,
+            text,
+            size,
+            color: color_to_css(color),
+            align: text_align_str(align).to_string(),
+        },
+    }
+}
+
+fn text_align_str(align: crate::dom::TextAlign) -> &'static str {
+    match align {
+        crate::dom::TextAlign::Start => "left",
+        crate::dom::TextAlign::Center => "center",
+        crate::dom::TextAlign::End => "right",
     }
 }
 

@@ -3689,10 +3689,19 @@ edition = "2021"
 
 [lib]
 name = "{lib_name}"
+# staticlib -> iOS, cdylib -> Android (.so) and Web (.wasm).
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 raxon = "0.0.9"
+
+# The generated Android bridge (`raxon generate`) uses JNI; it only compiles
+# into the Android `.so`, so the dependency is gated to that target.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+# The Web bridge uses a dependency-free raw wasm ABI (no wasm-bindgen needed).
+# Build it with: cargo build --lib --release --target wasm32-unknown-unknown
 "#,
         name = name,
         lib_name = name.replace('-', "_"),

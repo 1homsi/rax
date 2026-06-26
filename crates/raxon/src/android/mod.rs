@@ -811,8 +811,64 @@ pub enum AndroidWireAttribute {
     KeyboardDismissMode(String),
     ImageResizeMode(String),
     ContextMenu(Vec<AndroidWireMenuItem>),
+    DrawList(Vec<AndroidWireDrawCmd>),
     Unsupported {
         name: String,
+    },
+}
+
+/// A stroke (outline) for an [`AndroidWireDrawCmd`]: width + ARGB color.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidWireStroke {
+    pub width: f32,
+    pub color_argb: u32,
+}
+
+/// One vector drawing command for a canvas widget, with ARGB colors so the
+/// Android host can paint it onto a `Canvas` via `Paint`.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AndroidWireDrawCmd {
+    Line {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        width: f32,
+        color_argb: u32,
+    },
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        fill_argb: Option<u32>,
+        stroke: Option<AndroidWireStroke>,
+    },
+    Circle {
+        cx: f32,
+        cy: f32,
+        r: f32,
+        fill_argb: Option<u32>,
+        stroke: Option<AndroidWireStroke>,
+    },
+    Path {
+        points: Vec<[f32; 2]>,
+        closed: bool,
+        fill_argb: Option<u32>,
+        stroke: Option<AndroidWireStroke>,
+    },
+    Text {
+        x: f32,
+        y: f32,
+        text: String,
+        size: f32,
+        color_argb: u32,
+        align: String,
     },
 }
 
@@ -1052,12 +1108,71 @@ fn android_wire_attribute(attr: Attribute) -> AndroidWireAttribute {
         Attribute::ImageOnError(_) => AndroidWireAttribute::EventListener {
             event: "image_error".to_string(),
         },
-        Attribute::DrawList(_) => AndroidWireAttribute::Unsupported {
-            name: "draw_list".to_string(),
-        },
+        Attribute::DrawList(cmds) => AndroidWireAttribute::DrawList(
+            cmds.into_iter().map(android_wire_draw_cmd).collect(),
+        ),
         Attribute::ContextMenu(items) => AndroidWireAttribute::ContextMenu(
             items.into_iter().map(android_wire_menu_item).collect(),
         ),
+    }
+}
+
+fn android_wire_stroke(stroke: crate::dom::Stroke) -> AndroidWireStroke {
+    AndroidWireStroke {
+        width: stroke.width,
+        color_argb: stroke.color.to_argb_u32(),
+    }
+}
+
+fn android_wire_draw_cmd(cmd: crate::dom::DrawCmd) -> AndroidWireDrawCmd {
+    use crate::dom::DrawCmd;
+    match cmd {
+        DrawCmd::Line { x1, y1, x2, y2, width, color } => AndroidWireDrawCmd::Line {
+            x1,
+            y1,
+            x2,
+            y2,
+            width,
+            color_argb: color.to_argb_u32(),
+        },
+        DrawCmd::Rect { x, y, w, h, radius, fill, stroke } => AndroidWireDrawCmd::Rect {
+            x,
+            y,
+            w,
+            h,
+            radius,
+            fill_argb: fill.map(Color::to_argb_u32),
+            stroke: stroke.map(android_wire_stroke),
+        },
+        DrawCmd::Circle { cx, cy, r, fill, stroke } => AndroidWireDrawCmd::Circle {
+            cx,
+            cy,
+            r,
+            fill_argb: fill.map(Color::to_argb_u32),
+            stroke: stroke.map(android_wire_stroke),
+        },
+        DrawCmd::Path { points, closed, fill, stroke } => AndroidWireDrawCmd::Path {
+            points: points.into_iter().map(|(x, y)| [x, y]).collect(),
+            closed,
+            fill_argb: fill.map(Color::to_argb_u32),
+            stroke: stroke.map(android_wire_stroke),
+        },
+        DrawCmd::Text { x, y, text, size, color, align } => AndroidWireDrawCmd::Text {
+            x,
+            y,
+            text,
+            size,
+            color_argb: color.to_argb_u32(),
+            align: android_text_align_str(align).to_string(),
+        },
+    }
+}
+
+fn android_text_align_str(align: crate::dom::TextAlign) -> &'static str {
+    match align {
+        crate::dom::TextAlign::Start => "left",
+        crate::dom::TextAlign::Center => "center",
+        crate::dom::TextAlign::End => "right",
     }
 }
 
