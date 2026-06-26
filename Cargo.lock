@@ -729,6 +729,7 @@ dependencies = [
 name = "raxon"
 version = "0.0.9"
 dependencies = [
+ "base64",
  "block2",
  "futures",
  "objc2",

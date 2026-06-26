@@ -40,8 +40,8 @@ Early but functional. A reactive multi-screen app with tab navigation, dynamic l
 | Animation (tweens, springs, keyframes) | ✅ |
 | Networking (HTTP, WebSocket, SSE) | ✅ |
 | SQLite, Keychain, local storage | ✅ |
-| Android backend | 🟡 command backend + driver + batched JSON drain |
-| Web/WASM backend | 🟡 DOM command backend + driver + batched JSON drain |
+| Android backend | 🟡 command backend + driver + batched command/event wire |
+| Web/WASM backend | 🟡 DOM command backend + driver + batched command/event wire |
 
 ## Structure
 
@@ -53,8 +53,9 @@ raxon::reactive   — signals, memos, effects, stores, context
 raxon::dom        — virtual element tree and platform seam
 raxon::view       — declarative view builder
 raxon::ios        — UIKit backend (cfg'd to iOS targets)
-raxon::android    — Android command backend, driver, and batched host drain
-raxon::web        — WebAssembly DOM command backend, driver, and batched host drain
+raxon::android    — Android command backend, driver, and host wire adapters
+raxon::web        — WebAssembly DOM command backend, driver, and host wire adapters
+raxon::wire       — versioned JSON event protocol shared by platform hosts
 raxon::runtime    — app driver: layout, events, frames
 raxon::nav        — stack/tab/modal navigation
 raxon::net        — HTTP, WebSocket, SSE, query cache

@@ -72,6 +72,8 @@ pub mod layout;
 pub mod android;
 /// WebAssembly DOM backend command queue and driver foundation.
 pub mod web;
+/// Versioned JSON wire protocol for host-originated platform events.
+pub mod wire;
 
 /// Host-side testing harness (enable the `testing` feature).
 #[cfg(feature = "testing")]

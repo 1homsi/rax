@@ -22,6 +22,12 @@ use crate::view::View;
 /// A shared queue of Android commands produced by [`AndroidBackend`].
 pub type AndroidCommandQueue = Rc<RefCell<Vec<AndroidCommand>>>;
 
+/// Host-originated Android event payload for JNI adapters.
+pub type AndroidWireEvent = crate::wire::WireEvent;
+
+/// Batch of host-originated Android events for JNI adapters.
+pub type AndroidWireEventBatch = crate::wire::WireEventBatch;
+
 /// Android view classes used by the first native backend pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AndroidViewClass {
@@ -1219,6 +1225,39 @@ impl AndroidDriver {
         self.event_sink().dispatch(event);
     }
 
+    /// Enqueues one decoded host event for delivery on the next tick.
+    pub fn dispatch_wire_event(&self, event: AndroidWireEvent) {
+        self.dispatch_event(event.into_event());
+    }
+
+    /// Decodes one JSON host event and enqueues it for delivery on the next tick.
+    pub fn dispatch_wire_event_json(
+        &self,
+        payload: &str,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        self.dispatch_wire_event(AndroidWireEvent::decode_json(payload)?);
+        Ok(())
+    }
+
+    /// Validates and enqueues a batch of decoded host events in order.
+    pub fn dispatch_wire_event_batch(
+        &self,
+        batch: AndroidWireEventBatch,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        for event in batch.into_events()? {
+            self.dispatch_event(event);
+        }
+        Ok(())
+    }
+
+    /// Decodes, validates, and enqueues a JSON host event batch in order.
+    pub fn dispatch_wire_event_batch_json(
+        &self,
+        payload: &str,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        self.dispatch_wire_event_batch(AndroidWireEventBatch::decode_json(payload)?)
+    }
+
     /// Advances one frame.
     pub fn tick(&mut self) {
         self.app.tick();
@@ -1275,6 +1314,7 @@ pub fn frame_command(id: WidgetId, rect: Rect) -> AndroidCommand {
 mod tests {
     use super::*;
     use crate::dom::{Attribute, Mutation, WidgetKind};
+    use crate::reactive::create_signal;
     use crate::view::{button, column, text};
 
     #[test]
@@ -1362,5 +1402,39 @@ mod tests {
         let encoded = batch.encode_json().expect("batch encodes as JSON");
         assert!(encoded.contains("android.widget.TextView"));
         assert!(driver.drain_command_batch().is_empty());
+    }
+
+    #[test]
+    fn driver_dispatches_wire_event_batch_in_order() {
+        let tapped = create_signal(0);
+        let tapped_for_button = tapped;
+        let mut driver = AndroidDriver::new(Size::new(320.0, 480.0), || {
+            button("Tap", move || tapped_for_button.update(|count| *count += 1))
+        });
+        let batch = driver.drain_command_batch();
+        let button_id = batch
+            .commands
+            .iter()
+            .find_map(|command| match command {
+                AndroidWireCommand::Create { id, class_name }
+                    if class_name == "android.widget.Button" =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .expect("button create command is present");
+        let events = AndroidWireEventBatch::new(vec![
+            AndroidWireEvent::Tap { target: button_id },
+            AndroidWireEvent::Tap { target: button_id },
+        ]);
+        let encoded = events.encode_json().expect("event batch encodes");
+
+        driver
+            .dispatch_wire_event_batch_json(&encoded)
+            .expect("event batch dispatches");
+        driver.tick();
+
+        assert_eq!(tapped.get(), 2);
     }
 }

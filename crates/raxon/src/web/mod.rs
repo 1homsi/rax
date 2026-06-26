@@ -22,6 +22,12 @@ use crate::view::View;
 /// A shared queue of DOM commands produced by [`WebDomBackend`].
 pub type DomCommandQueue = Rc<RefCell<Vec<DomCommand>>>;
 
+/// Host-originated web event payload for JavaScript adapters.
+pub type DomWireEvent = crate::wire::WireEvent;
+
+/// Batch of host-originated web events for JavaScript adapters.
+pub type DomWireEventBatch = crate::wire::WireEventBatch;
+
 /// DOM element kinds used by the first web backend pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DomElementKind {
@@ -1203,6 +1209,39 @@ impl WebDriver {
         self.event_sink().dispatch(event);
     }
 
+    /// Enqueues one decoded host event for delivery on the next tick.
+    pub fn dispatch_wire_event(&self, event: DomWireEvent) {
+        self.dispatch_event(event.into_event());
+    }
+
+    /// Decodes one JSON host event and enqueues it for delivery on the next tick.
+    pub fn dispatch_wire_event_json(
+        &self,
+        payload: &str,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        self.dispatch_wire_event(DomWireEvent::decode_json(payload)?);
+        Ok(())
+    }
+
+    /// Validates and enqueues a batch of decoded host events in order.
+    pub fn dispatch_wire_event_batch(
+        &self,
+        batch: DomWireEventBatch,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        for event in batch.into_events()? {
+            self.dispatch_event(event);
+        }
+        Ok(())
+    }
+
+    /// Decodes, validates, and enqueues a JSON host event batch in order.
+    pub fn dispatch_wire_event_batch_json(
+        &self,
+        payload: &str,
+    ) -> Result<(), crate::wire::WireProtocolError> {
+        self.dispatch_wire_event_batch(DomWireEventBatch::decode_json(payload)?)
+    }
+
     /// Advances one frame.
     pub fn tick(&mut self) {
         self.app.tick();
@@ -1260,6 +1299,7 @@ pub fn frame_command(id: WidgetId, rect: Rect) -> DomCommand {
 mod tests {
     use super::*;
     use crate::dom::{Attribute, Mutation, WidgetKind};
+    use crate::reactive::create_signal;
     use crate::view::{button, column, text};
 
     #[test]
@@ -1350,5 +1390,35 @@ mod tests {
         let encoded = batch.encode_json().expect("batch encodes as JSON");
         assert!(encoded.contains("\"tag_name\":\"span\""));
         assert!(driver.drain_command_batch().is_empty());
+    }
+
+    #[test]
+    fn driver_dispatches_wire_event_batch_in_order() {
+        let tapped = create_signal(0);
+        let tapped_for_button = tapped;
+        let mut driver = WebDriver::new(Size::new(320.0, 480.0), || {
+            button("Tap", move || tapped_for_button.update(|count| *count += 1))
+        });
+        let batch = driver.drain_command_batch();
+        let button_id = batch
+            .commands
+            .iter()
+            .find_map(|command| match command {
+                DomWireCommand::Create { id, tag_name, .. } if tag_name == "button" => Some(*id),
+                _ => None,
+            })
+            .expect("button create command is present");
+        let events = DomWireEventBatch::new(vec![
+            DomWireEvent::Tap { target: button_id },
+            DomWireEvent::Tap { target: button_id },
+        ]);
+        let encoded = events.encode_json().expect("event batch encodes");
+
+        driver
+            .dispatch_wire_event_batch_json(&encoded)
+            .expect("event batch dispatches");
+        driver.tick();
+
+        assert_eq!(tapped.get(), 2);
     }
 }
