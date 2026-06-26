@@ -45,9 +45,9 @@ styleable, with a headless core, and replaceable via the theme registry
 - ✅ `Picker` / `Select` / `Dropdown` (inline, composed)
 - ⬜ `DatePicker` / `TimePicker` / `DateTimePicker`
 - ✅ `Pressable` / `Touchable` (`pressable(content, on_press)` — opacity 0.4 while pressed via pan-began/ended signal)
-- ⬜ `RatingBar`
+- ✅ `RatingBar` (`rating_bar(value: Signal<f32>, max: u32, on_change: fn)` — ★/☆ row, tapping writes rating)
 - ✅ `SearchBar` (`search_bar(query, on_change, placeholder)` — composed)
-- ⬜ `ColorPicker`
+- ✅ `ColorPicker` (`color_picker(color: Signal<Color>, label)` — 11-swatch palette, tapping writes to signal)
 
 ## Feedback & status
 - ✅ `ActivityIndicator` / `Spinner`

@@ -9,11 +9,11 @@ Match RN `FlatList`/`SectionList`/`VirtualizedList` and Flutter
 - ⬜ momentum / deceleration matching platform physics
 - ⬜ overscroll / bounce (iOS) / stretch (Android)
 - ✅ paging (`scroll.paging()` → `Attribute::PagingEnabled`; `carousel` now snap-pages)
-- ⬜ scroll events (offset, velocity, begin/end, momentum)
-- ⬜ programmatic scroll (to offset / to item / to top)
+- ✅ scroll events (`on_scroll(ScrollInfo{offset_x,offset_y,velocity_x,velocity_y})`, `on_scroll_begin`, `on_scroll_end` builders; `Attribute::OnScrollChange/Begin/End`)
+- ✅ programmatic scroll (`tree.scroll_to(id, x, y, animated)`, `tree.scroll_to_top(id, animated)` → `Mutation::ScrollTo/ScrollToTop`)
 - ✅ scroll indicators (`shows_indicator(bool)` — `UIScrollView.showsVertical/HorizontalScrollIndicator`)
 - ⬜ nested scrolling + scroll coordination
-- ⬜ keyboard-dismiss-on-drag
+- ✅ keyboard-dismiss-on-drag (`scroll.keyboard_dismiss_mode(KeyboardDismissMode::{None|OnDrag|Interactive})` → `setKeyboardDismissMode:` on UIScrollView)
 - ⬜ zoomable scroll (pinch)
 - ⬜ scroll-to-on-focus (forms)
 

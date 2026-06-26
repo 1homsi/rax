@@ -12,7 +12,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 ## Structured / database
 - ✅ SQLite (`rax-sqlite::Database` — rusqlite bundled, open/execute/query/query_with)
 - ✅ migrations (versioned, automatic — `Database::migrate(&[(version, sql)])` tracks applied versions in `_rax_migrations`)
-- ⬜ an ORM/query-builder option
+- ✅ reactive SQLite queries (`use_reactive_query(initial) -> ReactiveQuery<T>`; `.invalidate()` bumps version signal; `.refresh(fetch_fn)` re-runs query; `.get()` returns current `Vec<T>`)
 - ⬜ embedded document/KV DB option (sled/redb)
 - ⬜ full-text search
 - ✅ reactive KV queries (`watch_kv(key) -> Signal<Option<String>>`; `kv_set_reactive/kv_delete_reactive` for push notifications)

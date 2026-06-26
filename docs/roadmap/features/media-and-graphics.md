@@ -6,14 +6,14 @@ Match RN Image/`expo-av`/`react-native-svg` and Flutter's image/canvas/painting.
 ## Images
 - 🟡 sources: network, bundled asset, local file, data-URI, memory
 - ⬜ async decode off the UI thread
-- ⬜ in-memory + disk cache, cache control, prefetch
-- ⬜ resize modes (cover/contain/stretch/center/repeat)
+- ✅ in-memory image cache (`cache_image`, `get_cached_image`, `fetch_image`, `clear_image_cache` in rax-net — skip-on-hit)
+- ✅ resize modes (`image.resize_mode(ImageResizeMode::{Cover|Contain|Stretch|Center|Repeat})` → `setContentMode:` UIViewContentMode)
 - ⬜ placeholder + fade-in, blurhash/thumbhash, progressive
 - ⬜ priority, cancellation, retry
 - 🟡 tint/recolor, rounded corners, borders
 - ⬜ animated formats (GIF/APNG/animated WebP)
 - ⬜ HDR / wide-gamut, downsampling, density-aware `@2x/@3x`
-- ⬜ error/loading callbacks
+- ✅ error/loading callbacks (`image.on_load(fn)` → `Attribute::ImageOnLoad`; `image.on_error(fn)` → `Attribute::ImageOnError`; UIKit delegate wiring TODO)
 
 ## Vector & drawing
 - ⬜ SVG rendering

@@ -17,15 +17,15 @@ surgical. ✅ · 🟡 · ⬜.
 
 ## App-state patterns
 - ✅ global stores + scoped stores (`Store<S>` is `Copy` — pass it anywhere; `provide_context(store)` for scoped)
-- ⬜ actions/reducers pattern (opt-in, Elm/Redux-style) on top of signals
+- ✅ actions/reducers pattern (`Reducer` trait, `ReducerStore<S>{get/dispatch/signal}`, `use_reducer(initial)` — opt-in Elm/Redux style on top of signals)
 - ✅ middleware / interceptors (`add_signal_middleware(fn(type_name, value))` — `notify_middlewares` called on set/update; `clear_signal_middlewares`)
 - ✅ selectors with memoization (`store.select(fn) -> Memo<U>` — glitch-free derived memos)
-- ⬜ transactions / batched commits
-- ⬜ optimistic updates + rollback
+- ✅ transactions / batched commits (`transaction(|| { ... })` alias for `batch` — exported for discoverability)
+- ✅ optimistic updates + rollback (`store.optimistic_update(mutate_fn) -> rollback_fn` — snapshots state, applies mutation, returns closure to revert)
 
 ## Async & concurrency
 - ⬜ suspense / transitions (pending UI without tearing)
-- ⬜ async derivations, debounce/throttle helpers
+- ✅ async derivations (`AsyncState<T>{Loading|Ready(T)|Error(String)}`, `create_async_derived(fut_fn)`, `create_deferred<T>() -> (Signal<AsyncState<T>>, resolve_fn)`); ⬜ debounce/throttle helpers
 - ⬜ cross-thread signal writes marshaled to the UI thread (scheduler)
 - ⬜ cancellation tied to ownership scopes
 
