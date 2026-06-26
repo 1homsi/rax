@@ -120,6 +120,37 @@ where
     dynamic(move || render(nav.top()))
 }
 
+/// A push/pop stack navigator that creates and provides its own [`Navigator`]
+/// — the batteries-included form of [`create_navigator`] + [`routes`].
+///
+/// `initial` is the root route; `render` maps the current top route to a view.
+/// Descendant screens reach the navigator with
+/// [`use_navigator::<R>()`](use_navigator) to `push` / `pop`. Use this when you
+/// just want "a screen stack" without wiring the navigator by hand.
+///
+/// ```
+/// use raxon::nav::{stack, use_navigator};
+/// use raxon::view::{boxed, button, text};
+///
+/// #[derive(Clone)]
+/// enum Route { List, Detail(u32) }
+///
+/// let view = stack(Route::List, |route| match route {
+///     Route::List => boxed(button("Open #7", || {
+///         if let Some(nav) = use_navigator::<Route>() { nav.push(Route::Detail(7)); }
+///     })),
+///     Route::Detail(id) => boxed(text(format!("Item {id}"))),
+/// });
+/// ```
+pub fn stack<R, F>(initial: R, render: F) -> impl View
+where
+    R: Clone + 'static,
+    F: FnMut(R) -> BoxedView + 'static,
+{
+    let nav = create_navigator(initial);
+    routes(nav, render)
+}
+
 // ---------------------------------------------------------------------------
 // NavigationTransition — animated screen enter/exit
 // ---------------------------------------------------------------------------

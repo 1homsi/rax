@@ -65,9 +65,9 @@ pub use composite::{
     item_separator, keyboard_avoiding_view, lazy_column, lazy_row, list_with_header, modal,
     multi_select, network_image, pan_animation, pdf_view, picker, pressable, radio, rating_bar,
     reactive_list, reorderable_list, search_bar, section_list, segmented_control, skeleton,
-    status_bar, status_bar_spacer, sticky_header, swipe_actions, tab_bar, toast, tooltip, wrap,
-    AccordionSection, Avatar, Badge, BannerKind, Card, Checkbox, Chip, Radio, Section, Skeleton,
-    TabItem,
+    status_bar, status_bar_spacer, sticky_header, swipe_actions, tab, tab_bar, tabs, toast,
+    tooltip, wrap, AccordionSection, Avatar, Badge, BannerKind, Card, Checkbox, Chip, Radio,
+    Section, Skeleton, TabItem,
 };
 pub use web_view::{web_view, web_view_html, WebView};
 pub use container::{column, row, stack, Container, Stack};

@@ -762,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "raxon"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "block2",
  "futures",

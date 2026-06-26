@@ -2022,6 +2022,39 @@ pub fn tab_bar(tabs: Vec<TabItem>, selected: Signal<usize>) -> impl View {
     ))
 }
 
+/// Build a [`TabItem`] from a label, an icon name, and its content view — the
+/// terse form used with [`tabs`].
+///
+/// ```
+/// use super::view::{tab, text};
+/// let t = tab("Home", "house", text("Welcome"));
+/// ```
+pub fn tab(
+    label: impl Into<String>,
+    icon: impl Into<String>,
+    content: impl View + 'static,
+) -> TabItem {
+    TabItem::new(label, content).icon(icon)
+}
+
+/// A bottom-tab navigator that manages its own selection state — the
+/// batteries-included form of [`tab_bar`]. Pass a list of [`tab`]s; the first
+/// is selected initially. Use this when you don't need to drive the selected
+/// index yourself.
+///
+/// ```
+/// use super::view::{tabs, tab, text};
+///
+/// let view = tabs(vec![
+///     tab("Sell", "creditcard", text("Sell")),
+///     tab("Orders", "list.bullet", text("Orders")),
+/// ]);
+/// ```
+pub fn tabs(items: Vec<TabItem>) -> impl View {
+    let selected = create_signal(0usize);
+    tab_bar(items, selected)
+}
+
 // ---------------------------------------------------------------------------
 // SegmentedControl
 // ---------------------------------------------------------------------------

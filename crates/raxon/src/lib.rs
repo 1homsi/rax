@@ -111,7 +111,7 @@ pub mod prelude {
     };
     pub use crate::intl::{t, t_args, t_plural};
     pub use crate::nav::{
-        create_navigator, routes, transition_routes, use_navigator, NavigationTransition,
+        create_navigator, routes, stack, transition_routes, use_navigator, NavigationTransition,
         Navigator,
     };
     pub use crate::store::{persisted, store_get, store_set};
