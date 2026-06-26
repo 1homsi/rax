@@ -6,7 +6,7 @@ Native-quality text. Goal: match Flutter's `RichText`/`TextSpan` power and RN's
 ## Basic text
 - ✅ string + reactive text content
 - ✅ font size, color
-- 🟡 font family, weight, style (italic)
+- ✅ font family, weight, style (`.font_style(FontStyle::Italic/Normal/Oblique)` → `Attribute::FontStyle`)
 - ✅ line height, letter spacing (`.line_height(f32)`, `.letter_spacing(f32)` builders; NSParagraphStyle/NSKern on iOS)
 - 🟡 text alignment (start/center/end/justify)
 - ⬜ truncation / ellipsis (head/middle/tail), max lines
@@ -14,7 +14,7 @@ Native-quality text. Goal: match Flutter's `RichText`/`TextSpan` power and RN's
 - ✅ text decoration (`.underline()`, `.strikethrough()` → `TextDecoration` attribute; NSUnderlineStyle on iOS)
 - ⬜ text transform (uppercase/lowercase/capitalize)
 - ✅ text shadow (`.text_shadow(color, offset_x, offset_y, blur)` → `NSShadow` on iOS)
-- ⬜ selectable text (copy/select)
+- ✅ selectable text (`.selectable(bool)` → `Attribute::UserSelectText(bool)` → `setUserInteractionEnabled:`)
 
 ## Rich text
 - ✅ spans / `TextSpan` (`rich_text().span(TextSpan::new(text).bold().color(…).underline().letter_spacing(f)`) — NSAttributedString)

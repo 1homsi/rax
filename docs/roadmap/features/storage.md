@@ -6,7 +6,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 ## Key-value
 - ✅ simple async KV store (prefs) — typed
 - ⬜ fast synchronous KV (MMKV-style)
-- ⬜ namespaced / scoped stores
+- ✅ namespaced / scoped stores (`KvNamespace::new(prefix)` — `.set/.get/.keys/.clear/.persisted()`; keys stored as `"<ns>.<key>"`)
 - ✅ reactive storage (persisted signals)
 
 ## Structured / database
@@ -15,7 +15,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 - ⬜ an ORM/query-builder option
 - ⬜ embedded document/KV DB option (sled/redb)
 - ⬜ full-text search
-- ⬜ reactive queries (live results as signals)
+- ✅ reactive KV queries (`watch_kv(key) -> Signal<Option<String>>`; `kv_set_reactive/kv_delete_reactive` for push notifications)
 
 ## Files & blobs
 - ✅ file system access (`rax-fs`: `app_documents_dir/cache_dir/temp_dir/support_dir`; `read_text/bytes`, `write_text/bytes`, `append_text`, `delete_file`, `list_files`, `exists`, `file_size`, `create_dir`)
@@ -23,7 +23,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 - ⬜ blob/asset storage + image cache integration
 
 ## Secure & sensitive
-- ⬜ secure storage (Keychain / Keystore)
+- ✅ secure storage (`rax-keychain`: `set_secret/get_secret/delete_secret` — Security.framework SecItem* on iOS; in-memory fallback on other platforms)
 - ⬜ encryption at rest
 - ⬜ biometric-gated storage
 

@@ -499,6 +499,24 @@ pub enum Attribute {
     /// Italic / oblique style for a text label.
     /// Maps to `UIFont.italicSystemFont` or a slanted variant on iOS.
     FontStyle(FontStyle),
+    /// Group this element's children into a single accessibility container.
+    /// When `true`, the view itself is not an accessibility element but its
+    /// children are grouped. Maps to `isAccessibilityElement = false` on iOS.
+    AccessibilityGroup(bool),
+    /// Heading level for this element (1–6). When `level > 0`, adds the
+    /// `UIAccessibilityTraitHeader` bitmask (0x10000) to the view's traits.
+    /// Level 0 means no heading.
+    AccessibilityHeadingLevel(u8),
+    /// Named custom accessibility actions to expose on this element.
+    /// Each string becomes a `UIAccessibilityCustomAction` (stub on iOS for now).
+    AccessibilityActions(Vec<String>),
+    /// When `true`, the view's font adjusts for the user's preferred content
+    /// size category (Dynamic Type). Maps to
+    /// `adjustsFontForContentSizeCategory = true` on iOS.
+    DynamicType(bool),
+    /// A string read by VoiceOver as the element's current value (e.g. "50%"
+    /// for a progress indicator). Maps to `accessibilityValue` on iOS.
+    AccessibilityValueString(String),
 }
 
 /// The visual style of the iOS status bar.
@@ -888,5 +906,17 @@ pub enum Mutation {
     ShareText {
         /// The text to share.
         text: String,
+    },
+    /// Post an accessibility announcement via `UIAccessibilityPostNotification`.
+    /// VoiceOver reads the message immediately, interrupting any in-progress speech.
+    AnnounceAccessibility {
+        /// The string to announce.
+        message: String,
+    },
+    /// Move VoiceOver focus to the native view backing `id`.
+    /// Maps to `UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, view)`.
+    RequestFocus {
+        /// The widget to focus.
+        id: WidgetId,
     },
 }

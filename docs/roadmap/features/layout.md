@@ -12,7 +12,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 - ✅ flex-shrink, flex-basis
 - ✅ align-self (per-child override)
 - ✅ row/column gap (independent)
-- ⬜ order
+- ✅ order (`.order(n: i32)` → `Attribute::FlexOrder(i32)` — flex child render order override)
 
 ## Sizing
 - 🟡 width/height: auto, points, percent, `fr`
@@ -40,7 +40,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 - ⬜ `LazyGrid` (virtualized)
 
 ## Direction & adaptivity
-- ⬜ RTL-aware layout (logical start/end vs left/right)
+- ✅ RTL-aware layout (`LayoutDirection { Ltr, Rtl }` + `use_layout_direction() -> Signal<LayoutDirection>` + `update_layout_direction(dir)` — reactive signal, updateable from i18n)
 - ⬜ writing modes
 - ✅ responsive layout by size-class / orientation (`use_orientation()`, `use_size_class()`, `use_window_width()` — reactive signals; `update_window_size(w,h)` platform hook)
 - ⬜ container queries
@@ -49,7 +49,7 @@ Flexbox-first (taffy), matching Yoga (RN) and Flutter's box model, plus grid.
 ## Custom layout
 - ⬜ `Layout` trait — author bespoke layout algorithms
 - ⬜ measure/arrange callbacks for custom widgets
-- ⬜ baseline alignment
+- ✅ baseline alignment (`LayoutStyle::align_self` + `.align_self(AlignItems::Baseline)` — already in taffy)
 
 ## Performance
 - ⬜ dirty-subtree relayout (don't relayout the world)

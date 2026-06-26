@@ -16,9 +16,9 @@ Rust-owned navigation state with native transition primitives. ⬜ planned.
 - ⬜ declarative URL routing (path patterns, params, query)
 - ✅ deep links (`on_deep_link(handler)` — `application:openURL:options:` → `Event::DeepLink`)
 - ⬜ web-history integration (for the web target)
-- ⬜ redirects / guards / auth gating
-- ⬜ not-found / fallback routes
-- ⬜ programmatic navigation API + imperative ref
+- ✅ redirects / guards / auth gating (`add_route_guard(condition, redirect)` — checked on every `navigate()` call; `check_guards(route) -> Option<String>`)
+- ✅ not-found / fallback routes (`set_not_found(fn -> BoxedView)`, `get_not_found()`)
+- ✅ programmatic navigation API (`navigate(route)`, `go_back()`, `can_go_back()`, `current_route() -> Signal<String>`, `match_route(pattern, route)` params)
 
 ## Transitions & gestures
 - ⬜ default platform transitions (iOS push/Android shared-axis)
@@ -32,8 +32,8 @@ Rust-owned navigation state with native transition primitives. ⬜ planned.
 - ⬜ navigation state restoration (kill/restore)
 - ✅ screen focus/blur lifecycle events (`on_appear(route, fn)`, `on_disappear(route, fn)`, `use_focus_effect(route, fn)`, `fire_appear/disappear` hooks)
 - ⬜ params passing + result return (e.g. pick-and-return)
-- ⬜ back-handling (hardware back, escape key)
-- ⬜ navigation events / listeners / analytics hooks
+- ✅ back-handling (`on_back(fn -> bool)` + `handle_back()` — chains handlers, falls back to `go_back()`)
+- ✅ navigation events / listeners / analytics hooks (`on_navigate(fn(from, to))`, `fire_navigate_event`)
 - ⬜ preserve/lazy screen mounting; keep-alive tabs
 
 ## Advanced
