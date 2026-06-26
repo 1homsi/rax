@@ -1536,13 +1536,42 @@ mod tests {
         let encoded = DomWireEventBatch::new(vec![DomWireEvent::Tap { target: button_id }])
             .encode_json()
             .expect("event batch encodes");
-
-        let commands = registry
-            .dispatch_events_tick_and_drain_command_batch_json(handle, &encoded)
+        let event_batch = DomWireEventBatch::decode_json(&encoded).expect("event batch decodes");
+        let request = crate::host::HostBridgeRequest::DispatchEventsTickAndDrainCommandBatch {
+            handle: handle.to_raw(),
+            batch: event_batch,
+        };
+        let response = registry
+            .handle_request_json(
+                &serde_json::to_string(&crate::host::HostBridgeJsonRequest::new(request))
+                    .expect("request encodes"),
+            )
             .expect("registry dispatches into session");
+        let response: crate::host::HostBridgeJsonResponse =
+            serde_json::from_str(&response).expect("response decodes");
+        match response.response {
+            crate::host::HostBridgeResponse::CommandBatch { batch } => {
+                assert!(batch.to_string().contains("\"Count 1\""));
+            }
+            _ => panic!("expected command batch response"),
+        }
 
-        assert!(commands.contains("\"Count 1\""));
-        assert!(registry.remove(handle).is_some());
+        let destroy = crate::host::HostBridgeRequest::Destroy {
+            handle: handle.to_raw(),
+        };
+        let response = registry
+            .handle_request_json(
+                &serde_json::to_string(&crate::host::HostBridgeJsonRequest::new(destroy))
+                    .expect("request encodes"),
+            )
+            .expect("destroy request succeeds");
+        assert_eq!(
+            serde_json::from_str::<crate::host::HostBridgeJsonResponse>(&response)
+                .expect("response decodes"),
+            crate::host::HostBridgeJsonResponse::new(crate::host::HostBridgeResponse::Destroyed {
+                handle: handle.to_raw(),
+            })
+        );
         assert_eq!(
             registry.tick(handle),
             Err(crate::host::HostSessionError::UnknownSession {
