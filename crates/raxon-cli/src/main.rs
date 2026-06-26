@@ -5,7 +5,8 @@
 //!   rax doctor                            Print environment diagnostic info
 //!   rax build [--target <ios-sim|ios|android|web|macos>] [--dry-run]
 //!                                         Build or print a platform target
-//!   rax run [--target <ios-sim|ios>]      Print the cargo build + Xcode run steps
+//!   rax run [--target <ios-sim|ios|android|web>] [--dry-run]
+//!                                         Build and run a platform host
 //!   rax test [-- <args>]                  Run cargo test, forwarding extra args
 //!   rax lint                              Run cargo clippy --all-targets
 //!   rax fmt [--check]                     Run cargo fmt (or check formatting)
@@ -64,8 +65,20 @@ fn main() {
             run_build(&options);
         }
         Some("run") => {
-            let target = parse_target_flag(&args, "ios-sim");
-            run_run(&target);
+            if args
+                .iter()
+                .skip(2)
+                .any(|arg| arg == "--help" || arg == "-h")
+            {
+                println!("{}", run_usage());
+                return;
+            }
+            let options = parse_run_options(&args).unwrap_or_else(|error| {
+                eprintln!("{error}");
+                eprintln!("Usage: rax run [--target ios-sim|ios|android|web] [--dry-run]");
+                process::exit(1);
+            });
+            run_run(&options);
         }
         Some("test") => {
             // Collect everything after an optional "--" separator, or any
@@ -145,7 +158,7 @@ fn print_help() {
     println!("    new <name>                Create a new raxon app project");
     println!("    doctor                    Print environment diagnostic info");
     println!("    build [--target <TARGET>] Build a Rust library for a platform target");
-    println!("    run   [--target <TARGET>] Print the run steps for a target");
+    println!("    run   [--target <TARGET>] Build and run a platform host");
     println!("    test  [-- <args>]         Run cargo test, forwarding extra args");
     println!("    lint                      Run cargo clippy --all-targets");
     println!("    fmt   [--check]           Run cargo fmt (or --check to only verify)");
@@ -303,6 +316,8 @@ impl Default for BuildOptions {
 struct CommandSpec {
     program: String,
     args: Vec<String>,
+    cwd: Option<PathBuf>,
+    env: Vec<(String, String)>,
 }
 
 impl CommandSpec {
@@ -310,6 +325,8 @@ impl CommandSpec {
         CommandSpec {
             program: program.into(),
             args: Vec::new(),
+            cwd: None,
+            env: Vec::new(),
         }
     }
 
@@ -325,12 +342,39 @@ impl CommandSpec {
         self.args.extend(args.into_iter().map(Into::into));
     }
 
+    fn cwd(&mut self, cwd: impl Into<PathBuf>) {
+        self.cwd = Some(cwd.into());
+    }
+
+    fn env(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.env.push((key.into(), value.into()));
+    }
+
     fn display(&self) -> String {
-        std::iter::once(self.program.as_str())
+        let command = std::iter::once(self.program.as_str())
             .chain(self.args.iter().map(String::as_str))
             .map(shell_escape)
             .collect::<Vec<_>>()
-            .join(" ")
+            .join(" ");
+        let env = self
+            .env
+            .iter()
+            .map(|(key, value)| format!("{key}={}", shell_escape(value)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let command = if env.is_empty() {
+            command
+        } else {
+            format!("{env} {command}")
+        };
+        if let Some(cwd) = &self.cwd {
+            format!(
+                "cd {} && {command}",
+                shell_escape(&cwd.display().to_string())
+            )
+        } else {
+            command
+        }
     }
 }
 
@@ -372,6 +416,8 @@ struct CargoProjectInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GeneratedBindingInfo {
     android_library: Option<String>,
+    android_package: Option<String>,
+    android_activity: Option<String>,
     web_wasm_module: Option<String>,
 }
 
@@ -668,13 +714,17 @@ fn build_post_actions(
 }
 
 fn execute_command(command: &CommandSpec) -> Result<(), i32> {
-    let status = Command::new(&command.program)
+    let mut process = Command::new(&command.program);
+    process
         .args(&command.args)
-        .status()
-        .map_err(|error| {
-            eprintln!("failed to run {}: {error}", command.program);
-            1
-        })?;
+        .envs(command.env.iter().cloned());
+    if let Some(cwd) = &command.cwd {
+        process.current_dir(cwd);
+    }
+    let status = process.status().map_err(|error| {
+        eprintln!("failed to run {}: {error}", command.program);
+        1
+    })?;
     if status.success() {
         Ok(())
     } else {
@@ -871,6 +921,14 @@ fn read_generated_binding_info(generated_dir: &Path) -> Option<GeneratedBindingI
             .pointer("/android/library")
             .and_then(Value::as_str)
             .map(ToString::to_string),
+        android_package: value
+            .pointer("/android/package")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        android_activity: value
+            .pointer("/android/activity")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
         web_wasm_module: value
             .pointer("/web/wasmModule")
             .and_then(Value::as_str)
@@ -892,34 +950,358 @@ fn shell_escape(value: &str) -> String {
 // run
 // ---------------------------------------------------------------------------
 
-fn run_run(target: &str) {
-    let cargo_triple = target_to_triple(target);
-    if cargo_triple.is_empty() || (target != "ios-sim" && target != "ios") {
-        if target == "android" || target == "web" || target == "macos" {
-            eprintln!("'rax run' currently supports ios-sim and ios targets only.");
-            eprintln!(
-                "For {} use 'rax build --target {}' and deploy manually.",
-                target, target
-            );
-            process::exit(1);
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RunOptions {
+    target: String,
+    build: BuildOptions,
+    dry_run: bool,
+    no_build: bool,
+    host: String,
+    port: u16,
+    android_gradle_task: String,
+    launch_android: bool,
+}
+
+impl Default for RunOptions {
+    fn default() -> Self {
+        let build = BuildOptions::default();
+        RunOptions {
+            target: build.target.clone(),
+            build,
+            dry_run: false,
+            no_build: false,
+            host: "127.0.0.1".to_string(),
+            port: 5173,
+            android_gradle_task: ":app:installDebug".to_string(),
+            launch_android: true,
         }
-        eprintln!("Unknown target: {}", target);
-        eprintln!("Valid targets for run: ios-sim, ios");
-        process::exit(1);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RunPlan {
+    target: String,
+    build: Option<BuildPlan>,
+    commands: Vec<CommandSpec>,
+    notes: Vec<String>,
+}
+
+fn run_usage() -> String {
+    [
+        "Usage: rax run [options]",
+        "",
+        "Options:",
+        "  --target ios-sim|ios|android|web      Platform target (default: ios-sim)",
+        "  --release                             Build optimized artifacts (default)",
+        "  --debug                               Build debug artifacts",
+        "  --profile debug|release               Build profile",
+        "  --package, -p <name>                  Cargo package to build",
+        "  --manifest-path <path>                Cargo manifest to build",
+        "  --target-dir <dir>                    Cargo target directory",
+        "  --generated-dir <dir>                 rax generate output dir (default: generated)",
+        "  --out <path>                          Copy final platform artifact to path/dir",
+        "  --lib-name <name>                     Native library/wasm artifact stem",
+        "  --android-library <name>              Alias for --lib-name on Android",
+        "  --host <host>                         Web dev server host (default: 127.0.0.1)",
+        "  --port <port>                         Web dev server port (default: 5173)",
+        "  --android-gradle-task <task>           Gradle task for Android run (default: :app:installDebug)",
+        "  --no-launch                           Install/build Android but skip adb launch",
+        "  --no-build                            Skip cargo build and artifact copy",
+        "  --no-copy                             Build only; skip generated host artifact copy",
+        "  --dry-run, --print                    Print the run plan without executing it",
+        "",
+        "Environment:",
+        "  RAXON_CARGO                           Cargo binary used for nested builds",
+        "  RUSTC                                 Rust compiler used by cargo and target preflight",
+    ]
+    .join("\n")
+}
+
+fn parse_run_options(args: &[String]) -> Result<RunOptions, String> {
+    let mut options = RunOptions::default();
+    let mut iter = args.iter().skip(2).peekable();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--target" | "-t" => {
+                options.target = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --target".to_string())?
+                    .clone();
+            }
+            "--release" => {
+                options.build.profile = BuildProfile::Release;
+            }
+            "--debug" => {
+                options.build.profile = BuildProfile::Debug;
+            }
+            "--profile" => {
+                let profile = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --profile".to_string())?;
+                options.build.profile = match profile.as_str() {
+                    "debug" | "dev" => BuildProfile::Debug,
+                    "release" => BuildProfile::Release,
+                    other => return Err(format!("Unknown run profile '{other}'")),
+                };
+            }
+            "--package" | "-p" => {
+                options.build.package = Some(
+                    iter.next()
+                        .ok_or_else(|| "Missing value for --package".to_string())?
+                        .clone(),
+                );
+            }
+            "--manifest-path" => {
+                options.build.manifest_path =
+                    Some(PathBuf::from(iter.next().ok_or_else(|| {
+                        "Missing value for --manifest-path".to_string()
+                    })?));
+            }
+            "--target-dir" => {
+                options.build.target_dir =
+                    Some(PathBuf::from(iter.next().ok_or_else(|| {
+                        "Missing value for --target-dir".to_string()
+                    })?));
+            }
+            "--generated-dir" => {
+                options.build.generated_dir = PathBuf::from(
+                    iter.next()
+                        .ok_or_else(|| "Missing value for --generated-dir".to_string())?,
+                );
+            }
+            "--out" => {
+                options.build.out = Some(PathBuf::from(
+                    iter.next()
+                        .ok_or_else(|| "Missing value for --out".to_string())?,
+                ));
+            }
+            "--lib-name" | "--android-library" => {
+                options.build.lib_name = Some(
+                    iter.next()
+                        .ok_or_else(|| format!("Missing value for {arg}"))?
+                        .clone(),
+                );
+            }
+            "--host" => {
+                options.host = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --host".to_string())?
+                    .clone();
+            }
+            "--port" => {
+                let value = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --port".to_string())?;
+                options.port = value
+                    .parse::<u16>()
+                    .map_err(|_| "--port must be a number between 0 and 65535".to_string())?;
+            }
+            "--android-gradle-task" => {
+                options.android_gradle_task = iter
+                    .next()
+                    .ok_or_else(|| "Missing value for --android-gradle-task".to_string())?
+                    .clone();
+            }
+            "--no-launch" => {
+                options.launch_android = false;
+            }
+            "--no-build" => {
+                options.no_build = true;
+            }
+            "--copy" => {
+                options.build.copy_artifacts = true;
+            }
+            "--no-copy" => {
+                options.build.copy_artifacts = false;
+            }
+            "--dry-run" | "--print" => {
+                options.dry_run = true;
+            }
+            "--help" | "-h" => return Err(run_usage()),
+            other => return Err(format!("Unknown run option '{other}'")),
+        }
+    }
+    if !matches!(
+        options.target.as_str(),
+        "ios-sim" | "ios" | "android" | "web"
+    ) {
+        return Err(format!(
+            "Unknown run target: {}. Valid targets: ios-sim, ios, android, web",
+            options.target
+        ));
+    }
+    options.build.target = options.target.clone();
+    options.build.dry_run = options.dry_run;
+    Ok(options)
+}
+
+fn run_run(options: &RunOptions) {
+    if matches!(options.target.as_str(), "ios-sim" | "ios") {
+        print_ios_run_steps(&options.target);
+        return;
     }
 
+    let plan = create_run_plan(options).unwrap_or_else(|error| {
+        eprintln!("Failed to plan run: {error}");
+        process::exit(1);
+    });
+    print_run_plan(&plan, options.dry_run);
+    if options.dry_run {
+        return;
+    }
+
+    if let Some(build) = &plan.build {
+        if let Err(error) = ensure_target_std_available(&build.triple) {
+            eprintln!("{error}");
+            process::exit(1);
+        }
+        execute_command(&build.cargo).unwrap_or_else(|code| process::exit(code));
+        if options.build.copy_artifacts {
+            if let Err(error) = execute_post_actions(&build.post_actions) {
+                eprintln!("Build finished, but post-processing failed: {error}");
+                process::exit(1);
+            }
+        }
+    }
+    for command in &plan.commands {
+        execute_command(command).unwrap_or_else(|code| process::exit(code));
+    }
+}
+
+fn create_run_plan(options: &RunOptions) -> Result<RunPlan, String> {
+    let build = if options.no_build {
+        None
+    } else {
+        Some(create_build_plan(&options.build)?)
+    };
+    let mut commands = Vec::new();
+    let mut notes = Vec::new();
+    match options.target.as_str() {
+        "web" => {
+            let web_dir = options.build.generated_dir.join("web");
+            let dev_server = web_dir.join("dev-server.mjs");
+            if !dev_server.exists() {
+                notes.push(format!(
+                    "Expected generated Web shell at {}; run `rax generate --target web --out {}` first.",
+                    dev_server.display(),
+                    options.build.generated_dir.display()
+                ));
+            }
+            let mut command = CommandSpec::new("node");
+            command.arg("./dev-server.mjs");
+            command.cwd(web_dir);
+            command.env("HOST", &options.host);
+            command.env("PORT", options.port.to_string());
+            commands.push(command);
+        }
+        "android" => {
+            let android_dir = options.build.generated_dir.join("android");
+            if !android_dir.join("settings.gradle.kts").exists() {
+                notes.push(format!(
+                    "Expected generated Android project at {}; run `rax generate --target android --out {}` first.",
+                    android_dir.display(),
+                    options.build.generated_dir.display()
+                ));
+            }
+            let mut gradle = CommandSpec::new(android_gradle_program(&android_dir));
+            gradle.arg(&options.android_gradle_task);
+            gradle.cwd(&android_dir);
+            commands.push(gradle);
+
+            if options.launch_android {
+                if let Some(component) = android_launch_component(&options.build.generated_dir) {
+                    let mut adb = CommandSpec::new("adb");
+                    adb.args(["shell", "am", "start", "-n"]);
+                    adb.arg(component);
+                    commands.push(adb);
+                } else {
+                    notes.push(format!(
+                        "Could not infer Android launch component from {}; Gradle install will run, but adb launch is skipped.",
+                        options.build.generated_dir.join("raxon-bindings.json").display()
+                    ));
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(RunPlan {
+        target: options.target.clone(),
+        build,
+        commands,
+        notes,
+    })
+}
+
+fn print_run_plan(plan: &RunPlan, dry_run: bool) {
+    println!("rax run --target {}", plan.target);
+    if let Some(build) = &plan.build {
+        println!("profile: {}", build.profile.as_str());
+        println!("target triple: {}", build.triple);
+        println!();
+        println!("Build:");
+        println!("  {}", build.cargo.display());
+        if !build.post_actions.is_empty() {
+            println!("Post-build:");
+            for action in &build.post_actions {
+                println!("  - {}", action.describe());
+            }
+        }
+    } else {
+        println!("Build: skipped by --no-build");
+    }
+    if !plan.commands.is_empty() {
+        println!("Run:");
+        for command in &plan.commands {
+            println!("  {}", command.display());
+        }
+    }
+    if !plan.notes.is_empty() {
+        println!("Notes:");
+        for note in &plan.notes {
+            println!("  - {note}");
+        }
+    }
+    if dry_run {
+        println!();
+        println!("Dry run only; no commands executed.");
+    }
+}
+
+fn android_gradle_program(android_dir: &Path) -> String {
+    let wrapper = android_dir.join("gradlew");
+    if wrapper.exists() {
+        "./gradlew".to_string()
+    } else {
+        "gradle".to_string()
+    }
+}
+
+fn android_launch_component(generated_dir: &Path) -> Option<String> {
+    let info = read_generated_binding_info(generated_dir)?;
+    let package = info.android_package?;
+    let activity = info.android_activity?;
+    let class_name = if activity.starts_with('.') || activity.contains('.') {
+        activity
+    } else {
+        format!("{package}.{activity}")
+    };
+    Some(format!("{package}/{class_name}"))
+}
+
+fn print_ios_run_steps(target: &str) {
+    let cargo_triple = target_to_triple(target);
     println!("rax run --target {}", target);
     println!();
-    println!("Step 1 — build the library:");
+    println!("Step 1 - build the library:");
     println!("  cargo build --target {} --release", cargo_triple);
     println!();
 
     if target == "ios-sim" {
-        println!("Step 2 — open your Xcode project and choose an iOS Simulator destination,");
-        println!("         then press ▶ Run (or use xcodebuild):");
+        println!("Step 2 - open your Xcode project and choose an iOS Simulator destination,");
+        println!("         then press Run (or use xcodebuild):");
         println!("  xcodebuild -scheme <YourScheme> -destination 'platform=iOS Simulator,name=iPhone 16' build");
     } else {
-        println!("Step 2 — open your Xcode project, select a connected device, then press ▶ Run:");
+        println!("Step 2 - open your Xcode project, select a connected device, then press Run:");
         println!(
             "  xcodebuild -scheme <YourScheme> -destination 'platform=iOS,id=<DEVICE_UDID>' build"
         );
@@ -932,19 +1314,6 @@ fn run_run(target: &str) {
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
-
-/// Parse `--target <value>` from args, returning `default_target` if absent.
-fn parse_target_flag(args: &[String], default_target: &str) -> String {
-    let mut iter = args.iter().skip(2).peekable();
-    while let Some(arg) = iter.next() {
-        if arg == "--target" || arg == "-t" {
-            if let Some(val) = iter.next() {
-                return val.clone();
-            }
-        }
-    }
-    default_target.to_string()
-}
 
 /// Map a friendly target name to a Rust target triple.
 fn target_to_triple(target: &str) -> &'static str {
@@ -1481,6 +1850,8 @@ fn android_kotlin_host_template(options: &GenerateOptions) -> String {
 
 import android.graphics.Color
 import android.graphics.Typeface
+import android.content.Intent
+import android.net.Uri
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
@@ -2025,6 +2396,13 @@ open class __ANDROID_ACTIVITY__ : Activity() {
                 }
                 "request_focus" -> {
                     host.views[request.optLong("id")]?.requestFocus()
+                }
+                "open_external_url" -> {
+                    val url = request.optString("url")
+                    if (url.isNotBlank()) {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        runCatching { root.context.startActivity(intent) }
+                    }
                 }
             }
         }
@@ -2894,7 +3272,15 @@ const host = await createRaxonWebHost(root, {{
     console.error("[raxon] bridge error", error);
   }},
   handlePlatformRequest(request) {{
-    console.warn("[raxon] unhandled platform request", request);
+    switch (request.type) {{
+      case "open_external_url":
+        if (request.url) {{
+          window.open(request.url, "_blank", "noopener,noreferrer");
+        }}
+        break;
+      default:
+        console.warn("[raxon] unhandled platform request", request);
+    }}
   }},
 }});
 
@@ -3097,8 +3483,8 @@ functions.
 
 Run `npm run dev` from this directory and open the printed local URL. Customize
 `main.js` to handle platform requests such as notifications, media picker,
-clipboard, and accessibility announcements for your app. Set `HOST` or `PORT`
-to override the dev-server bind address.
+clipboard, external URLs, and accessibility announcements for your app. Set
+`HOST` or `PORT` to override the dev-server bind address.
 "#,
         wasm_module = options.wasm_module,
     )
@@ -3526,6 +3912,170 @@ name = "demo_web"
     }
 
     #[test]
+    fn parses_run_options() {
+        let args = vec![
+            "rax".to_string(),
+            "run".to_string(),
+            "--target".to_string(),
+            "web".to_string(),
+            "--debug".to_string(),
+            "--package".to_string(),
+            "demo-app".to_string(),
+            "--generated-dir".to_string(),
+            "bindings".to_string(),
+            "--host".to_string(),
+            "0.0.0.0".to_string(),
+            "--port".to_string(),
+            "8080".to_string(),
+            "--no-build".to_string(),
+            "--dry-run".to_string(),
+        ];
+
+        let options = parse_run_options(&args).expect("run options parse");
+
+        assert_eq!(options.target, "web");
+        assert_eq!(options.build.target, "web");
+        assert_eq!(options.build.profile, BuildProfile::Debug);
+        assert_eq!(options.build.package.as_deref(), Some("demo-app"));
+        assert_eq!(options.build.generated_dir, PathBuf::from("bindings"));
+        assert_eq!(options.host, "0.0.0.0");
+        assert_eq!(options.port, 8080);
+        assert!(options.no_build);
+        assert!(options.dry_run);
+        assert!(options.build.dry_run);
+    }
+
+    #[test]
+    fn run_plan_web_builds_and_serves_generated_shell() {
+        let out_dir = temp_output_dir("web-run-plan");
+        let manifest_path = out_dir.join("Cargo.toml");
+        let generated_dir = out_dir.join("generated");
+        fs::create_dir_all(generated_dir.join("web")).unwrap();
+        fs::write(
+            &manifest_path,
+            r#"[package]
+name = "demo-app"
+
+[lib]
+name = "demo_web"
+"#,
+        )
+        .unwrap();
+        fs::write(generated_dir.join("web/dev-server.mjs"), "").unwrap();
+        fs::write(
+            generated_dir.join("raxon-bindings.json"),
+            r#"{
+  "android": { "package": "dev.raxon.demo", "activity": "DemoActivity", "library": "demo_native" },
+  "web": { "wasmModule": "./pkg/demo.js" }
+}
+"#,
+        )
+        .unwrap();
+        let options = RunOptions {
+            target: "web".to_string(),
+            build: BuildOptions {
+                target: "web".to_string(),
+                manifest_path: Some(manifest_path),
+                target_dir: Some(out_dir.join("target")),
+                generated_dir: generated_dir.clone(),
+                ..BuildOptions::default()
+            },
+            host: "0.0.0.0".to_string(),
+            port: 8080,
+            dry_run: true,
+            ..RunOptions::default()
+        };
+
+        let plan = create_run_plan(&options).expect("run plan");
+
+        assert_eq!(plan.target, "web");
+        assert!(plan.build.is_some());
+        assert_eq!(plan.commands.len(), 1);
+        assert_eq!(plan.commands[0].program, "node");
+        assert_eq!(plan.commands[0].args, vec!["./dev-server.mjs"]);
+        assert_eq!(
+            plan.commands[0].cwd.as_deref(),
+            Some(generated_dir.join("web").as_path())
+        );
+        assert_eq!(
+            plan.commands[0].env,
+            vec![
+                ("HOST".to_string(), "0.0.0.0".to_string()),
+                ("PORT".to_string(), "8080".to_string()),
+            ]
+        );
+        assert!(plan.notes.is_empty());
+
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
+    fn run_plan_android_installs_and_launches_generated_activity() {
+        let out_dir = temp_output_dir("android-run-plan");
+        let manifest_path = out_dir.join("Cargo.toml");
+        let generated_dir = out_dir.join("generated");
+        fs::create_dir_all(generated_dir.join("android")).unwrap();
+        fs::write(
+            &manifest_path,
+            r#"[package]
+name = "demo-app"
+
+[lib]
+name = "demo_native"
+"#,
+        )
+        .unwrap();
+        fs::write(generated_dir.join("android/settings.gradle.kts"), "").unwrap();
+        fs::write(
+            generated_dir.join("raxon-bindings.json"),
+            r#"{
+  "android": { "package": "dev.raxon.demo", "activity": "DemoActivity", "library": "demo_native" },
+  "web": { "wasmModule": "./pkg/demo.js" }
+}
+"#,
+        )
+        .unwrap();
+        let options = RunOptions {
+            target: "android".to_string(),
+            build: BuildOptions {
+                target: "android".to_string(),
+                manifest_path: Some(manifest_path),
+                target_dir: Some(out_dir.join("target")),
+                generated_dir: generated_dir.clone(),
+                ..BuildOptions::default()
+            },
+            dry_run: true,
+            ..RunOptions::default()
+        };
+
+        let plan = create_run_plan(&options).expect("run plan");
+
+        assert_eq!(plan.target, "android");
+        assert!(plan.build.is_some());
+        assert_eq!(plan.commands.len(), 2);
+        assert_eq!(plan.commands[0].program, "gradle");
+        assert_eq!(plan.commands[0].args, vec![":app:installDebug"]);
+        assert_eq!(
+            plan.commands[0].cwd.as_deref(),
+            Some(generated_dir.join("android").as_path())
+        );
+        assert_eq!(plan.commands[1].program, "adb");
+        assert_eq!(
+            plan.commands[1].args,
+            vec![
+                "shell",
+                "am",
+                "start",
+                "-n",
+                "dev.raxon.demo/dev.raxon.demo.DemoActivity",
+            ]
+        );
+        assert!(plan.notes.is_empty());
+
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
     fn target_libdir_probe_requires_libcore() {
         let out_dir = temp_output_dir("target-libdir");
         fs::create_dir_all(&out_dir).unwrap();
@@ -3591,6 +4141,8 @@ name = "demo_web"
         assert!(activity.contains("Choreographer.getInstance().postFrameCallback"));
         assert!(activity.contains("DemoHost.loadLibrary(NATIVE_LIBRARY)"));
         assert!(activity.contains("const val NATIVE_LIBRARY: String = \"demo_lib\""));
+        assert!(activity.contains("\"open_external_url\""));
+        assert!(activity.contains("Intent(Intent.ACTION_VIEW, Uri.parse(url))"));
 
         let manifest =
             fs::read_to_string(out_dir.join("android/app/src/main/AndroidManifest.xml")).unwrap();
@@ -3645,6 +4197,8 @@ name = "demo_web"
         assert!(web_main.contains("import { raxonWebBuild } from \"./raxon-web-build.js\""));
         assert!(web_main.contains("createRaxonWebHost(root"));
         assert!(web_main.contains("wasmUrl: raxonWebBuild.wasmUrl"));
+        assert!(web_main.contains("case \"open_external_url\""));
+        assert!(web_main.contains("window.open(request.url"));
         assert!(web_main.contains("ResizeObserver"));
         assert!(web_main.contains("window.requestAnimationFrame(frame)"));
 

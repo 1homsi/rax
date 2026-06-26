@@ -3472,6 +3472,18 @@ impl Backend for UiKitBackend {
                     });
                 }
             }
+            Mutation::OpenExternalUrl { url } => {
+                unsafe {
+                    let ns_url_str = NSString::from_str(&url);
+                    let ns_url: *mut AnyObject =
+                        msg_send![class!(NSURL), URLWithString: &*ns_url_str];
+                    if !ns_url.is_null() {
+                        let app: *mut AnyObject =
+                            msg_send![class!(UIApplication), sharedApplication];
+                        let _: bool = msg_send![app, openURL: ns_url];
+                    }
+                }
+            }
             Mutation::AnnounceAccessibility { message } => {
                 // UIAccessibilityAnnouncementNotification = 1008
                 // UIAccessibilityPostNotification(notification, argument)

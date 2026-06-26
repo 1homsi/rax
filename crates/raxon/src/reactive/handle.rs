@@ -31,6 +31,12 @@ impl<T> Clone for Signal<T> {
     }
 }
 impl<T> Copy for Signal<T> {}
+impl<T> PartialEq for Signal<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.rt == other.rt && self.key == other.key
+    }
+}
+impl<T> Eq for Signal<T> {}
 
 /// A derived, memoized value of type `T`.
 ///
@@ -47,6 +53,12 @@ impl<T> Clone for Memo<T> {
     }
 }
 impl<T> Copy for Memo<T> {}
+impl<T> PartialEq for Memo<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.rt == other.rt && self.key == other.key
+    }
+}
+impl<T> Eq for Memo<T> {}
 
 /// Creates a signal initialized to `value`, owned by the current scope/runtime.
 pub fn create_signal<T: 'static>(value: T) -> Signal<T> {

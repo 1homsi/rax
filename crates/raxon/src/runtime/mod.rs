@@ -86,6 +86,10 @@ thread_local! {
     static PENDING_SHARE_TEXTS: RefCell<Vec<String>> =
         const { RefCell::new(Vec::new()) };
 
+    /// External URLs queued by [`open_external_url`]. Drained by [`App::tick`].
+    static PENDING_EXTERNAL_URLS: RefCell<Vec<String>> =
+        const { RefCell::new(Vec::new()) };
+
     /// Reactive signal for battery level [0.0–1.0]. Lazily initialised by
     /// [`use_battery_level`]; updated by the platform backend via [`update_battery`].
     static BATTERY_LEVEL: Cell<Option<Signal<f32>>> = const { Cell::new(None) };
@@ -516,6 +520,18 @@ pub fn set_clipboard(text: impl Into<String>) {
 /// ```
 pub fn share_text(text: impl Into<String>) {
     PENDING_SHARE_TEXTS.with(|v| v.borrow_mut().push(text.into()));
+}
+
+/// Ask the platform to open `url` with its default external handler. The request
+/// is applied on the next frame tick so it is safe to call from event handlers.
+///
+/// ```no_run
+/// use raxon::runtime::open_external_url;
+///
+/// open_external_url("https://example.com");
+/// ```
+pub fn open_external_url(url: impl Into<String>) {
+    PENDING_EXTERNAL_URLS.with(|v| v.borrow_mut().push(url.into()));
 }
 
 /// Returns a reactive `Signal<f32>` whose value is the current battery charge
@@ -1192,6 +1208,14 @@ impl App {
         });
         for text in share_texts {
             self.tree.share_text(text);
+        }
+
+        // Drain external URLs queued by open_external_url().
+        let external_urls: Vec<String> = PENDING_EXTERNAL_URLS.with(|q| {
+            std::mem::take(&mut *q.borrow_mut())
+        });
+        for url in external_urls {
+            self.tree.open_external_url(url);
         }
 
         // Drain torch state queued by set_torch().

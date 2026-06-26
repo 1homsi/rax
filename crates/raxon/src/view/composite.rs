@@ -1359,7 +1359,7 @@ pub fn wrap(gap: f32, items: Vec<BoxedView>) -> impl View {
 ///
 /// let v = pressable(text("Tap me"), || println!("pressed"));
 /// ```
-pub fn pressable<V: View + 'static>(content: V, on_press: impl Fn() + 'static) -> impl View {
+pub fn pressable<V: View + 'static>(content: V, mut on_press: impl FnMut() + 'static) -> impl View {
     let pressed = create_signal(false);
 
     // `opacity_fn` re-reads `pressed` reactively on every frame that the

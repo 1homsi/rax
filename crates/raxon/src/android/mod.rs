@@ -330,6 +330,9 @@ impl AndroidCommand {
             Mutation::ShareText { text } => {
                 AndroidCommand::Request(AndroidPlatformRequest::ShareText { text })
             }
+            Mutation::OpenExternalUrl { url } => {
+                AndroidCommand::Request(AndroidPlatformRequest::OpenExternalUrl { url })
+            }
             Mutation::AnnounceAccessibility { message } => {
                 AndroidCommand::Request(AndroidPlatformRequest::AnnounceAccessibility { message })
             }
@@ -574,6 +577,9 @@ pub enum AndroidWirePlatformRequest {
     ShareText {
         text: String,
     },
+    OpenExternalUrl {
+        url: String,
+    },
     AnnounceAccessibility {
         message: String,
     },
@@ -639,6 +645,9 @@ impl From<AndroidPlatformRequest> for AndroidWirePlatformRequest {
             }
             AndroidPlatformRequest::ShareText { text } => {
                 AndroidWirePlatformRequest::ShareText { text }
+            }
+            AndroidPlatformRequest::OpenExternalUrl { url } => {
+                AndroidWirePlatformRequest::OpenExternalUrl { url }
             }
             AndroidPlatformRequest::AnnounceAccessibility { message } => {
                 AndroidWirePlatformRequest::AnnounceAccessibility { message }
@@ -1137,6 +1146,11 @@ pub enum AndroidPlatformRequest {
         /// Text to share.
         text: String,
     },
+    /// Open a URL with an ACTION_VIEW intent.
+    OpenExternalUrl {
+        /// URL to open.
+        url: String,
+    },
     /// Announce a screen-reader message.
     AnnounceAccessibility {
         /// Announcement text.
@@ -1394,6 +1408,28 @@ mod tests {
         });
 
         assert_eq!(command, AndroidCommand::SetBackdrop { argb: 0x4411_2233 });
+    }
+
+    #[test]
+    fn converts_external_url_to_android_platform_request() {
+        let command = AndroidCommand::from_mutation(Mutation::OpenExternalUrl {
+            url: "https://example.com".to_string(),
+        });
+
+        assert_eq!(
+            command,
+            AndroidCommand::Request(AndroidPlatformRequest::OpenExternalUrl {
+                url: "https://example.com".to_string()
+            })
+        );
+        assert_eq!(
+            AndroidWirePlatformRequest::from(AndroidPlatformRequest::OpenExternalUrl {
+                url: "https://example.com".to_string()
+            }),
+            AndroidWirePlatformRequest::OpenExternalUrl {
+                url: "https://example.com".to_string()
+            }
+        );
     }
 
     #[test]

@@ -340,6 +340,9 @@ impl DomCommand {
             Mutation::ShareText { text } => {
                 DomCommand::Request(WebPlatformRequest::ShareText { text })
             }
+            Mutation::OpenExternalUrl { url } => {
+                DomCommand::Request(WebPlatformRequest::OpenExternalUrl { url })
+            }
             Mutation::AnnounceAccessibility { message } => {
                 DomCommand::Request(WebPlatformRequest::AnnounceAccessibility { message })
             }
@@ -584,6 +587,9 @@ pub enum DomWirePlatformRequest {
     ShareText {
         text: String,
     },
+    OpenExternalUrl {
+        url: String,
+    },
     AnnounceAccessibility {
         message: String,
     },
@@ -648,6 +654,9 @@ impl From<WebPlatformRequest> for DomWirePlatformRequest {
                 DomWirePlatformRequest::SetClipboard { text }
             }
             WebPlatformRequest::ShareText { text } => DomWirePlatformRequest::ShareText { text },
+            WebPlatformRequest::OpenExternalUrl { url } => {
+                DomWirePlatformRequest::OpenExternalUrl { url }
+            }
             WebPlatformRequest::AnnounceAccessibility { message } => {
                 DomWirePlatformRequest::AnnounceAccessibility { message }
             }
@@ -1121,6 +1130,11 @@ pub enum WebPlatformRequest {
         /// Text to share.
         text: String,
     },
+    /// Open a URL in a browser tab/window.
+    OpenExternalUrl {
+        /// URL to open.
+        url: String,
+    },
     /// Announce a screen-reader message.
     AnnounceAccessibility {
         /// Announcement text.
@@ -1381,6 +1395,28 @@ mod tests {
             command,
             DomCommand::SetBackdrop {
                 css_color: "rgba(10, 20, 30, 0.502)".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn converts_external_url_to_web_platform_request() {
+        let command = DomCommand::from_mutation(Mutation::OpenExternalUrl {
+            url: "https://example.com".to_string(),
+        });
+
+        assert_eq!(
+            command,
+            DomCommand::Request(WebPlatformRequest::OpenExternalUrl {
+                url: "https://example.com".to_string()
+            })
+        );
+        assert_eq!(
+            DomWirePlatformRequest::from(WebPlatformRequest::OpenExternalUrl {
+                url: "https://example.com".to_string()
+            }),
+            DomWirePlatformRequest::OpenExternalUrl {
+                url: "https://example.com".to_string()
             }
         );
     }

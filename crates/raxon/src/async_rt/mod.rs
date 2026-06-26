@@ -26,9 +26,9 @@
 use std::cell::RefCell;
 use std::future::Future;
 
+use crate::reactive::{create_signal, Signal};
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
-use crate::reactive::{create_signal, Signal};
 
 thread_local! {
     static POOL: RefCell<LocalPool> = RefCell::new(LocalPool::new());
@@ -74,6 +74,12 @@ impl<T: 'static> Clone for Resource<T> {
     }
 }
 impl<T: 'static> Copy for Resource<T> {}
+impl<T: 'static> PartialEq for Resource<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.state == other.state
+    }
+}
+impl<T: 'static> Eq for Resource<T> {}
 
 /// Creates a resource driven by `future`, which resolves to `Ok(value)` or
 /// `Err(message)`. The future is spawned immediately on the UI executor.

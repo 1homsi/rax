@@ -1271,6 +1271,11 @@ pub enum Mutation {
         /// The text to share.
         text: String,
     },
+    /// Open a URL with the platform's default external handler.
+    OpenExternalUrl {
+        /// The absolute URL to open.
+        url: String,
+    },
     /// Post an accessibility announcement via `UIAccessibilityPostNotification`.
     /// VoiceOver reads the message immediately, interrupting any in-progress speech.
     AnnounceAccessibility {

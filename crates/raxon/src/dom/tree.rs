@@ -282,6 +282,11 @@ impl Tree {
         self.host.emit(Mutation::ShareText { text });
     }
 
+    /// Opens a URL with the platform's default external handler.
+    pub fn open_external_url(&mut self, url: String) {
+        self.host.emit(Mutation::OpenExternalUrl { url });
+    }
+
     /// Posts an accessibility announcement that VoiceOver reads immediately.
     ///
     /// Maps to `UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, message)`
