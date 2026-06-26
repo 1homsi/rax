@@ -253,11 +253,17 @@ pub enum WsMessage {
 }
 
 /// A handle to an active WebSocket connection. Drop to close.
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub struct WsHandle {
     /// Channel to send outgoing messages to the background thread.
     tx: std::sync::mpsc::SyncSender<tungstenite::Message>,
 }
 
+/// A handle to an active browser WebSocket connection.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub struct WsHandle;
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 impl WsHandle {
     /// Send a text message to the server.
     pub fn send_text(&self, msg: impl Into<String>) {
@@ -273,6 +279,18 @@ impl WsHandle {
     pub fn close(self) {
         let _ = self.tx.send(tungstenite::Message::Close(None));
     }
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+impl WsHandle {
+    /// Send a text message to the server.
+    pub fn send_text(&self, _msg: impl Into<String>) {}
+
+    /// Send a binary message to the server.
+    pub fn send_binary(&self, _data: Vec<u8>) {}
+
+    /// Close the connection gracefully.
+    pub fn close(self) {}
 }
 
 /// Connect to a WebSocket server at `url` (must start with `ws://` or `wss://`).
@@ -295,7 +313,14 @@ pub fn connect_ws(
     url: impl Into<String>,
     on_message: impl Fn(WsMessage) + Send + 'static,
 ) -> Result<WsHandle, String> {
-    let url = url.into();
+    connect_ws_impl(url.into(), on_message)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+fn connect_ws_impl(
+    url: String,
+    on_message: impl Fn(WsMessage) + Send + 'static,
+) -> Result<WsHandle, String> {
     let (tx, rx) = std::sync::mpsc::sync_channel::<tungstenite::Message>(32);
 
     std::thread::spawn(move || {
@@ -333,6 +358,14 @@ pub fn connect_ws(
     });
 
     Ok(WsHandle { tx })
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn connect_ws_impl(
+    _url: String,
+    _on_message: impl Fn(WsMessage) + Send + 'static,
+) -> Result<WsHandle, String> {
+    Err("web WebSocket support requires the browser host bridge".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -414,6 +447,15 @@ fn do_request_with_config(
     body: Option<&str>,
     config: RequestConfig,
 ) -> Result<Response, String> {
+    do_request_with_config_impl(url, body, config)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+fn do_request_with_config_impl(
+    url: &str,
+    body: Option<&str>,
+    config: RequestConfig,
+) -> Result<Response, String> {
     let max_attempts = config.retry_count + 1;
     let mut last_err = String::new();
 
@@ -465,6 +507,15 @@ fn do_request_with_config(
     }
 
     Err(last_err)
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn do_request_with_config_impl(
+    _url: &str,
+    _body: Option<&str>,
+    _config: RequestConfig,
+) -> Result<Response, String> {
+    Err("web HTTP support requires a browser fetch client via set_client".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +588,11 @@ fn apply_interceptors(url: &mut String, headers: &mut Vec<(String, String)>) {
 /// assert!(resp.is_success());
 /// ```
 pub fn upload_bytes(url: &str, data: Vec<u8>, content_type: &str) -> Result<Response, String> {
+    upload_bytes_impl(url, data, content_type)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+fn upload_bytes_impl(url: &str, data: Vec<u8>, content_type: &str) -> Result<Response, String> {
     let mut effective_url = url.to_string();
     let mut headers: Vec<(String, String)> = vec![
         ("Content-Type".to_string(), content_type.to_string()),
@@ -557,6 +613,11 @@ pub fn upload_bytes(url: &str, data: Vec<u8>, content_type: &str) -> Result<Resp
         body: body_text,
         body_bytes,
     })
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn upload_bytes_impl(_url: &str, _data: Vec<u8>, _content_type: &str) -> Result<Response, String> {
+    Err("web uploads require a browser fetch client via set_client".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -956,7 +1017,14 @@ pub fn connect_sse(
     url: impl Into<String>,
     on_event: impl Fn(SseEvent) + Send + 'static,
 ) -> std::thread::JoinHandle<()> {
-    let url = url.into();
+    connect_sse_impl(url.into(), on_event)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+fn connect_sse_impl(
+    url: String,
+    on_event: impl Fn(SseEvent) + Send + 'static,
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let response = match ureq::get(&url)
             .set("Accept", "text/event-stream")
@@ -1007,6 +1075,14 @@ pub fn connect_sse(
             // Lines starting with ':' are comments — ignored.
         }
     })
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn connect_sse_impl(
+    _url: String,
+    _on_event: impl Fn(SseEvent) + Send + 'static,
+) -> std::thread::JoinHandle<()> {
+    panic!("web SSE support requires the browser host bridge")
 }
 
 // ---------------------------------------------------------------------------
@@ -1125,6 +1201,14 @@ pub fn download_with_progress(
     url: &str,
     on_progress: impl Fn(DownloadProgress) + Send + 'static,
 ) -> Result<Response, String> {
+    download_with_progress_impl(url, on_progress)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+fn download_with_progress_impl(
+    url: &str,
+    on_progress: impl Fn(DownloadProgress) + Send + 'static,
+) -> Result<Response, String> {
     let mut effective_url = url.to_string();
     let mut headers: Vec<(String, String)> = vec![];
     apply_interceptors(&mut effective_url, &mut headers);
@@ -1164,6 +1248,14 @@ pub fn download_with_progress(
         body,
         body_bytes: bytes,
     })
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn download_with_progress_impl(
+    _url: &str,
+    _on_progress: impl Fn(DownloadProgress) + Send + 'static,
+) -> Result<Response, String> {
+    Err("web downloads require a browser fetch client via set_client".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -1215,6 +1307,11 @@ pub fn clear_image_cache() {
 /// assert_eq!(bytes, bytes2);
 /// ```
 pub fn fetch_image(url: &str) -> Result<Vec<u8>, String> {
+    fetch_image_impl(url)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+fn fetch_image_impl(url: &str) -> Result<Vec<u8>, String> {
     if let Some(data) = get_cached_image(url) {
         return Ok(data);
     }
@@ -1227,6 +1324,14 @@ pub fn fetch_image(url: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())?;
     cache_image(url, bytes.clone());
     Ok(bytes)
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn fetch_image_impl(url: &str) -> Result<Vec<u8>, String> {
+    if let Some(data) = get_cached_image(url) {
+        return Ok(data);
+    }
+    Err("web image fetches require a browser fetch client via set_client".to_string())
 }
 
 #[cfg(test)]

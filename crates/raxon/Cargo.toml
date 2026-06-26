@@ -20,12 +20,16 @@ testing = []
 
 [dependencies]
 futures = { version = "0.3", default-features = false, features = ["executor", "std"] }
-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
-ureq = { version = "2", features = [] }
 serde = { version = "1" }
 serde_json = { version = "1" }
-rusqlite = { version = "0.31", features = ["bundled"] }
 taffy = "0.7"
+
+[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+ureq = { version = "2", default-features = false, features = [] }
+
+[target.'cfg(not(any(target_os = "android", all(target_arch = "wasm32", target_os = "unknown"))))'.dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.6"

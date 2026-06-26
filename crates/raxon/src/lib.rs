@@ -58,16 +58,20 @@ pub mod keychain;
 pub mod log;
 /// i18n message format helpers.
 pub mod i18n;
-/// SQLite database access.
-pub mod sqlite;
+/// Frame scheduler and clock.
+pub mod scheduler;
 /// Filesystem utilities.
 pub mod fs;
 /// Form validation helpers.
 pub mod form;
-/// Frame scheduler and clock.
-pub mod scheduler;
+/// SQLite database access.
+pub mod sqlite;
 /// Layout engine integration.
 pub mod layout;
+/// Android backend command queue and driver foundation.
+pub mod android;
+/// WebAssembly DOM backend command queue and driver foundation.
+pub mod web;
 
 /// Host-side testing harness (enable the `testing` feature).
 #[cfg(feature = "testing")]
@@ -120,7 +124,7 @@ pub mod prelude {
     pub use crate::style::{theme, use_theme, Theme};
     pub use crate::plugin::{dispatch_plugin_event, register_plugin, Plugin};
     pub use crate::keychain::{delete_secret, get_secret, set_secret};
-    pub use crate::platform::platform_value;
+    pub use crate::platform::{platform_choice, platform_value};
 
     #[cfg(target_os = "ios")]
     pub use crate::ios::run;

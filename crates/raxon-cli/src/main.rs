@@ -1,9 +1,9 @@
 //! rax CLI — project scaffolding and development tool.
 //!
 //! Usage:
-//!   rax new <project-name>                Create a new rax iOS project
+//!   rax new <project-name>                Create a new raxon app project
 //!   rax doctor                            Print environment diagnostic info
-//!   rax build [--target <ios-sim|ios|android|macos>]
+//!   rax build [--target <ios-sim|ios|android|web|macos>]
 //!                                         Print the cargo build command to run
 //!   rax run [--target <ios-sim|ios>]      Print the cargo build + Xcode run steps
 //!   rax test [-- <args>]                  Run cargo test, forwarding extra args
@@ -102,7 +102,7 @@ fn print_help() {
     println!("    rax <COMMAND>");
     println!();
     println!("COMMANDS:");
-    println!("    new <name>                Create a new rax iOS project");
+    println!("    new <name>                Create a new raxon app project");
     println!("    doctor                    Print environment diagnostic info");
     println!("    build [--target <TARGET>] Print the build command for a target");
     println!("    run   [--target <TARGET>] Print the run steps for a target");
@@ -117,6 +117,7 @@ fn print_help() {
     println!("    ios-sim   (default)  aarch64-apple-ios-sim");
     println!("    ios                  aarch64-apple-ios");
     println!("    android              aarch64-linux-android");
+    println!("    web                  wasm32-unknown-unknown");
     println!("    macos                aarch64-apple-darwin");
     println!();
     println!("EXAMPLE:");
@@ -151,16 +152,16 @@ fn run_doctor() {
     }
 
     // rustup installed targets
-    let installed_targets: Vec<String> =
-        match Command::new("rustup").args(["target", "list", "--installed"]).output() {
-            Ok(out) if out.status.success() => {
-                String::from_utf8_lossy(&out.stdout)
-                    .lines()
-                    .map(|l| l.trim().to_string())
-                    .collect()
-            }
-            _ => Vec::new(),
-        };
+    let installed_targets: Vec<String> = match Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+    {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .collect(),
+        _ => Vec::new(),
+    };
 
     let check_target = |triple: &str| {
         if installed_targets.iter().any(|t| t == triple) {
@@ -175,6 +176,7 @@ fn run_doctor() {
 
     check_target("aarch64-apple-ios-sim");
     check_target("aarch64-apple-ios");
+    check_target("aarch64-linux-android");
     check_target("wasm32-unknown-unknown");
 
     // Xcode Command Line Tools
@@ -199,7 +201,7 @@ fn run_build(target: &str) {
     let cargo_triple = target_to_triple(target);
     if cargo_triple.is_empty() {
         eprintln!("Unknown target: {}", target);
-        eprintln!("Valid targets: ios-sim, ios, android, macos");
+        eprintln!("Valid targets: ios-sim, ios, android, web, macos");
         process::exit(1);
     }
 
@@ -212,7 +214,21 @@ fn run_build(target: &str) {
     if target == "ios-sim" || target == "ios" {
         println!();
         println!("After the build succeeds, open your Xcode project and link the");
-        println!("generated `.a` static library from `target/{}/release/`.`", cargo_triple);
+        println!(
+            "generated `.a` static library from `target/{}/release/`.`",
+            cargo_triple
+        );
+    } else if target == "android" {
+        println!();
+        println!("Android hosts should load the generated native library from");
+        println!(
+            "`target/{}/release/` or use cargo-ndk for APK packaging.",
+            cargo_triple
+        );
+    } else if target == "web" {
+        println!();
+        println!("The web host should load the generated `.wasm` and drive");
+        println!("`raxon::web::WebDriver` from requestAnimationFrame.");
     }
 }
 
@@ -223,9 +239,12 @@ fn run_build(target: &str) {
 fn run_run(target: &str) {
     let cargo_triple = target_to_triple(target);
     if cargo_triple.is_empty() || (target != "ios-sim" && target != "ios") {
-        if target == "android" || target == "macos" {
+        if target == "android" || target == "web" || target == "macos" {
             eprintln!("'rax run' currently supports ios-sim and ios targets only.");
-            eprintln!("For {} use 'rax build --target {}' and deploy manually.", target, target);
+            eprintln!(
+                "For {} use 'rax build --target {}' and deploy manually.",
+                target, target
+            );
             process::exit(1);
         }
         eprintln!("Unknown target: {}", target);
@@ -245,7 +264,9 @@ fn run_run(target: &str) {
         println!("  xcodebuild -scheme <YourScheme> -destination 'platform=iOS Simulator,name=iPhone 16' build");
     } else {
         println!("Step 2 — open your Xcode project, select a connected device, then press ▶ Run:");
-        println!("  xcodebuild -scheme <YourScheme> -destination 'platform=iOS,id=<DEVICE_UDID>' build");
+        println!(
+            "  xcodebuild -scheme <YourScheme> -destination 'platform=iOS,id=<DEVICE_UDID>' build"
+        );
     }
 
     println!();
@@ -275,6 +296,7 @@ fn target_to_triple(target: &str) -> &'static str {
         "ios-sim" => "aarch64-apple-ios-sim",
         "ios" => "aarch64-apple-ios",
         "android" => "aarch64-linux-android",
+        "web" => "wasm32-unknown-unknown",
         "macos" => "aarch64-apple-darwin",
         _ => "",
     }
@@ -305,10 +327,10 @@ edition = "2021"
 
 [lib]
 name = "{lib_name}"
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
-rax = {{ git = "https://github.com/1homsi/rax.git" }}
+raxon = "0.0.9"
 "#,
         name = name,
         lib_name = name.replace('-', "_"),
@@ -316,25 +338,25 @@ rax = {{ git = "https://github.com/1homsi/rax.git" }}
     fs::write(dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
 
     // Write src/lib.rs
-    let lib_rs = r#"use rax::prelude::*;
+    let lib_rs = r#"use raxon::prelude::*;
 
 #[no_mangle]
 pub extern "C" fn rax_main() {
-    rax::run(|_host, _size| {
+    raxon::run(|| {
         let count = create_signal(0);
 
         column((
-            text("Hello from rax! \u{1F980}")
+            text("Hello from raxon!")
                 .font_size(24.0)
-                .color(Color::rgb(0.1, 0.1, 0.1)),
-            text("Build native iOS apps in Rust.")
+                .color(Color::rgb(26, 26, 26)),
+            text("Build native apps in Rust.")
                 .font_size(16.0)
-                .color(Color::rgba(0.0, 0.0, 0.0, 0.6)),
-            button("Tap me", move || count.update(|n| n + 1)),
+                .color(Color::rgba(0, 0, 0, 153)),
+            button("Tap me", move || count.update(|n| *n += 1)),
             dynamic(move || {
                 text(format!("Tapped {} times", count.get()))
                     .font_size(14.0)
-                    .color(Color::rgb(0.2, 0.5, 1.0))
+                    .color(Color::rgb(51, 128, 255))
             }),
         ))
         .padding(32.0)
@@ -354,8 +376,10 @@ pub extern "C" fn rax_main() {
     println!("  cd {}", name);
     println!("  rax doctor");
     println!("  rax build --target ios-sim");
+    println!("  rax build --target android");
+    println!("  rax build --target web");
     println!();
-    println!("To build and run on the iOS Simulator, use Xcode or xcodebuild.");
+    println!("To run, use the native host project for the platform you are targeting.");
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +423,11 @@ fn cmd_lint() {
 // ---------------------------------------------------------------------------
 
 fn cmd_fmt(check: bool) {
-    let args = if check { vec!["fmt", "--check"] } else { vec!["fmt"] };
+    let args = if check {
+        vec!["fmt", "--check"]
+    } else {
+        vec!["fmt"]
+    };
     println!("Running: cargo {}", args.join(" "));
     let status = std::process::Command::new("cargo")
         .args(&args)

@@ -1,6 +1,6 @@
 # raxon
 
-A **100% Rust**, signal-driven framework for building **native** mobile apps. No JavaScript, no WebView — your declarative Rust UI renders real platform widgets (UIKit today; Android next).
+A **100% Rust**, signal-driven framework for building **native** mobile apps. No JavaScript, no WebView — your declarative Rust UI renders real platform widgets (UIKit today; Android and WebAssembly DOM foundations in progress).
 
 ```toml
 [dependencies]
@@ -40,7 +40,8 @@ Early but functional. A reactive multi-screen app with tab navigation, dynamic l
 | Animation (tweens, springs, keyframes) | ✅ |
 | Networking (HTTP, WebSocket, SSE) | ✅ |
 | SQLite, Keychain, local storage | ✅ |
-| Android backend | ⬜ |
+| Android backend | 🟡 command backend + driver |
+| Web/WASM backend | 🟡 DOM command backend + driver |
 
 ## Structure
 
@@ -52,6 +53,8 @@ raxon::reactive   — signals, memos, effects, stores, context
 raxon::dom        — virtual element tree and platform seam
 raxon::view       — declarative view builder
 raxon::ios        — UIKit backend (cfg'd to iOS targets)
+raxon::android    — Android command backend + driver foundation
+raxon::web        — WebAssembly DOM command backend + driver foundation
 raxon::runtime    — app driver: layout, events, frames
 raxon::nav        — stack/tab/modal navigation
 raxon::net        — HTTP, WebSocket, SSE, query cache
@@ -67,6 +70,8 @@ raxon::scheduler  — frame scheduler and task priorities
 ```sh
 cargo test -p raxon                              # host-side, no platform needed
 cargo check -p raxon --target aarch64-apple-ios-sim
+cargo check -p raxon --target aarch64-linux-android
+cargo check -p raxon --target wasm32-unknown-unknown
 ```
 
 ## License
