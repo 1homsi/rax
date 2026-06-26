@@ -211,6 +211,63 @@ pub enum GestureKind {
     Pinch,
     /// Rotation gesture (continuous; reports rotation in radians + velocity).
     Rotate,
+    /// Swipe in a cardinal direction (discrete).
+    Swipe,
+}
+
+/// Cardinal direction for a swipe gesture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SwipeDirection {
+    /// Swipe toward the left edge.
+    Left,
+    /// Swipe toward the right edge.
+    Right,
+    /// Swipe toward the top edge.
+    Up,
+    /// Swipe toward the bottom edge.
+    Down,
+}
+
+/// Mouse / pointer cursor style. On mobile this is a no-op; on desktop / iPad
+/// pointer-device contexts it controls the system cursor shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorStyle {
+    /// The default system cursor (arrow).
+    Default,
+    /// A pointing-hand cursor, e.g. for links and buttons.
+    Pointer,
+    /// An I-beam cursor, e.g. for text fields.
+    Text,
+    /// An open-hand (grab) cursor, e.g. for draggable content.
+    Grab,
+}
+
+/// A reference-counted, heap-allocated callback (`Arc<dyn Fn()>`).
+///
+/// Implements `Clone` by cloning the `Arc` (cheap reference count bump) and
+/// `PartialEq` by pointer identity (two distinct `Arc`s are never considered
+/// equal, so any re-setting of a callback attribute always triggers a
+/// re-render). `Debug` formats as `"<callback>"`.
+#[derive(Clone)]
+pub struct Callback(pub std::sync::Arc<dyn Fn() + Send + Sync>);
+
+impl Callback {
+    /// Call the wrapped function.
+    pub fn call(&self) {
+        (self.0)();
+    }
+}
+
+impl std::fmt::Debug for Callback {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<callback>")
+    }
+}
+
+impl PartialEq for Callback {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 /// A single settable **paint** property on a widget.
@@ -391,6 +448,56 @@ pub enum Attribute {
         /// Inset from the left edge.
         left: f32,
     },
+    /// Fires when a touch begins on this view (touch-down / press-in).
+    OnPressIn(Callback),
+    /// Fires when a touch ends (or is cancelled) on this view (press-out).
+    OnPressOut(Callback),
+    /// Pointer cursor style shown over this view on pointer-device contexts.
+    /// No-op on touch-only platforms.
+    Cursor(CursorStyle),
+    /// Fires when the user performs a swipe gesture in `direction`.
+    OnSwipe {
+        /// The required swipe direction.
+        direction: SwipeDirection,
+        /// The handler to invoke.
+        handler: Callback,
+    },
+    /// Color applied to the placeholder text of a text field.
+    PlaceholderColor(Color),
+    /// A short label shown to the left of the text field's content (prefix).
+    InputPrefix(String),
+    /// A short label shown to the right of the text field's content (suffix).
+    InputSuffix(String),
+    /// Show or hide the built-in clear (×) button on a text field.
+    ClearButton(bool),
+    /// If `true`, the text field / area is non-editable (read-only).
+    ReadOnly(bool),
+    /// Maximum number of characters the text field will accept.
+    MaxLength(usize),
+    /// Blur / backdrop-filter effect radius in points. iOS maps to
+    /// `UIBlurEffect` + `UIVisualEffectView` as a subview.
+    BlurRadius(f32),
+    /// Clip subviews to the view's bounds (`clipsToBounds` / `masksToBounds`).
+    ClipToBounds(bool),
+    /// Z-order on the CALayer (higher values render on top of lower ones).
+    ZIndex(i32),
+    /// The visual style of the iOS status bar (dark / light / auto).
+    /// Maps to `UIStatusBarStyle` on iOS.
+    StatusBarStyle(StatusBarStyle),
+    /// Enforce a fixed width-to-height aspect ratio on this view.
+    /// Maps to an `NSLayoutConstraint` aspect-ratio constraint on iOS.
+    AspectRatio(f32),
+}
+
+/// The visual style of the iOS status bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusBarStyle {
+    /// Dark content (use on light backgrounds).
+    Dark,
+    /// Light content (use on dark backgrounds).
+    Light,
+    /// Follows the system / device appearance setting.
+    Auto,
 }
 
 /// Text decoration applied to a label or span.

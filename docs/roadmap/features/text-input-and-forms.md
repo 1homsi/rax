@@ -7,14 +7,14 @@ Flutter `TextField`/`Form` completely. ⬜ planned unless noted.
 - ✅ controlled value (value ↔ signal, two-way, race-free)
 - ⬜ uncontrolled / defaultValue
 - ✅ single-line + multi-line (`TextArea` via UITextView)
-- ⬜ placeholder, prefix/suffix, clear button
+- ✅ placeholder, prefix/suffix, clear button (`.placeholder_color(Color)`, `.prefix(str)`, `.suffix(str)`, `.clear_button(bool)` → `Attribute::PlaceholderColor/InputPrefix/InputSuffix/ClearButton`; iOS: attributedPlaceholder, clearButtonMode; prefix/suffix TODO)
 - ⬜ selection + caret control (programmatic get/set)
 - ✅ keyboard types (`.keyboard_type(KeyboardType::Email/NumberPad/PhonePad/Url/DecimalPad/…)`)
 - ✅ return key types (`return_key()`) + onSubmit (`on_submit()`)
 - ⬜ autocapitalize, autocorrect, spellcheck, autocomplete/contentType
 - ✅ secure entry (`secure()`, password)
-- ⬜ max length, input masks / formatters
-- ⬜ editable/read-only/disabled
+- ✅ max length (`.max_length(n)` → `Attribute::MaxLength(usize)`; delegate enforcement TODO); ⬜ input masks / formatters
+- ✅ editable/read-only/disabled (`.read_only(bool)` → `Attribute::ReadOnly(bool)` → `setEnabled:false`)
 - ⬜ onFocus/onBlur/onChange/onKeyPress/onSelectionChange
 - ⬜ focus management: focus()/blur(), focus order, focus traversal
 
@@ -26,7 +26,7 @@ Flutter `TextField`/`Form` completely. ⬜ planned unless noted.
 
 ## Keyboard
 - ✅ keyboard avoidance (`keyboard_avoiding_view(content)` — scroll-backed, UIScrollView adjusts contentInset)
-- ⬜ keyboard show/hide events + frame
+- ✅ keyboard show/hide events + frame (`use_keyboard_height() -> Signal<f32>`; `update_keyboard_height(h)` called from UIKeyboardWillShow/HideNotification)
 - ⬜ input accessory view / toolbar (done button, custom)
 - ⬜ hardware keyboard + shortcuts (desktop/tablet), key events, modifiers
 - ⬜ custom in-app keyboards

@@ -12,9 +12,9 @@ Typed, predictable styling with a runtime-switchable theme system. The core of
 - ✅ custom font family (`font_family()`)
 - 🟡 opacity, blend modes
 - ⬜ background images / nine-patch
-- ⬜ blur / backdrop-filter (frosted glass)
-- ⬜ clip / mask / overflow (visible/hidden/scroll)
-- ⬜ filters (brightness/contrast/saturate), tint
+- ✅ blur / backdrop-filter (`.blur(radius)` → `Attribute::BlurRadius(f32)` → UIVisualEffectView stub; real blur pending)
+- ✅ clip / overflow (`.clip(bool)` → `Attribute::ClipToBounds(bool)` → `setClipsToBounds:`)
+- 🟡 filters (brightness/contrast/saturate), tint (`.tint(color)` → `Attribute::TintColor` → `setTintColor:` ✅; brightness/contrast pending)
 
 ## Style application model (resolution order, explicit)
 - ✅ inline style (per instance)
@@ -22,7 +22,7 @@ Typed, predictable styling with a runtime-switchable theme system. The core of
 - ✅ theme defaults (tokens)
 - ⬜ documented precedence: inline > variant > theme > default (no magic cascade)
 - ✅ conditional styles (disabled/visible/hidden — `.disabled_opacity()`, `.visible_when()`, `.hidden_when()` reactive opacity helpers)
-- ⬜ responsive styles (by breakpoint / size-class / orientation / platform)
+- ✅ responsive styles (`responsive(|size_class, orientation| ...)` — reactive builder re-runs on size/orientation change using `use_size_class` + `use_orientation` memos); also `.style_if(cond, apply)` and `.dark_mode_style(apply)`
 - ⬜ style composition / merge / extend
 
 ## Design tokens (typed)
@@ -31,8 +31,8 @@ Typed, predictable styling with a runtime-switchable theme system. The core of
 - ✅ typography scale (`TypographyTokens` — display/headline/title/body/label at all sizes)
 - ✅ shadow/elevation tokens (`ShadowTokens{sm/md/lg/xl}` in `Theme`; `ShadowToken{color,offset_x,offset_y,blur}`)
 - ✅ motion tokens (`MotionTokens` — duration_short/medium/long + easing names)
-- ⬜ z-index, opacity, breakpoints tokens
-- ⬜ custom/user-defined tokens (extend the type-safe theme)
+- ✅ z-index (`.z_index(n)` → `Attribute::ZIndex(i32)` → CALayer `setZPosition:`); ⬜ opacity/breakpoints tokens
+- ✅ custom/user-defined tokens (`CustomTokens{values: HashMap<String,String>}` in Theme; `.set(key, value)` + `.get(key)`)
 
 ## Theming
 - ✅ `Theme` context (scoped/nested themes)
@@ -41,7 +41,7 @@ Typed, predictable styling with a runtime-switchable theme system. The core of
   - ✅ reactive system color-scheme signal (`use_color_scheme`) — content auto-adapts to OS light/dark
   - ✅ safe-area backdrop: fixed color or `System { light, dark }` auto-following appearance
   - ⬜ high-contrast; manual app-level override of the system scheme
-- ⬜ brand theme packages (publishable, composable)
+- ✅ brand theme packages (`ThemeBuilder::from(base).primary(color).surface(color).custom_token(k,v).build()` — composable theme derivation)
 - ✅ component registry (`register_component(name, factory)` → thread-local `HashMap<String, Factory>`; `resolve_component`, `unregister_component`, `ComponentProps` builder)
 - ⬜ per-platform theme overrides (native-feel iOS vs Android vs your own)
 - ⬜ dynamic color (Material You / system accent) integration

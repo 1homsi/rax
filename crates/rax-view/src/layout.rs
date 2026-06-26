@@ -308,3 +308,40 @@ pub fn update_window_size(width: f32, height: f32) {
         s.set(orientation);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Responsive layout helper
+// ---------------------------------------------------------------------------
+
+/// Build a view that reactively adapts to the current [`SizeClass`] and
+/// [`Orientation`].
+///
+/// `builder` is called once at startup and again whenever the size class or
+/// orientation changes. The returned view replaces the previous one in the
+/// tree via [`crate::dynamic::dynamic`].
+///
+/// # Example
+/// ```rust
+/// use rax_view::{text, boxed, layout::{responsive, SizeClass, Orientation}};
+///
+/// let v = responsive(|size_class, orientation| {
+///     let label = match (size_class, orientation) {
+///         (SizeClass::Regular, _) => "Tablet layout",
+///         (_, Orientation::Landscape) => "Landscape phone",
+///         _ => "Portrait phone",
+///     };
+///     boxed(text(label))
+/// });
+/// ```
+pub fn responsive<V: crate::view::View + 'static>(
+    builder: impl Fn(SizeClass, Orientation) -> V + 'static,
+) -> impl crate::view::View {
+    use crate::dynamic::dynamic;
+    use crate::view::boxed;
+
+    dynamic(move || {
+        let sc = use_size_class().get();
+        let ori = use_orientation().get();
+        boxed(builder(sc, ori))
+    })
+}

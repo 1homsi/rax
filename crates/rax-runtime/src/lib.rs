@@ -93,6 +93,12 @@ thread_local! {
     /// [`use_network_status`]; updated by the platform backend via
     /// [`update_network_status`].
     static NETWORK_STATUS: Cell<Option<Signal<NetworkStatus>>> = const { Cell::new(None) };
+
+    /// Reactive signal for the current on-screen keyboard height in logical
+    /// pixels. Zero when the keyboard is hidden. Lazily initialised by
+    /// [`use_keyboard_height`]; updated by the platform backend via
+    /// [`update_keyboard_height`].
+    static KEYBOARD_HEIGHT: Cell<Option<Signal<f32>>> = const { Cell::new(None) };
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +348,44 @@ pub fn update_network_status(status: NetworkStatus) {
     NETWORK_STATUS.with(|slot| {
         if let Some(sig) = slot.get() {
             sig.set(status);
+        }
+    });
+}
+
+/// Returns a reactive `Signal<f32>` whose value is the current on-screen
+/// keyboard height in logical pixels. The signal is `0.0` when the keyboard is
+/// hidden and a positive value (typically 260–350 pt) while it is shown.
+///
+/// This signal is updated by the platform backend whenever the keyboard shows
+/// or hides. Use it to adjust your layout (e.g. add bottom padding) so focused
+/// text fields are not obscured.
+///
+/// Must be called while building views under a running [`App`].
+///
+/// ```no_run
+/// use rax_runtime::use_keyboard_height;
+///
+/// let kbd = use_keyboard_height();
+/// // kbd.get() → 0.0 when hidden, ~336.0 when the default keyboard is up
+/// ```
+pub fn use_keyboard_height() -> Signal<f32> {
+    KEYBOARD_HEIGHT.with(|slot| {
+        if let Some(sig) = slot.get() {
+            return sig;
+        }
+        let sig = create_signal(0.0f32);
+        slot.set(Some(sig));
+        sig
+    })
+}
+
+/// Called by the platform backend to push the current keyboard height into the
+/// reactive signal exposed by [`use_keyboard_height`]. App code should not call
+/// this directly.
+pub fn update_keyboard_height(height: f32) {
+    KEYBOARD_HEIGHT.with(|slot| {
+        if let Some(sig) = slot.get() {
+            sig.set(height);
         }
     });
 }

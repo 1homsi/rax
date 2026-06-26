@@ -82,16 +82,17 @@ pub use text::{rich_text, text, DynamicText, IntoText, RichText, StaticText, Tex
 pub use rax_dom::TextSpan;
 pub use text_input::{text_area, text_input, TextArea, TextInput};
 pub use theme::{
-    provide_theme, try_use_theme, use_theme, ColorTokens, MotionTokens, RadiusTokens,
-    ShadowToken, ShadowTokens, SpacingTokens, Theme, TypographyTokens,
+    provide_theme, try_use_theme, use_theme, ColorTokens, CustomTokens, MotionTokens, RadiusTokens,
+    ShadowToken, ShadowTokens, SpacingTokens, Theme, ThemeBuilder, TypographyTokens,
 };
 pub use registry::{
     is_registered, register_component, resolve_component, unregister_component, ComponentProps,
 };
 pub use view::{boxed, BoxedView, View, ViewSequence};
 pub use layout::{
-    aspect_ratio, center, expanded, flexible, safe_area_bottom, safe_area_top, safe_area_view,
-    update_window_size, use_orientation, use_size_class, use_window_width, Orientation, SizeClass,
+    aspect_ratio, center, expanded, flexible, responsive, safe_area_bottom, safe_area_top,
+    safe_area_view, update_window_size, use_orientation, use_size_class, use_window_width,
+    Orientation, SizeClass,
 };
 
 // Re-export the style enums used by the builder API for convenience.

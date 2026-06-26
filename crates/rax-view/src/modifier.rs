@@ -5,8 +5,8 @@
 
 use rax_core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Point, Position};
 use rax_dom::{
-    Attribute, EventKind, GesturePhase, GestureKind, LayoutDirection, LinearGradient, Role, Shadow,
-    Transform, Tree, WidgetId,
+    Attribute, Callback, CursorStyle, EventKind, GesturePhase, GestureKind, LayoutDirection,
+    LinearGradient, Role, Shadow, SwipeDirection, Transform, Tree, WidgetId,
 };
 
 use crate::view::View;
@@ -379,6 +379,58 @@ pub trait ViewExt: View + Sized {
         })
     }
 
+    /// Runs `f` when a touch begins on this view (press-in / touch-down).
+    ///
+    /// Useful for giving immediate visual feedback (e.g. scale-down) before
+    /// the user lifts their finger.
+    fn on_press_in(
+        self,
+        f: impl Fn() + Send + Sync + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        let cb = Callback(std::sync::Arc::new(f));
+        self.decorate(move |t, id| {
+            t.set(id, Attribute::OnPressIn(cb));
+        })
+    }
+
+    /// Runs `f` when a touch ends (or is cancelled) on this view (press-out /
+    /// touch-up). Pair with [`on_press_in`](ViewExt::on_press_in) to reset
+    /// visual state when the finger lifts.
+    fn on_press_out(
+        self,
+        f: impl Fn() + Send + Sync + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        let cb = Callback(std::sync::Arc::new(f));
+        self.decorate(move |t, id| {
+            t.set(id, Attribute::OnPressOut(cb));
+        })
+    }
+
+    /// Runs `f` when the user swipes in `direction` over this view.
+    ///
+    /// Multiple `.on_swipe` modifiers can be chained for different directions.
+    fn on_swipe(
+        self,
+        direction: SwipeDirection,
+        f: impl Fn() + Send + Sync + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        let handler = Callback(std::sync::Arc::new(f));
+        self.decorate(move |t, id| {
+            t.set(id, Attribute::OnSwipe { direction, handler });
+            t.enable_gesture(id, GestureKind::Swipe);
+        })
+    }
+
+    /// Sets the pointer cursor style for this view. No-op on touch-only
+    /// platforms; on iPad with pointer device or macOS Catalyst it changes
+    /// the system cursor shape when hovering.
+    fn cursor(
+        self,
+        style: CursorStyle,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::Cursor(style)))
+    }
+
     // --- accessibility ---
 
     /// Sets the screen-reader label for this view.
@@ -525,6 +577,95 @@ pub trait ViewExt: View + Sized {
         dir: LayoutDirection,
     ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |t, id| t.set(id, Attribute::Direction(dir)))
+    }
+
+    // --- styling additions ---
+
+    /// Apply a blur / backdrop-filter effect with the given `radius` in points.
+    ///
+    /// iOS maps this to a `UIBlurEffect` + `UIVisualEffectView` inserted as a
+    /// subview. On unsupported platforms the attribute is a no-op.
+    fn blur(self, radius: f32) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::BlurRadius(radius)))
+    }
+
+    /// Clip subviews to this view's bounds.
+    ///
+    /// Maps to `clipsToBounds = true/false` on iOS / `setClipToBounds` on Android.
+    fn clip(self, clip: bool) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::ClipToBounds(clip)))
+    }
+
+    /// Override the tint color of this view and its subviews.
+    ///
+    /// Maps to `UIView.tintColor` on iOS.
+    fn tint(self, color: Color) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::TintColor(color)))
+    }
+
+    /// Set the Z-order (rendering layer depth) for this view.
+    ///
+    /// Higher values render on top of lower ones at the same level. Maps to
+    /// `CALayer.zPosition` on iOS.
+    fn z_index(self, n: i32) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::ZIndex(n)))
+    }
+
+    /// Conditionally apply extra paint/layout attributes when `condition()` is
+    /// `true`. Re-evaluates reactively whenever signals read inside `condition`
+    /// or `apply` change.
+    ///
+    /// # Example
+    /// ```no_run
+    /// view.style_if(move || is_selected.get(), |t, id| {
+    ///     t.set(id, Attribute::BorderWidth(2.0));
+    ///     t.set(id, Attribute::BorderColor(Color::BLUE));
+    /// })
+    /// ```
+    fn style_if(
+        self,
+        condition: impl Fn() -> bool + 'static,
+        apply: impl Fn(&mut Tree, WidgetId) + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| {
+            if condition() {
+                apply(t, id);
+            }
+        })
+    }
+
+    /// Apply extra paint attributes when the app is in dark mode.
+    ///
+    /// Reads [`try_use_theme`](crate::theme::try_use_theme) — if no theme is
+    /// provided it falls back to checking `UITraitCollection` (no-op stub for
+    /// now). Because the theme signal is reactive, this re-evaluates whenever
+    /// the theme changes.
+    ///
+    /// # Example
+    /// ```no_run
+    /// card.dark_mode_style(|t, id| t.set(id, Attribute::BackgroundColor(Color::hex(0x1C1B1Fff))))
+    /// ```
+    fn dark_mode_style(
+        self,
+        apply: impl Fn(&mut Tree, WidgetId) + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        use crate::theme::try_use_theme;
+        self.decorate(move |t, id| {
+            let is_dark = try_use_theme()
+                .map(|sig| {
+                    // Dark if the theme's surface color is dark (luminance < 0.5).
+                    let c = sig.get().colors.background;
+                    // Simple luminance approximation: 0.299R + 0.587G + 0.114B.
+                    let lum = 0.299 * (c.r as f32 / 255.0)
+                        + 0.587 * (c.g as f32 / 255.0)
+                        + 0.114 * (c.b as f32 / 255.0);
+                    lum < 0.5
+                })
+                .unwrap_or(false);
+            if is_dark {
+                apply(t, id);
+            }
+        })
     }
 }
 

@@ -225,6 +225,47 @@ impl Default for ShadowTokens {
 }
 
 // ---------------------------------------------------------------------------
+// Custom / user-defined tokens
+// ---------------------------------------------------------------------------
+
+/// A bag of arbitrary string key-value pairs for app-specific design tokens.
+///
+/// Attach to a [`Theme`] via `theme.custom` and read with
+/// `theme.custom.get("key")`.
+///
+/// # Example
+/// ```no_run
+/// use rax_view::theme::{Theme, CustomTokens};
+///
+/// let theme = Theme::light();
+/// let theme = ThemeBuilder::from(theme)
+///     .build();
+/// ```
+#[derive(Clone, Debug, Default)]
+pub struct CustomTokens {
+    /// Raw string key-value storage.
+    pub values: std::collections::HashMap<String, String>,
+}
+
+impl CustomTokens {
+    /// Create an empty token bag.
+    pub fn new() -> Self {
+        Self { values: Default::default() }
+    }
+
+    /// Set a key-value pair, returning `self` for chaining.
+    pub fn set(mut self, key: &str, value: &str) -> Self {
+        self.values.insert(key.to_string(), value.to_string());
+        self
+    }
+
+    /// Retrieve a value by key.
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.values.get(key).map(|s| s.as_str())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Theme aggregate
 // ---------------------------------------------------------------------------
 
@@ -236,6 +277,8 @@ pub struct Theme {
     pub radius: RadiusTokens,
     pub motion: MotionTokens,
     pub shadows: ShadowTokens,
+    /// User-defined design tokens for app-specific values.
+    pub custom: CustomTokens,
 }
 
 impl Theme {
@@ -247,6 +290,7 @@ impl Theme {
             radius: RadiusTokens::default(),
             motion: MotionTokens::default(),
             shadows: ShadowTokens::default(),
+            custom: CustomTokens::new(),
         }
     }
 
@@ -258,7 +302,71 @@ impl Theme {
             radius: RadiusTokens::default(),
             motion: MotionTokens::default(),
             shadows: ShadowTokens::default(),
+            custom: CustomTokens::new(),
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ThemeBuilder — brand theme packages
+// ---------------------------------------------------------------------------
+
+/// Fluent builder for customizing a [`Theme`] with brand-specific colors.
+///
+/// Start from a base light or dark theme and override individual tokens:
+///
+/// ```no_run
+/// use rax_core::Color;
+/// use rax_view::theme::{Theme, ThemeBuilder};
+///
+/// let brand_theme = ThemeBuilder::from(Theme::light())
+///     .primary(Color::hex(0xFF5722FF))
+///     .surface(Color::hex(0xFFF8F5FF))
+///     .build();
+/// ```
+pub struct ThemeBuilder {
+    base: Theme,
+}
+
+impl ThemeBuilder {
+    /// Start building from `base`.
+    pub fn from(base: Theme) -> Self {
+        Self { base }
+    }
+
+    /// Override the primary brand color.
+    pub fn primary(mut self, color: Color) -> Self {
+        self.base.colors.primary = color;
+        self
+    }
+
+    /// Override the surface background color.
+    pub fn surface(mut self, color: Color) -> Self {
+        self.base.colors.surface = color;
+        self
+    }
+
+    /// Override the background color.
+    pub fn background(mut self, color: Color) -> Self {
+        self.base.colors.background = color;
+        self
+    }
+
+    /// Override the error color.
+    pub fn error(mut self, color: Color) -> Self {
+        self.base.colors.error = color;
+        self
+    }
+
+    /// Set a custom token on the theme.
+    pub fn custom_token(mut self, key: &str, value: &str) -> Self {
+        self.base.custom = self.base.custom.set(key, value);
+        self
+    }
+
+    /// Consume the builder and return the finished [`Theme`].
+    pub fn build(self) -> Theme {
+        self.base
     }
 }
 
