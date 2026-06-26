@@ -6,9 +6,9 @@ Rust-owned navigation state with native transition primitives. ⬜ planned.
 ## Navigators
 - ✅ stack navigator (push/pop/replace/popToTop/popToRoot)
 - ✅ tab navigator (bottom tabs + top tabs)
-- ⬜ modal / sheet presentation (full / page-sheet / form-sheet / sizes)
+- ✅ modal presentation stack (`present_modal(route)`, `dismiss_modal()`, `current_modal()`, `modal_stack()` — separate stack, does not affect main nav)
 - ✅ drawer / side-menu navigator (`drawer(show, on_dismiss, width, content)` — composed)
-- ⬜ nested navigators (tabs containing stacks, etc.)
+- ✅ deep link parsing (`parse_deep_link(url) -> (path, HashMap<key,val>)` — strips scheme, splits path/query); ✅ `try_navigate(route) -> bool` (guard-aware, returns false if redirected); ⬜ nested navigators (tabs containing stacks)
 - ⬜ split-view / master-detail (tablet/desktop adaptive)
 
 ## Routing

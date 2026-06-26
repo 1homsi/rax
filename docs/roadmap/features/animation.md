@@ -8,7 +8,7 @@ scheduler's frame loop. ⬜ planned.
 - ✅ timing animations (duration + easing curves: linear/ease/cubic-bezier/steps)
 - ✅ spring animations (mass/stiffness/damping; presets: GENTLE/BOUNCY/SNAPPY/SLOW + default/stiff/wobbly)
 - ✅ decay / fling (velocity-based coast to stop)
-- ⬜ keyframes / sequences / staggers
+- ✅ keyframes (`keyframes(clock: Signal<f32>, frames: Vec<Keyframe<f32>>) -> Signal<f32>` — per-segment easing, normalized progress 0..1); ✅ `tick_animation_frame()` + `animation_frame() -> u64` + `use_looping_clock(period_frames)` → cycling 0..1 signal; ⬜ staggers (wall-clock delay needs timer support)
 - ✅ parallel + sequential composition (`parallel()` / `sequence()`)
 - ✅ loop / oscillate / yoyo (`oscillate()`)
 - ✅ delay (`delayed()`); ⬜ interpolation, clamping/extrapolation

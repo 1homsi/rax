@@ -36,7 +36,7 @@ Match Expo/RN CLI + Metro + Flutter CLI + DevTools + hot reload. ✅ · 🟡 · 
 - ⬜ remote debugging (device ↔ desktop)
 
 ## Error handling & diagnostics
-- ⬜ red-box error overlay (panics + `Result` surfaces) with source mapping
+- ✅ error overlay (`error_overlay(message, visible: Signal<bool>)` composable — red bubble overlay; `debug_border(content, label)` dev border helper)
 - ✅ structured logging (`rax-log`: `rax_debug!/info!/warn!/error!` macros; `Level` enum; `set_min_level`; routes to `println!` on iOS → Xcode console)
 - ⬜ great compiler-error ergonomics for the view API (type-erasure boundaries)
 - ⬜ crash reporting / symbolication SDK hooks
@@ -46,6 +46,7 @@ Match Expo/RN CLI + Metro + Flutter CLI + DevTools + hot reload. ✅ · 🟡 · 
 - ✅ recording backend; host-side pipeline tests
 - 🟡 headless host + finder/query API (find-by-text/role/testID)
 - ✅ widget interaction tests (tap / value / long-press / double-tap / pan / arbitrary events)
+- ✅ `rax-testing` crate: `assert_signal_eq`, `assert_signal`, `assert_after_updates`, `Recorder<T>` (signal change recorder), `with_test_scope`
 - ⬜ snapshot tests (mutation stream + golden images per platform)
 - ⬜ the cross-platform **conformance suite** (release gate)
 - ⬜ property/fuzz tests (layout, reconciler, reactivity)
