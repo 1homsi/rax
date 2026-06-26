@@ -357,6 +357,695 @@ impl DomCommand {
     }
 }
 
+/// A single drained web frame encoded for wasm or JavaScript host adapters.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomCommandBatch {
+    pub commands: Vec<DomWireCommand>,
+}
+
+impl DomCommandBatch {
+    /// Converts DOM backend commands into the host-facing wire representation.
+    pub fn from_commands(commands: Vec<DomCommand>) -> Self {
+        DomCommandBatch {
+            commands: commands.into_iter().map(DomWireCommand::from).collect(),
+        }
+    }
+
+    /// Number of commands in this frame batch.
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+
+    /// Whether this frame contains no host work.
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
+    /// Encodes the whole frame as JSON for a wasm boundary that wants one payload.
+    pub fn encode_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+}
+
+/// DOM command payload with only host-serializable values.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DomWireCommand {
+    Create {
+        id: u64,
+        tag_name: String,
+        input_type: Option<String>,
+    },
+    SetAttribute {
+        id: u64,
+        attr: DomWireAttribute,
+    },
+    SetFrame {
+        id: u64,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+    InsertChild {
+        parent: u64,
+        child: u64,
+        index: u64,
+    },
+    RemoveChild {
+        parent: u64,
+        child: u64,
+    },
+    Destroy {
+        id: u64,
+    },
+    SetRoot {
+        id: u64,
+    },
+    AddGesture {
+        id: u64,
+        gesture: String,
+    },
+    SetContentSize {
+        id: u64,
+        width: f32,
+        height: f32,
+    },
+    SetBackdrop {
+        css_color: String,
+    },
+    Haptic {
+        style: String,
+    },
+    Request {
+        request: DomWirePlatformRequest,
+    },
+    ScrollTo {
+        id: u64,
+        offset_x: f32,
+        offset_y: f32,
+        animated: bool,
+    },
+    ScrollToTop {
+        id: u64,
+        animated: bool,
+    },
+}
+
+impl From<DomCommand> for DomWireCommand {
+    fn from(command: DomCommand) -> Self {
+        match command {
+            DomCommand::Create { id, kind } => DomWireCommand::Create {
+                id,
+                tag_name: kind.tag_name().to_string(),
+                input_type: kind.input_type().map(str::to_string),
+            },
+            DomCommand::SetAttribute { id, attr } => DomWireCommand::SetAttribute {
+                id,
+                attr: dom_wire_attribute(attr),
+            },
+            DomCommand::SetFrame {
+                id,
+                x,
+                y,
+                width,
+                height,
+            } => DomWireCommand::SetFrame {
+                id,
+                x,
+                y,
+                width,
+                height,
+            },
+            DomCommand::InsertChild {
+                parent,
+                child,
+                index,
+            } => DomWireCommand::InsertChild {
+                parent,
+                child,
+                index: index as u64,
+            },
+            DomCommand::RemoveChild { parent, child } => {
+                DomWireCommand::RemoveChild { parent, child }
+            }
+            DomCommand::Destroy { id } => DomWireCommand::Destroy { id },
+            DomCommand::SetRoot { id } => DomWireCommand::SetRoot { id },
+            DomCommand::AddGesture { id, gesture } => DomWireCommand::AddGesture {
+                id,
+                gesture: debug_label(gesture),
+            },
+            DomCommand::SetContentSize { id, width, height } => {
+                DomWireCommand::SetContentSize { id, width, height }
+            }
+            DomCommand::SetBackdrop { css_color } => DomWireCommand::SetBackdrop { css_color },
+            DomCommand::Haptic { style } => DomWireCommand::Haptic {
+                style: debug_label(style),
+            },
+            DomCommand::Request(request) => DomWireCommand::Request {
+                request: DomWirePlatformRequest::from(request),
+            },
+            DomCommand::ScrollTo {
+                id,
+                offset_x,
+                offset_y,
+                animated,
+            } => DomWireCommand::ScrollTo {
+                id,
+                offset_x,
+                offset_y,
+                animated,
+            },
+            DomCommand::ScrollToTop { id, animated } => {
+                DomWireCommand::ScrollToTop { id, animated }
+            }
+        }
+    }
+}
+
+/// Web platform request payload with primitive/string host values.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DomWirePlatformRequest {
+    ScheduleNotification {
+        id: String,
+        title: String,
+        body: String,
+        delay_seconds: u32,
+    },
+    CancelNotification {
+        id: String,
+    },
+    AuthenticateBiometric {
+        reason: String,
+    },
+    StartLocation,
+    StopLocation,
+    StartMotion {
+        accelerometer: bool,
+        gyroscope: bool,
+    },
+    StopMotion,
+    PresentMediaPicker {
+        max_selection: u64,
+    },
+    PresentDocumentPicker {
+        types: Vec<String>,
+    },
+    RegisterBackgroundTask {
+        identifier: String,
+    },
+    ScheduleBackgroundTask {
+        identifier: String,
+        earliest_seconds: f64,
+    },
+    SetClipboard {
+        text: String,
+    },
+    ShareText {
+        text: String,
+    },
+    AnnounceAccessibility {
+        message: String,
+    },
+    RequestFocus {
+        id: u64,
+    },
+    SetTorch {
+        on: bool,
+    },
+    RegisterForPushNotifications,
+    SetAppBadge {
+        count: u32,
+    },
+}
+
+impl From<WebPlatformRequest> for DomWirePlatformRequest {
+    fn from(request: WebPlatformRequest) -> Self {
+        match request {
+            WebPlatformRequest::ScheduleNotification(notification) => {
+                DomWirePlatformRequest::ScheduleNotification {
+                    id: notification.id,
+                    title: notification.title,
+                    body: notification.body,
+                    delay_seconds: notification.delay_seconds,
+                }
+            }
+            WebPlatformRequest::CancelNotification { id } => {
+                DomWirePlatformRequest::CancelNotification { id }
+            }
+            WebPlatformRequest::AuthenticateBiometric { reason } => {
+                DomWirePlatformRequest::AuthenticateBiometric { reason }
+            }
+            WebPlatformRequest::StartLocation => DomWirePlatformRequest::StartLocation,
+            WebPlatformRequest::StopLocation => DomWirePlatformRequest::StopLocation,
+            WebPlatformRequest::StartMotion {
+                accelerometer,
+                gyroscope,
+            } => DomWirePlatformRequest::StartMotion {
+                accelerometer,
+                gyroscope,
+            },
+            WebPlatformRequest::StopMotion => DomWirePlatformRequest::StopMotion,
+            WebPlatformRequest::PresentMediaPicker { max_selection } => {
+                DomWirePlatformRequest::PresentMediaPicker {
+                    max_selection: max_selection as u64,
+                }
+            }
+            WebPlatformRequest::PresentDocumentPicker { types } => {
+                DomWirePlatformRequest::PresentDocumentPicker { types }
+            }
+            WebPlatformRequest::RegisterBackgroundTask { identifier } => {
+                DomWirePlatformRequest::RegisterBackgroundTask { identifier }
+            }
+            WebPlatformRequest::ScheduleBackgroundTask {
+                identifier,
+                earliest_seconds,
+            } => DomWirePlatformRequest::ScheduleBackgroundTask {
+                identifier,
+                earliest_seconds,
+            },
+            WebPlatformRequest::SetClipboard { text } => {
+                DomWirePlatformRequest::SetClipboard { text }
+            }
+            WebPlatformRequest::ShareText { text } => DomWirePlatformRequest::ShareText { text },
+            WebPlatformRequest::AnnounceAccessibility { message } => {
+                DomWirePlatformRequest::AnnounceAccessibility { message }
+            }
+            WebPlatformRequest::RequestFocus { id } => DomWirePlatformRequest::RequestFocus { id },
+            WebPlatformRequest::SetTorch { on } => DomWirePlatformRequest::SetTorch { on },
+            WebPlatformRequest::RegisterForPushNotifications => {
+                DomWirePlatformRequest::RegisterForPushNotifications
+            }
+            WebPlatformRequest::SetAppBadge { count } => {
+                DomWirePlatformRequest::SetAppBadge { count }
+            }
+        }
+    }
+}
+
+/// DOM attribute payload with callbacks replaced by listener intent markers.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "name", content = "value", rename_all = "snake_case")]
+pub enum DomWireAttribute {
+    Text(String),
+    FontSize(f32),
+    TextColor(String),
+    BackgroundColor(String),
+    CornerRadius(f32),
+    Opacity(f32),
+    BorderWidth(f32),
+    BorderColor(String),
+    Shadow {
+        color: String,
+        radius: f32,
+        dx: f32,
+        dy: f32,
+    },
+    ImageSource(String),
+    ImageData(Vec<u8>),
+    BoolValue(bool),
+    FloatValue(f32),
+    TintColor(String),
+    Placeholder(String),
+    Items(Vec<String>),
+    Range {
+        min: f32,
+        max: f32,
+        step: f32,
+    },
+    AccessibilityLabel(String),
+    AccessibilityHint(String),
+    AccessibilityRole(String),
+    AccessibilityHidden(bool),
+    Direction(String),
+    FontWeight(f32),
+    Italic(bool),
+    TextAlign(String),
+    Transform {
+        translate_x: f32,
+        translate_y: f32,
+        scale_x: f32,
+        scale_y: f32,
+        rotate: f32,
+    },
+    Gradient {
+        colors: Vec<String>,
+        start_x: f32,
+        start_y: f32,
+        end_x: f32,
+        end_y: f32,
+    },
+    NumberOfLines(u32),
+    Horizontal(bool),
+    Refreshing(bool),
+    ReturnKey(String),
+    Secure(bool),
+    QrScanning(bool),
+    FontFamily(String),
+    KeyboardType(String),
+    RichText(Vec<DomWireTextSpan>),
+    Url(String),
+    Html(String),
+    TextStyle(String),
+    DatePickerMode(String),
+    DatePickerStyle(String),
+    DateValue(f64),
+    DateMin(f64),
+    DateMax(f64),
+    ItemCount(u64),
+    EstimatedItemHeight(f32),
+    AnimateLayout(bool),
+    MapCenter {
+        latitude: f64,
+        longitude: f64,
+    },
+    MapSpan {
+        lat_span: f64,
+        lon_span: f64,
+    },
+    MapAnnotation {
+        annotation_id: String,
+        latitude: f64,
+        longitude: f64,
+        title: String,
+    },
+    AccessibilitySelected(bool),
+    AccessibilityDisabled(bool),
+    AccessibilityExpanded(bool),
+    AccessibilityBusy(bool),
+    HitSlop {
+        top: f32,
+        right: f32,
+        bottom: f32,
+        left: f32,
+    },
+    LetterSpacing(f32),
+    LineHeight(f32),
+    TextDecoration(String),
+    TextShadow {
+        color: String,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+    },
+    ScrollEnabled(bool),
+    ShowsScrollIndicator(bool),
+    PagingEnabled(bool),
+    ContentInset {
+        top: f32,
+        right: f32,
+        bottom: f32,
+        left: f32,
+    },
+    EventListener {
+        event: String,
+    },
+    SwipeListener {
+        direction: String,
+    },
+    Cursor(String),
+    PlaceholderColor(String),
+    InputPrefix(String),
+    InputSuffix(String),
+    ClearButton(bool),
+    ReadOnly(bool),
+    MaxLength(u64),
+    BlurRadius(f32),
+    ClipToBounds(bool),
+    ZIndex(i32),
+    StatusBarStyle(String),
+    AspectRatio(f32),
+    FlexOrder(i32),
+    UserSelectText(bool),
+    ParagraphSpacing(f32),
+    FontStyle(String),
+    AccessibilityGroup(bool),
+    AccessibilityHeadingLevel(u8),
+    AccessibilityActions(Vec<String>),
+    DynamicType(bool),
+    AccessibilityValueString(String),
+    KeyboardDismissMode(String),
+    ImageResizeMode(String),
+    ContextMenu(Vec<DomWireMenuItem>),
+    Unsupported {
+        name: String,
+    },
+}
+
+/// DOM host data for a rich-text span.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomWireTextSpan {
+    pub text: String,
+    pub color: Option<String>,
+    pub font_size: Option<f32>,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+    pub letter_spacing: Option<f32>,
+}
+
+/// DOM host data for a context-menu row without the Rust action closure.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomWireMenuItem {
+    pub title: String,
+    pub icon: Option<String>,
+    pub destructive: bool,
+}
+
+fn dom_wire_attribute(attr: Attribute) -> DomWireAttribute {
+    match attr {
+        Attribute::Text(value) => DomWireAttribute::Text(value),
+        Attribute::FontSize(value) => DomWireAttribute::FontSize(value),
+        Attribute::TextColor(color) => DomWireAttribute::TextColor(color_to_css(color)),
+        Attribute::BackgroundColor(color) => DomWireAttribute::BackgroundColor(color_to_css(color)),
+        Attribute::CornerRadius(value) => DomWireAttribute::CornerRadius(value),
+        Attribute::Opacity(value) => DomWireAttribute::Opacity(value),
+        Attribute::BorderWidth(value) => DomWireAttribute::BorderWidth(value),
+        Attribute::BorderColor(color) => DomWireAttribute::BorderColor(color_to_css(color)),
+        Attribute::Shadow(shadow) => DomWireAttribute::Shadow {
+            color: color_to_css(shadow.color),
+            radius: shadow.radius,
+            dx: shadow.dx,
+            dy: shadow.dy,
+        },
+        Attribute::ImageSource(value) => DomWireAttribute::ImageSource(value),
+        Attribute::BoolValue(value) => DomWireAttribute::BoolValue(value),
+        Attribute::FloatValue(value) => DomWireAttribute::FloatValue(value),
+        Attribute::TintColor(color) => DomWireAttribute::TintColor(color_to_css(color)),
+        Attribute::Placeholder(value) => DomWireAttribute::Placeholder(value),
+        Attribute::Items(items) => DomWireAttribute::Items(items),
+        Attribute::Range { min, max, step } => DomWireAttribute::Range { min, max, step },
+        Attribute::AccessibilityLabel(value) => DomWireAttribute::AccessibilityLabel(value),
+        Attribute::AccessibilityHint(value) => DomWireAttribute::AccessibilityHint(value),
+        Attribute::AccessibilityRole(role) => {
+            DomWireAttribute::AccessibilityRole(debug_label(role))
+        }
+        Attribute::AccessibilityHidden(value) => DomWireAttribute::AccessibilityHidden(value),
+        Attribute::Direction(value) => DomWireAttribute::Direction(debug_label(value)),
+        Attribute::FontWeight(value) => DomWireAttribute::FontWeight(value),
+        Attribute::Italic(value) => DomWireAttribute::Italic(value),
+        Attribute::TextAlign(value) => DomWireAttribute::TextAlign(debug_label(value)),
+        Attribute::Transform(transform) => DomWireAttribute::Transform {
+            translate_x: transform.translate_x,
+            translate_y: transform.translate_y,
+            scale_x: transform.scale_x,
+            scale_y: transform.scale_y,
+            rotate: transform.rotate,
+        },
+        Attribute::Gradient(gradient) => DomWireAttribute::Gradient {
+            colors: gradient.colors.into_iter().map(color_to_css).collect(),
+            start_x: gradient.start.0,
+            start_y: gradient.start.1,
+            end_x: gradient.end.0,
+            end_y: gradient.end.1,
+        },
+        Attribute::NumberOfLines(value) => DomWireAttribute::NumberOfLines(value),
+        Attribute::ImageData(bytes) => DomWireAttribute::ImageData(bytes.as_ref().clone()),
+        Attribute::Horizontal(value) => DomWireAttribute::Horizontal(value),
+        Attribute::Refreshing(value) => DomWireAttribute::Refreshing(value),
+        Attribute::ReturnKey(value) => DomWireAttribute::ReturnKey(debug_label(value)),
+        Attribute::Secure(value) => DomWireAttribute::Secure(value),
+        Attribute::QrScanning(value) => DomWireAttribute::QrScanning(value),
+        Attribute::FontFamily(value) => DomWireAttribute::FontFamily(value),
+        Attribute::KeyboardType(value) => DomWireAttribute::KeyboardType(debug_label(value)),
+        Attribute::RichText(spans) => {
+            DomWireAttribute::RichText(spans.into_iter().map(dom_wire_text_span).collect())
+        }
+        Attribute::Url(value) => DomWireAttribute::Url(value),
+        Attribute::Html(value) => DomWireAttribute::Html(value),
+        Attribute::TextStyle(value) => DomWireAttribute::TextStyle(debug_label(value)),
+        Attribute::DatePickerMode(value) => DomWireAttribute::DatePickerMode(debug_label(value)),
+        Attribute::DatePickerStyle(value) => DomWireAttribute::DatePickerStyle(debug_label(value)),
+        Attribute::DateValue(value) => DomWireAttribute::DateValue(value),
+        Attribute::DateMin(value) => DomWireAttribute::DateMin(value),
+        Attribute::DateMax(value) => DomWireAttribute::DateMax(value),
+        Attribute::ItemCount(value) => DomWireAttribute::ItemCount(value as u64),
+        Attribute::EstimatedItemHeight(value) => DomWireAttribute::EstimatedItemHeight(value),
+        Attribute::AnimateLayout(value) => DomWireAttribute::AnimateLayout(value),
+        Attribute::MapCenter {
+            latitude,
+            longitude,
+        } => DomWireAttribute::MapCenter {
+            latitude,
+            longitude,
+        },
+        Attribute::MapSpan { lat_span, lon_span } => {
+            DomWireAttribute::MapSpan { lat_span, lon_span }
+        }
+        Attribute::MapAnnotation {
+            annotation_id,
+            latitude,
+            longitude,
+            title,
+        } => DomWireAttribute::MapAnnotation {
+            annotation_id,
+            latitude,
+            longitude,
+            title,
+        },
+        Attribute::AccessibilitySelected(value) => DomWireAttribute::AccessibilitySelected(value),
+        Attribute::AccessibilityDisabled(value) => DomWireAttribute::AccessibilityDisabled(value),
+        Attribute::AccessibilityExpanded(value) => DomWireAttribute::AccessibilityExpanded(value),
+        Attribute::AccessibilityBusy(value) => DomWireAttribute::AccessibilityBusy(value),
+        Attribute::HitSlop {
+            top,
+            right,
+            bottom,
+            left,
+        } => DomWireAttribute::HitSlop {
+            top,
+            right,
+            bottom,
+            left,
+        },
+        Attribute::LetterSpacing(value) => DomWireAttribute::LetterSpacing(value),
+        Attribute::LineHeight(value) => DomWireAttribute::LineHeight(value),
+        Attribute::TextDecoration(value) => DomWireAttribute::TextDecoration(debug_label(value)),
+        Attribute::TextShadow {
+            color,
+            offset_x,
+            offset_y,
+            blur,
+        } => DomWireAttribute::TextShadow {
+            color: color_to_css(color),
+            offset_x,
+            offset_y,
+            blur,
+        },
+        Attribute::ScrollEnabled(value) => DomWireAttribute::ScrollEnabled(value),
+        Attribute::ShowsScrollIndicator(value) => DomWireAttribute::ShowsScrollIndicator(value),
+        Attribute::PagingEnabled(value) => DomWireAttribute::PagingEnabled(value),
+        Attribute::ContentInset {
+            top,
+            right,
+            bottom,
+            left,
+        } => DomWireAttribute::ContentInset {
+            top,
+            right,
+            bottom,
+            left,
+        },
+        Attribute::OnPressIn(_) => DomWireAttribute::EventListener {
+            event: "press_in".to_string(),
+        },
+        Attribute::OnPressOut(_) => DomWireAttribute::EventListener {
+            event: "press_out".to_string(),
+        },
+        Attribute::Cursor(value) => DomWireAttribute::Cursor(debug_label(value)),
+        Attribute::OnSwipe { direction, .. } => DomWireAttribute::SwipeListener {
+            direction: debug_label(direction),
+        },
+        Attribute::PlaceholderColor(color) => {
+            DomWireAttribute::PlaceholderColor(color_to_css(color))
+        }
+        Attribute::InputPrefix(value) => DomWireAttribute::InputPrefix(value),
+        Attribute::InputSuffix(value) => DomWireAttribute::InputSuffix(value),
+        Attribute::ClearButton(value) => DomWireAttribute::ClearButton(value),
+        Attribute::ReadOnly(value) => DomWireAttribute::ReadOnly(value),
+        Attribute::MaxLength(value) => DomWireAttribute::MaxLength(value as u64),
+        Attribute::BlurRadius(value) => DomWireAttribute::BlurRadius(value),
+        Attribute::ClipToBounds(value) => DomWireAttribute::ClipToBounds(value),
+        Attribute::ZIndex(value) => DomWireAttribute::ZIndex(value),
+        Attribute::StatusBarStyle(value) => DomWireAttribute::StatusBarStyle(debug_label(value)),
+        Attribute::AspectRatio(value) => DomWireAttribute::AspectRatio(value),
+        Attribute::FlexOrder(value) => DomWireAttribute::FlexOrder(value),
+        Attribute::UserSelectText(value) => DomWireAttribute::UserSelectText(value),
+        Attribute::ParagraphSpacing(value) => DomWireAttribute::ParagraphSpacing(value),
+        Attribute::FontStyle(value) => DomWireAttribute::FontStyle(debug_label(value)),
+        Attribute::AccessibilityGroup(value) => DomWireAttribute::AccessibilityGroup(value),
+        Attribute::AccessibilityHeadingLevel(value) => {
+            DomWireAttribute::AccessibilityHeadingLevel(value)
+        }
+        Attribute::AccessibilityActions(value) => DomWireAttribute::AccessibilityActions(value),
+        Attribute::DynamicType(value) => DomWireAttribute::DynamicType(value),
+        Attribute::AccessibilityValueString(value) => {
+            DomWireAttribute::AccessibilityValueString(value)
+        }
+        Attribute::OnScrollChange(_) => DomWireAttribute::EventListener {
+            event: "scroll_change".to_string(),
+        },
+        Attribute::OnScrollBegin(_) => DomWireAttribute::EventListener {
+            event: "scroll_begin".to_string(),
+        },
+        Attribute::OnScrollEnd(_) => DomWireAttribute::EventListener {
+            event: "scroll_end".to_string(),
+        },
+        Attribute::KeyboardDismissMode(value) => {
+            DomWireAttribute::KeyboardDismissMode(debug_label(value))
+        }
+        Attribute::ImageResizeMode(value) => DomWireAttribute::ImageResizeMode(debug_label(value)),
+        Attribute::ImageOnLoad(_) => DomWireAttribute::EventListener {
+            event: "image_load".to_string(),
+        },
+        Attribute::ImageOnError(_) => DomWireAttribute::EventListener {
+            event: "image_error".to_string(),
+        },
+        Attribute::DrawList(_) => DomWireAttribute::Unsupported {
+            name: "draw_list".to_string(),
+        },
+        Attribute::ContextMenu(items) => {
+            DomWireAttribute::ContextMenu(items.into_iter().map(dom_wire_menu_item).collect())
+        }
+    }
+}
+
+fn dom_wire_text_span(span: crate::dom::TextSpan) -> DomWireTextSpan {
+    DomWireTextSpan {
+        text: span.text,
+        color: span.color.map(color_to_css),
+        font_size: span.font_size,
+        bold: span.bold,
+        italic: span.italic,
+        underline: span.underline,
+        strikethrough: span.strikethrough,
+        letter_spacing: span.letter_spacing,
+    }
+}
+
+fn dom_wire_menu_item(item: crate::dom::MenuItem) -> DomWireMenuItem {
+    DomWireMenuItem {
+        title: item.title,
+        icon: item.icon,
+        destructive: item.destructive,
+    }
+}
+
+fn debug_label(value: impl std::fmt::Debug) -> String {
+    format!("{value:?}")
+}
+
 /// Browser/platform-service work requested by app code.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WebPlatformRequest {
@@ -469,6 +1158,16 @@ impl WebDomBackend {
     pub fn drain_commands(&self) -> Vec<DomCommand> {
         std::mem::take(&mut *self.commands.borrow_mut())
     }
+
+    /// Drains pending commands as one host-facing frame batch.
+    pub fn drain_command_batch(&self) -> DomCommandBatch {
+        DomCommandBatch::from_commands(self.drain_commands())
+    }
+
+    /// Drains pending commands and encodes the batch as JSON.
+    pub fn drain_command_batch_json(&self) -> Result<String, serde_json::Error> {
+        self.drain_command_batch().encode_json()
+    }
 }
 
 impl Backend for WebDomBackend {
@@ -517,6 +1216,16 @@ impl WebDriver {
     /// Drains commands emitted since the previous drain.
     pub fn drain_commands(&self) -> Vec<DomCommand> {
         std::mem::take(&mut *self.commands.borrow_mut())
+    }
+
+    /// Drains commands emitted since the previous drain as one host-facing frame batch.
+    pub fn drain_command_batch(&self) -> DomCommandBatch {
+        DomCommandBatch::from_commands(self.drain_commands())
+    }
+
+    /// Drains commands emitted since the previous drain and encodes the batch as JSON.
+    pub fn drain_command_batch_json(&self) -> Result<String, serde_json::Error> {
+        self.drain_command_batch().encode_json()
     }
 
     /// Returns mutable access to the underlying app for platform-specific state updates.
@@ -602,5 +1311,44 @@ mod tests {
         assert!(commands
             .iter()
             .any(|command| matches!(command, DomCommand::SetRoot { .. })));
+    }
+
+    #[test]
+    fn driver_drains_host_command_batch() {
+        let driver = WebDriver::new(Size::new(320.0, 480.0), || {
+            text("Hello").font_size(24.0).color(Color::rgb(1, 2, 3))
+        });
+        let batch = driver.drain_command_batch();
+
+        assert!(!batch.is_empty());
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            DomWireCommand::Create { tag_name, .. } if tag_name == "span"
+        )));
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            DomWireCommand::SetAttribute {
+                attr: DomWireAttribute::Text(value),
+                ..
+            } if value == "Hello"
+        )));
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            DomWireCommand::SetAttribute {
+                attr: DomWireAttribute::FontSize(24.0),
+                ..
+            }
+        )));
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            DomWireCommand::SetAttribute {
+                attr: DomWireAttribute::TextColor(value),
+                ..
+            } if value == "rgba(1, 2, 3, 1.000)"
+        )));
+
+        let encoded = batch.encode_json().expect("batch encodes as JSON");
+        assert!(encoded.contains("\"tag_name\":\"span\""));
+        assert!(driver.drain_command_batch().is_empty());
     }
 }

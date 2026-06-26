@@ -349,6 +349,719 @@ impl AndroidCommand {
     }
 }
 
+/// A single drained Android frame encoded for JNI or host adapters.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidCommandBatch {
+    pub commands: Vec<AndroidWireCommand>,
+}
+
+impl AndroidCommandBatch {
+    /// Converts native backend commands into the host-facing wire representation.
+    pub fn from_commands(commands: Vec<AndroidCommand>) -> Self {
+        AndroidCommandBatch {
+            commands: commands.into_iter().map(AndroidWireCommand::from).collect(),
+        }
+    }
+
+    /// Number of commands in this frame batch.
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+
+    /// Whether this frame contains no host work.
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
+    /// Encodes the whole frame as JSON for a JNI boundary that wants one string.
+    pub fn encode_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+}
+
+/// Android command payload with only host-serializable values.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AndroidWireCommand {
+    Create {
+        id: u64,
+        class_name: String,
+    },
+    SetAttribute {
+        id: u64,
+        attr: AndroidWireAttribute,
+    },
+    SetFrame {
+        id: u64,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+    InsertChild {
+        parent: u64,
+        child: u64,
+        index: u64,
+    },
+    RemoveChild {
+        parent: u64,
+        child: u64,
+    },
+    Destroy {
+        id: u64,
+    },
+    SetRoot {
+        id: u64,
+    },
+    AddGesture {
+        id: u64,
+        gesture: String,
+    },
+    SetContentSize {
+        id: u64,
+        width: f32,
+        height: f32,
+    },
+    SetBackdrop {
+        argb: u32,
+    },
+    Haptic {
+        style: String,
+    },
+    Request {
+        request: AndroidWirePlatformRequest,
+    },
+    ScrollTo {
+        id: u64,
+        offset_x: f32,
+        offset_y: f32,
+        animated: bool,
+    },
+    ScrollToTop {
+        id: u64,
+        animated: bool,
+    },
+}
+
+impl From<AndroidCommand> for AndroidWireCommand {
+    fn from(command: AndroidCommand) -> Self {
+        match command {
+            AndroidCommand::Create { id, class } => AndroidWireCommand::Create {
+                id,
+                class_name: class.class_name().to_string(),
+            },
+            AndroidCommand::SetAttribute { id, attr } => AndroidWireCommand::SetAttribute {
+                id,
+                attr: android_wire_attribute(attr),
+            },
+            AndroidCommand::SetFrame {
+                id,
+                x,
+                y,
+                width,
+                height,
+            } => AndroidWireCommand::SetFrame {
+                id,
+                x,
+                y,
+                width,
+                height,
+            },
+            AndroidCommand::InsertChild {
+                parent,
+                child,
+                index,
+            } => AndroidWireCommand::InsertChild {
+                parent,
+                child,
+                index: index as u64,
+            },
+            AndroidCommand::RemoveChild { parent, child } => {
+                AndroidWireCommand::RemoveChild { parent, child }
+            }
+            AndroidCommand::Destroy { id } => AndroidWireCommand::Destroy { id },
+            AndroidCommand::SetRoot { id } => AndroidWireCommand::SetRoot { id },
+            AndroidCommand::AddGesture { id, gesture } => AndroidWireCommand::AddGesture {
+                id,
+                gesture: debug_label(gesture),
+            },
+            AndroidCommand::SetContentSize { id, width, height } => {
+                AndroidWireCommand::SetContentSize { id, width, height }
+            }
+            AndroidCommand::SetBackdrop { argb } => AndroidWireCommand::SetBackdrop { argb },
+            AndroidCommand::Haptic { style } => AndroidWireCommand::Haptic {
+                style: debug_label(style),
+            },
+            AndroidCommand::Request(request) => AndroidWireCommand::Request {
+                request: AndroidWirePlatformRequest::from(request),
+            },
+            AndroidCommand::ScrollTo {
+                id,
+                offset_x,
+                offset_y,
+                animated,
+            } => AndroidWireCommand::ScrollTo {
+                id,
+                offset_x,
+                offset_y,
+                animated,
+            },
+            AndroidCommand::ScrollToTop { id, animated } => {
+                AndroidWireCommand::ScrollToTop { id, animated }
+            }
+        }
+    }
+}
+
+/// Android platform request payload with primitive/string host values.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AndroidWirePlatformRequest {
+    ScheduleNotification {
+        id: String,
+        title: String,
+        body: String,
+        delay_seconds: u32,
+    },
+    CancelNotification {
+        id: String,
+    },
+    AuthenticateBiometric {
+        reason: String,
+    },
+    StartLocation,
+    StopLocation,
+    StartMotion {
+        accelerometer: bool,
+        gyroscope: bool,
+    },
+    StopMotion,
+    PresentMediaPicker {
+        max_selection: u64,
+    },
+    PresentDocumentPicker {
+        types: Vec<String>,
+    },
+    RegisterBackgroundTask {
+        identifier: String,
+    },
+    ScheduleBackgroundTask {
+        identifier: String,
+        earliest_seconds: f64,
+    },
+    SetClipboard {
+        text: String,
+    },
+    ShareText {
+        text: String,
+    },
+    AnnounceAccessibility {
+        message: String,
+    },
+    RequestFocus {
+        id: u64,
+    },
+    SetTorch {
+        on: bool,
+    },
+    RegisterForPushNotifications,
+    SetAppBadge {
+        count: u32,
+    },
+}
+
+impl From<AndroidPlatformRequest> for AndroidWirePlatformRequest {
+    fn from(request: AndroidPlatformRequest) -> Self {
+        match request {
+            AndroidPlatformRequest::ScheduleNotification(notification) => {
+                AndroidWirePlatformRequest::ScheduleNotification {
+                    id: notification.id,
+                    title: notification.title,
+                    body: notification.body,
+                    delay_seconds: notification.delay_seconds,
+                }
+            }
+            AndroidPlatformRequest::CancelNotification { id } => {
+                AndroidWirePlatformRequest::CancelNotification { id }
+            }
+            AndroidPlatformRequest::AuthenticateBiometric { reason } => {
+                AndroidWirePlatformRequest::AuthenticateBiometric { reason }
+            }
+            AndroidPlatformRequest::StartLocation => AndroidWirePlatformRequest::StartLocation,
+            AndroidPlatformRequest::StopLocation => AndroidWirePlatformRequest::StopLocation,
+            AndroidPlatformRequest::StartMotion {
+                accelerometer,
+                gyroscope,
+            } => AndroidWirePlatformRequest::StartMotion {
+                accelerometer,
+                gyroscope,
+            },
+            AndroidPlatformRequest::StopMotion => AndroidWirePlatformRequest::StopMotion,
+            AndroidPlatformRequest::PresentMediaPicker { max_selection } => {
+                AndroidWirePlatformRequest::PresentMediaPicker {
+                    max_selection: max_selection as u64,
+                }
+            }
+            AndroidPlatformRequest::PresentDocumentPicker { types } => {
+                AndroidWirePlatformRequest::PresentDocumentPicker { types }
+            }
+            AndroidPlatformRequest::RegisterBackgroundTask { identifier } => {
+                AndroidWirePlatformRequest::RegisterBackgroundTask { identifier }
+            }
+            AndroidPlatformRequest::ScheduleBackgroundTask {
+                identifier,
+                earliest_seconds,
+            } => AndroidWirePlatformRequest::ScheduleBackgroundTask {
+                identifier,
+                earliest_seconds,
+            },
+            AndroidPlatformRequest::SetClipboard { text } => {
+                AndroidWirePlatformRequest::SetClipboard { text }
+            }
+            AndroidPlatformRequest::ShareText { text } => {
+                AndroidWirePlatformRequest::ShareText { text }
+            }
+            AndroidPlatformRequest::AnnounceAccessibility { message } => {
+                AndroidWirePlatformRequest::AnnounceAccessibility { message }
+            }
+            AndroidPlatformRequest::RequestFocus { id } => {
+                AndroidWirePlatformRequest::RequestFocus { id }
+            }
+            AndroidPlatformRequest::SetTorch { on } => AndroidWirePlatformRequest::SetTorch { on },
+            AndroidPlatformRequest::RegisterForPushNotifications => {
+                AndroidWirePlatformRequest::RegisterForPushNotifications
+            }
+            AndroidPlatformRequest::SetAppBadge { count } => {
+                AndroidWirePlatformRequest::SetAppBadge { count }
+            }
+        }
+    }
+}
+
+/// Android attribute payload with callbacks replaced by listener intent markers.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "name", content = "value", rename_all = "snake_case")]
+pub enum AndroidWireAttribute {
+    Text(String),
+    FontSize(f32),
+    TextColor(u32),
+    BackgroundColor(u32),
+    CornerRadius(f32),
+    Opacity(f32),
+    BorderWidth(f32),
+    BorderColor(u32),
+    Shadow {
+        color_argb: u32,
+        radius: f32,
+        dx: f32,
+        dy: f32,
+    },
+    ImageSource(String),
+    ImageData(Vec<u8>),
+    BoolValue(bool),
+    FloatValue(f32),
+    TintColor(u32),
+    Placeholder(String),
+    Items(Vec<String>),
+    Range {
+        min: f32,
+        max: f32,
+        step: f32,
+    },
+    AccessibilityLabel(String),
+    AccessibilityHint(String),
+    AccessibilityRole(String),
+    AccessibilityHidden(bool),
+    Direction(String),
+    FontWeight(f32),
+    Italic(bool),
+    TextAlign(String),
+    Transform {
+        translate_x: f32,
+        translate_y: f32,
+        scale_x: f32,
+        scale_y: f32,
+        rotate: f32,
+    },
+    Gradient {
+        colors_argb: Vec<u32>,
+        start_x: f32,
+        start_y: f32,
+        end_x: f32,
+        end_y: f32,
+    },
+    NumberOfLines(u32),
+    Horizontal(bool),
+    Refreshing(bool),
+    ReturnKey(String),
+    Secure(bool),
+    QrScanning(bool),
+    FontFamily(String),
+    KeyboardType(String),
+    RichText(Vec<AndroidWireTextSpan>),
+    Url(String),
+    Html(String),
+    TextStyle(String),
+    DatePickerMode(String),
+    DatePickerStyle(String),
+    DateValue(f64),
+    DateMin(f64),
+    DateMax(f64),
+    ItemCount(u64),
+    EstimatedItemHeight(f32),
+    AnimateLayout(bool),
+    MapCenter {
+        latitude: f64,
+        longitude: f64,
+    },
+    MapSpan {
+        lat_span: f64,
+        lon_span: f64,
+    },
+    MapAnnotation {
+        annotation_id: String,
+        latitude: f64,
+        longitude: f64,
+        title: String,
+    },
+    AccessibilitySelected(bool),
+    AccessibilityDisabled(bool),
+    AccessibilityExpanded(bool),
+    AccessibilityBusy(bool),
+    HitSlop {
+        top: f32,
+        right: f32,
+        bottom: f32,
+        left: f32,
+    },
+    LetterSpacing(f32),
+    LineHeight(f32),
+    TextDecoration(String),
+    TextShadow {
+        color_argb: u32,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+    },
+    ScrollEnabled(bool),
+    ShowsScrollIndicator(bool),
+    PagingEnabled(bool),
+    ContentInset {
+        top: f32,
+        right: f32,
+        bottom: f32,
+        left: f32,
+    },
+    EventListener {
+        event: String,
+    },
+    SwipeListener {
+        direction: String,
+    },
+    Cursor(String),
+    PlaceholderColor(u32),
+    InputPrefix(String),
+    InputSuffix(String),
+    ClearButton(bool),
+    ReadOnly(bool),
+    MaxLength(u64),
+    BlurRadius(f32),
+    ClipToBounds(bool),
+    ZIndex(i32),
+    StatusBarStyle(String),
+    AspectRatio(f32),
+    FlexOrder(i32),
+    UserSelectText(bool),
+    ParagraphSpacing(f32),
+    FontStyle(String),
+    AccessibilityGroup(bool),
+    AccessibilityHeadingLevel(u8),
+    AccessibilityActions(Vec<String>),
+    DynamicType(bool),
+    AccessibilityValueString(String),
+    KeyboardDismissMode(String),
+    ImageResizeMode(String),
+    ContextMenu(Vec<AndroidWireMenuItem>),
+    Unsupported {
+        name: String,
+    },
+}
+
+/// Android host data for a rich-text span.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidWireTextSpan {
+    pub text: String,
+    pub color_argb: Option<u32>,
+    pub font_size: Option<f32>,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+    pub letter_spacing: Option<f32>,
+}
+
+/// Android host data for a context-menu row without the Rust action closure.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidWireMenuItem {
+    pub title: String,
+    pub icon: Option<String>,
+    pub destructive: bool,
+}
+
+fn android_wire_attribute(attr: Attribute) -> AndroidWireAttribute {
+    match attr {
+        Attribute::Text(value) => AndroidWireAttribute::Text(value),
+        Attribute::FontSize(value) => AndroidWireAttribute::FontSize(value),
+        Attribute::TextColor(color) => AndroidWireAttribute::TextColor(color.to_argb_u32()),
+        Attribute::BackgroundColor(color) => {
+            AndroidWireAttribute::BackgroundColor(color.to_argb_u32())
+        }
+        Attribute::CornerRadius(value) => AndroidWireAttribute::CornerRadius(value),
+        Attribute::Opacity(value) => AndroidWireAttribute::Opacity(value),
+        Attribute::BorderWidth(value) => AndroidWireAttribute::BorderWidth(value),
+        Attribute::BorderColor(color) => AndroidWireAttribute::BorderColor(color.to_argb_u32()),
+        Attribute::Shadow(shadow) => AndroidWireAttribute::Shadow {
+            color_argb: shadow.color.to_argb_u32(),
+            radius: shadow.radius,
+            dx: shadow.dx,
+            dy: shadow.dy,
+        },
+        Attribute::ImageSource(value) => AndroidWireAttribute::ImageSource(value),
+        Attribute::BoolValue(value) => AndroidWireAttribute::BoolValue(value),
+        Attribute::FloatValue(value) => AndroidWireAttribute::FloatValue(value),
+        Attribute::TintColor(color) => AndroidWireAttribute::TintColor(color.to_argb_u32()),
+        Attribute::Placeholder(value) => AndroidWireAttribute::Placeholder(value),
+        Attribute::Items(items) => AndroidWireAttribute::Items(items),
+        Attribute::Range { min, max, step } => AndroidWireAttribute::Range { min, max, step },
+        Attribute::AccessibilityLabel(value) => AndroidWireAttribute::AccessibilityLabel(value),
+        Attribute::AccessibilityHint(value) => AndroidWireAttribute::AccessibilityHint(value),
+        Attribute::AccessibilityRole(role) => {
+            AndroidWireAttribute::AccessibilityRole(debug_label(role))
+        }
+        Attribute::AccessibilityHidden(value) => AndroidWireAttribute::AccessibilityHidden(value),
+        Attribute::Direction(value) => AndroidWireAttribute::Direction(debug_label(value)),
+        Attribute::FontWeight(value) => AndroidWireAttribute::FontWeight(value),
+        Attribute::Italic(value) => AndroidWireAttribute::Italic(value),
+        Attribute::TextAlign(value) => AndroidWireAttribute::TextAlign(debug_label(value)),
+        Attribute::Transform(transform) => AndroidWireAttribute::Transform {
+            translate_x: transform.translate_x,
+            translate_y: transform.translate_y,
+            scale_x: transform.scale_x,
+            scale_y: transform.scale_y,
+            rotate: transform.rotate,
+        },
+        Attribute::Gradient(gradient) => AndroidWireAttribute::Gradient {
+            colors_argb: gradient
+                .colors
+                .into_iter()
+                .map(Color::to_argb_u32)
+                .collect(),
+            start_x: gradient.start.0,
+            start_y: gradient.start.1,
+            end_x: gradient.end.0,
+            end_y: gradient.end.1,
+        },
+        Attribute::NumberOfLines(value) => AndroidWireAttribute::NumberOfLines(value),
+        Attribute::ImageData(bytes) => AndroidWireAttribute::ImageData(bytes.as_ref().clone()),
+        Attribute::Horizontal(value) => AndroidWireAttribute::Horizontal(value),
+        Attribute::Refreshing(value) => AndroidWireAttribute::Refreshing(value),
+        Attribute::ReturnKey(value) => AndroidWireAttribute::ReturnKey(debug_label(value)),
+        Attribute::Secure(value) => AndroidWireAttribute::Secure(value),
+        Attribute::QrScanning(value) => AndroidWireAttribute::QrScanning(value),
+        Attribute::FontFamily(value) => AndroidWireAttribute::FontFamily(value),
+        Attribute::KeyboardType(value) => AndroidWireAttribute::KeyboardType(debug_label(value)),
+        Attribute::RichText(spans) => {
+            AndroidWireAttribute::RichText(spans.into_iter().map(android_wire_text_span).collect())
+        }
+        Attribute::Url(value) => AndroidWireAttribute::Url(value),
+        Attribute::Html(value) => AndroidWireAttribute::Html(value),
+        Attribute::TextStyle(value) => AndroidWireAttribute::TextStyle(debug_label(value)),
+        Attribute::DatePickerMode(value) => {
+            AndroidWireAttribute::DatePickerMode(debug_label(value))
+        }
+        Attribute::DatePickerStyle(value) => {
+            AndroidWireAttribute::DatePickerStyle(debug_label(value))
+        }
+        Attribute::DateValue(value) => AndroidWireAttribute::DateValue(value),
+        Attribute::DateMin(value) => AndroidWireAttribute::DateMin(value),
+        Attribute::DateMax(value) => AndroidWireAttribute::DateMax(value),
+        Attribute::ItemCount(value) => AndroidWireAttribute::ItemCount(value as u64),
+        Attribute::EstimatedItemHeight(value) => AndroidWireAttribute::EstimatedItemHeight(value),
+        Attribute::AnimateLayout(value) => AndroidWireAttribute::AnimateLayout(value),
+        Attribute::MapCenter {
+            latitude,
+            longitude,
+        } => AndroidWireAttribute::MapCenter {
+            latitude,
+            longitude,
+        },
+        Attribute::MapSpan { lat_span, lon_span } => {
+            AndroidWireAttribute::MapSpan { lat_span, lon_span }
+        }
+        Attribute::MapAnnotation {
+            annotation_id,
+            latitude,
+            longitude,
+            title,
+        } => AndroidWireAttribute::MapAnnotation {
+            annotation_id,
+            latitude,
+            longitude,
+            title,
+        },
+        Attribute::AccessibilitySelected(value) => {
+            AndroidWireAttribute::AccessibilitySelected(value)
+        }
+        Attribute::AccessibilityDisabled(value) => {
+            AndroidWireAttribute::AccessibilityDisabled(value)
+        }
+        Attribute::AccessibilityExpanded(value) => {
+            AndroidWireAttribute::AccessibilityExpanded(value)
+        }
+        Attribute::AccessibilityBusy(value) => AndroidWireAttribute::AccessibilityBusy(value),
+        Attribute::HitSlop {
+            top,
+            right,
+            bottom,
+            left,
+        } => AndroidWireAttribute::HitSlop {
+            top,
+            right,
+            bottom,
+            left,
+        },
+        Attribute::LetterSpacing(value) => AndroidWireAttribute::LetterSpacing(value),
+        Attribute::LineHeight(value) => AndroidWireAttribute::LineHeight(value),
+        Attribute::TextDecoration(value) => {
+            AndroidWireAttribute::TextDecoration(debug_label(value))
+        }
+        Attribute::TextShadow {
+            color,
+            offset_x,
+            offset_y,
+            blur,
+        } => AndroidWireAttribute::TextShadow {
+            color_argb: color.to_argb_u32(),
+            offset_x,
+            offset_y,
+            blur,
+        },
+        Attribute::ScrollEnabled(value) => AndroidWireAttribute::ScrollEnabled(value),
+        Attribute::ShowsScrollIndicator(value) => AndroidWireAttribute::ShowsScrollIndicator(value),
+        Attribute::PagingEnabled(value) => AndroidWireAttribute::PagingEnabled(value),
+        Attribute::ContentInset {
+            top,
+            right,
+            bottom,
+            left,
+        } => AndroidWireAttribute::ContentInset {
+            top,
+            right,
+            bottom,
+            left,
+        },
+        Attribute::OnPressIn(_) => AndroidWireAttribute::EventListener {
+            event: "press_in".to_string(),
+        },
+        Attribute::OnPressOut(_) => AndroidWireAttribute::EventListener {
+            event: "press_out".to_string(),
+        },
+        Attribute::Cursor(value) => AndroidWireAttribute::Cursor(debug_label(value)),
+        Attribute::OnSwipe { direction, .. } => AndroidWireAttribute::SwipeListener {
+            direction: debug_label(direction),
+        },
+        Attribute::PlaceholderColor(color) => {
+            AndroidWireAttribute::PlaceholderColor(color.to_argb_u32())
+        }
+        Attribute::InputPrefix(value) => AndroidWireAttribute::InputPrefix(value),
+        Attribute::InputSuffix(value) => AndroidWireAttribute::InputSuffix(value),
+        Attribute::ClearButton(value) => AndroidWireAttribute::ClearButton(value),
+        Attribute::ReadOnly(value) => AndroidWireAttribute::ReadOnly(value),
+        Attribute::MaxLength(value) => AndroidWireAttribute::MaxLength(value as u64),
+        Attribute::BlurRadius(value) => AndroidWireAttribute::BlurRadius(value),
+        Attribute::ClipToBounds(value) => AndroidWireAttribute::ClipToBounds(value),
+        Attribute::ZIndex(value) => AndroidWireAttribute::ZIndex(value),
+        Attribute::StatusBarStyle(value) => {
+            AndroidWireAttribute::StatusBarStyle(debug_label(value))
+        }
+        Attribute::AspectRatio(value) => AndroidWireAttribute::AspectRatio(value),
+        Attribute::FlexOrder(value) => AndroidWireAttribute::FlexOrder(value),
+        Attribute::UserSelectText(value) => AndroidWireAttribute::UserSelectText(value),
+        Attribute::ParagraphSpacing(value) => AndroidWireAttribute::ParagraphSpacing(value),
+        Attribute::FontStyle(value) => AndroidWireAttribute::FontStyle(debug_label(value)),
+        Attribute::AccessibilityGroup(value) => AndroidWireAttribute::AccessibilityGroup(value),
+        Attribute::AccessibilityHeadingLevel(value) => {
+            AndroidWireAttribute::AccessibilityHeadingLevel(value)
+        }
+        Attribute::AccessibilityActions(value) => AndroidWireAttribute::AccessibilityActions(value),
+        Attribute::DynamicType(value) => AndroidWireAttribute::DynamicType(value),
+        Attribute::AccessibilityValueString(value) => {
+            AndroidWireAttribute::AccessibilityValueString(value)
+        }
+        Attribute::OnScrollChange(_) => AndroidWireAttribute::EventListener {
+            event: "scroll_change".to_string(),
+        },
+        Attribute::OnScrollBegin(_) => AndroidWireAttribute::EventListener {
+            event: "scroll_begin".to_string(),
+        },
+        Attribute::OnScrollEnd(_) => AndroidWireAttribute::EventListener {
+            event: "scroll_end".to_string(),
+        },
+        Attribute::KeyboardDismissMode(value) => {
+            AndroidWireAttribute::KeyboardDismissMode(debug_label(value))
+        }
+        Attribute::ImageResizeMode(value) => {
+            AndroidWireAttribute::ImageResizeMode(debug_label(value))
+        }
+        Attribute::ImageOnLoad(_) => AndroidWireAttribute::EventListener {
+            event: "image_load".to_string(),
+        },
+        Attribute::ImageOnError(_) => AndroidWireAttribute::EventListener {
+            event: "image_error".to_string(),
+        },
+        Attribute::DrawList(_) => AndroidWireAttribute::Unsupported {
+            name: "draw_list".to_string(),
+        },
+        Attribute::ContextMenu(items) => AndroidWireAttribute::ContextMenu(
+            items.into_iter().map(android_wire_menu_item).collect(),
+        ),
+    }
+}
+
+fn android_wire_text_span(span: crate::dom::TextSpan) -> AndroidWireTextSpan {
+    AndroidWireTextSpan {
+        text: span.text,
+        color_argb: span.color.map(Color::to_argb_u32),
+        font_size: span.font_size,
+        bold: span.bold,
+        italic: span.italic,
+        underline: span.underline,
+        strikethrough: span.strikethrough,
+        letter_spacing: span.letter_spacing,
+    }
+}
+
+fn android_wire_menu_item(item: crate::dom::MenuItem) -> AndroidWireMenuItem {
+    AndroidWireMenuItem {
+        title: item.title,
+        icon: item.icon,
+        destructive: item.destructive,
+    }
+}
+
+fn debug_label(value: impl std::fmt::Debug) -> String {
+    format!("{value:?}")
+}
+
 /// Android platform-service work requested by app code.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AndroidPlatformRequest {
@@ -461,6 +1174,16 @@ impl AndroidBackend {
     pub fn drain_commands(&self) -> Vec<AndroidCommand> {
         std::mem::take(&mut *self.commands.borrow_mut())
     }
+
+    /// Drains pending commands as one host-facing frame batch.
+    pub fn drain_command_batch(&self) -> AndroidCommandBatch {
+        AndroidCommandBatch::from_commands(self.drain_commands())
+    }
+
+    /// Drains pending commands and encodes the batch as JSON.
+    pub fn drain_command_batch_json(&self) -> Result<String, serde_json::Error> {
+        self.drain_command_batch().encode_json()
+    }
 }
 
 impl Backend for AndroidBackend {
@@ -509,6 +1232,16 @@ impl AndroidDriver {
     /// Drains commands emitted since the previous drain.
     pub fn drain_commands(&self) -> Vec<AndroidCommand> {
         std::mem::take(&mut *self.commands.borrow_mut())
+    }
+
+    /// Drains commands emitted since the previous drain as one host-facing frame batch.
+    pub fn drain_command_batch(&self) -> AndroidCommandBatch {
+        AndroidCommandBatch::from_commands(self.drain_commands())
+    }
+
+    /// Drains commands emitted since the previous drain and encodes the batch as JSON.
+    pub fn drain_command_batch_json(&self) -> Result<String, serde_json::Error> {
+        self.drain_command_batch().encode_json()
     }
 
     /// Returns mutable access to the underlying app for platform-specific state updates.
@@ -589,5 +1322,45 @@ mod tests {
         assert!(commands
             .iter()
             .any(|command| matches!(command, AndroidCommand::SetRoot { .. })));
+    }
+
+    #[test]
+    fn driver_drains_host_command_batch() {
+        let driver = AndroidDriver::new(Size::new(320.0, 480.0), || {
+            text("Hello").font_size(24.0).color(Color::rgb(1, 2, 3))
+        });
+        let batch = driver.drain_command_batch();
+
+        assert!(!batch.is_empty());
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            AndroidWireCommand::Create { class_name, .. }
+                if class_name == "android.widget.TextView"
+        )));
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            AndroidWireCommand::SetAttribute {
+                attr: AndroidWireAttribute::Text(value),
+                ..
+            } if value == "Hello"
+        )));
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            AndroidWireCommand::SetAttribute {
+                attr: AndroidWireAttribute::FontSize(24.0),
+                ..
+            }
+        )));
+        assert!(batch.commands.iter().any(|command| matches!(
+            command,
+            AndroidWireCommand::SetAttribute {
+                attr: AndroidWireAttribute::TextColor(0xff01_0203),
+                ..
+            }
+        )));
+
+        let encoded = batch.encode_json().expect("batch encodes as JSON");
+        assert!(encoded.contains("android.widget.TextView"));
+        assert!(driver.drain_command_batch().is_empty());
     }
 }
