@@ -223,9 +223,9 @@ fn handle_tick() {
             // Detect high-contrast / darker system colors (UIAccessibilityIsDarkerSystemColorsEnabled).
             let high_contrast = unsafe {
                 extern "C" {
-                    fn UIAccessibilityIsDarkerSystemColorsEnabled() -> bool;
+                    fn UIAccessibilityDarkerSystemColorsEnabled() -> bool;
                 }
-                UIAccessibilityIsDarkerSystemColorsEnabled()
+                UIAccessibilityDarkerSystemColorsEnabled()
             };
             app.set_high_contrast(high_contrast);
             app.set_safe_area(EdgeInsets {
@@ -874,11 +874,14 @@ fn setup_qr_scanner(view: *const UIView, widget_tag: u64) {
 
         // Use the main queue for callbacks — same thread as handle_tick so
         // PENDING_QR doesn't need a Mutex.
+        // `dispatch_get_main_queue()` is a C `static inline` that returns the
+        // address of the `_dispatch_main_q` global — there is no callable symbol
+        // by that name, so reference the global directly.
         let main_queue: *mut AnyObject = {
             extern "C" {
-                fn dispatch_get_main_queue() -> *mut AnyObject;
+                static _dispatch_main_q: objc2::runtime::AnyObject;
             }
-            dispatch_get_main_queue()
+            (&_dispatch_main_q as *const objc2::runtime::AnyObject) as *mut AnyObject
         };
         let _: () = msg_send![output, setDelegate: delegate callbackQueue: main_queue];
 
