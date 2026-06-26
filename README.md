@@ -40,8 +40,8 @@ Early but functional. A reactive multi-screen app with tab navigation, dynamic l
 | Animation (tweens, springs, keyframes) | ✅ |
 | Networking (HTTP, WebSocket, SSE) | ✅ |
 | SQLite, Keychain, local storage | ✅ |
-| Android backend | 🟡 command backend + driver + binding runtime + generated host glue + Gradle app shell + build/run artifact flow + host session/registry/versioned bridge + command/event wire |
-| Web/WASM backend | 🟡 DOM command backend + driver + binding runtime + generated host glue + browser/dev-server shell + raw wasm loader/build config + build/run artifact flow + host session/registry/versioned bridge + command/event wire |
+| Android backend | 🟡 command backend + driver + binding runtime + generated host glue + Gradle app shell + build/run artifact flow + built-in platform request defaults + host session/registry/versioned bridge + command/event wire |
+| Web/WASM backend | 🟡 DOM command backend + driver + binding runtime + generated host glue + browser/dev-server shell + raw wasm loader/build config + build/run artifact flow + built-in platform request defaults + host session/registry/versioned bridge + command/event wire |
 
 ## Structure
 

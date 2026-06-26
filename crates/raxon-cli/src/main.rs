@@ -2312,6 +2312,11 @@ fn android_activity_template(options: &GenerateOptions) -> String {
     r#"package __ANDROID_PACKAGE__
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.Choreographer
 import android.widget.FrameLayout
@@ -2391,6 +2396,21 @@ open class __ANDROID_ACTIVITY__ : Activity() {
     protected open fun installDefaultPlatformHandlers(host: __ANDROID_CLASS__) {
         host.platformRequestHandler = { request ->
             when (request.optString("type")) {
+                "set_clipboard" -> {
+                    val text = request.optString("text")
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("raxon", text))
+                }
+                "share_text" -> {
+                    val text = request.optString("text")
+                    if (text.isNotBlank()) {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        }
+                        runCatching { startActivity(Intent.createChooser(intent, null)) }
+                    }
+                }
                 "announce_accessibility" -> {
                     root.announceForAccessibility(request.optString("message"))
                 }
@@ -2611,7 +2631,9 @@ gradle wrapper --gradle-version {gradle_version}
 For brownfield apps, copy the `app/src/main` tree into an Android application
 module, or merge these files into an existing module. Override
 `{activity}.installDefaultPlatformHandlers` or set hooks on `{host_class}` for
-platform services and custom widgets.
+platform services and custom widgets. The generated Activity includes default
+handlers for clipboard writes, share text, external URLs, accessibility
+announcements, and focus requests.
 "#,
         package_path = options.android_package.replace('.', "/"),
         host_class = options.android_class,
@@ -2700,6 +2722,39 @@ fn web_js_host_template(options: &GenerateOptions) -> String {
     r#"const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+async function writeClipboardText(text) {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.writeText === "function" &&
+    window.isSecureContext
+  ) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return fallbackClipboardText(text);
+}
+
+function fallbackClipboardText(text) {
+  if (typeof document === "undefined" || !document.body) return false;
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  Object.assign(textarea.style, {
+    position: "fixed",
+    left: "-9999px",
+    top: "0",
+    opacity: "0",
+  });
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand("copy");
+  } finally {
+    textarea.remove();
+  }
+}
+
 export async function createRaxonWebHost(root, options = {}) {
   const module = options.wasm ?? await loadRaxonWasmModule(options);
   if (typeof module.default === "function" && options.initialize !== false) {
@@ -2756,7 +2811,8 @@ export class RaxonWebHost {
     this.handleCommand = handleCommand ?? (() => false);
     this.applyAttributeHook = applyAttribute ?? (() => false);
     this.installGestureHook = installGesture ?? (() => false);
-    this.handlePlatformRequest = handlePlatformRequest ?? (() => {});
+    this.handlePlatformRequestHook = handlePlatformRequest ?? (() => false);
+    this.liveRegion = null;
   }
 
   mount(width = this.root.clientWidth, height = this.root.clientHeight) {
@@ -2923,6 +2979,81 @@ export class RaxonWebHost {
         this.handlePlatformRequest(command.request ?? command);
         break;
     }
+  }
+
+  handlePlatformRequest(request) {
+    if (this.handlePlatformRequestHook(request, this) === true) return;
+    switch (request.type) {
+      case "set_clipboard":
+        writeClipboardText(String(request.text ?? "")).catch((error) => {
+          console.warn("[raxon] clipboard write failed", error);
+        });
+        break;
+      case "share_text":
+        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+          navigator.share({ text: String(request.text ?? "") }).catch((error) => {
+            if (error?.name !== "AbortError") {
+              console.warn("[raxon] web share failed", error);
+            }
+          });
+        } else {
+          writeClipboardText(String(request.text ?? "")).catch((error) => {
+            console.warn("[raxon] share fallback clipboard write failed", error);
+          });
+        }
+        break;
+      case "announce_accessibility":
+        this.announceAccessibility(String(request.message ?? ""));
+        break;
+      case "request_focus":
+        this.focusNode(Number(request.id));
+        break;
+      case "open_external_url":
+        if (request.url) {
+          window.open(String(request.url), "_blank", "noopener,noreferrer");
+        }
+        break;
+      default:
+        console.warn("[raxon] unhandled platform request", request);
+    }
+  }
+
+  announceAccessibility(message) {
+    const region = this.ensureLiveRegion();
+    region.textContent = "";
+    window.setTimeout(() => {
+      region.textContent = message;
+    }, 0);
+  }
+
+  ensureLiveRegion() {
+    if (this.liveRegion?.isConnected) return this.liveRegion;
+    const region = document.createElement("div");
+    region.setAttribute("aria-live", "polite");
+    region.setAttribute("aria-atomic", "true");
+    Object.assign(region.style, {
+      position: "absolute",
+      width: "1px",
+      height: "1px",
+      overflow: "hidden",
+      clip: "rect(0 0 0 0)",
+      whiteSpace: "nowrap",
+      border: "0",
+      padding: "0",
+      margin: "-1px",
+    });
+    this.root.appendChild(region);
+    this.liveRegion = region;
+    return region;
+  }
+
+  focusNode(id) {
+    const node = this.nodes.get(id);
+    if (!node) return;
+    if (!node.matches("a[href],button,input,select,textarea,[tabindex]")) {
+      node.tabIndex = -1;
+    }
+    node.focus({ preventScroll: false });
   }
 
   applyAttribute(node, attr) {
@@ -3147,7 +3278,10 @@ export interface RaxonWebHostOptions {
     command: Record<string, any>,
     host: RaxonWebHost,
   ) => boolean;
-  handlePlatformRequest?: (request: Record<string, any>) => void;
+  handlePlatformRequest?: (
+    request: Record<string, any>,
+    host: RaxonWebHost,
+  ) => boolean | void;
 }
 
 export function createRaxonWebHost(
@@ -3168,6 +3302,9 @@ export class RaxonWebHost {
   request(request: Record<string, any>): RaxonBridgeReply;
   applyCommandBatch(batch: { commands?: unknown[] }): void;
   applyCommand(command: Record<string, any>): void;
+  handlePlatformRequest(request: Record<string, any>): void;
+  announceAccessibility(message: string): void;
+  focusNode(id: number): void;
   applyAttribute(node: HTMLElement, attr: Record<string, any>): void;
 }
 "#
@@ -3270,17 +3407,6 @@ const host = await createRaxonWebHost(root, {{
   wasmUrl: raxonWebBuild.wasmUrl,
   onBridgeError(error) {{
     console.error("[raxon] bridge error", error);
-  }},
-  handlePlatformRequest(request) {{
-    switch (request.type) {{
-      case "open_external_url":
-        if (request.url) {{
-          window.open(request.url, "_blank", "noopener,noreferrer");
-        }}
-        break;
-      default:
-        console.warn("[raxon] unhandled platform request", request);
-    }}
   }},
 }});
 
@@ -3481,10 +3607,12 @@ functions.
 
 ## Browser side
 
-Run `npm run dev` from this directory and open the printed local URL. Customize
-`main.js` to handle platform requests such as notifications, media picker,
-clipboard, external URLs, and accessibility announcements for your app. Set
-`HOST` or `PORT` to override the dev-server bind address.
+Run `npm run dev` from this directory and open the printed local URL. The
+generated host includes default handlers for clipboard writes, share text,
+external URLs, accessibility announcements, and focus requests. Customize
+`main.js` or pass `handlePlatformRequest` for app-specific platform requests
+such as notifications or media pickers. Set `HOST` or `PORT` to override the
+dev-server bind address.
 "#,
         wasm_module = options.wasm_module,
     )
@@ -4141,6 +4269,15 @@ name = "demo_native"
         assert!(activity.contains("Choreographer.getInstance().postFrameCallback"));
         assert!(activity.contains("DemoHost.loadLibrary(NATIVE_LIBRARY)"));
         assert!(activity.contains("const val NATIVE_LIBRARY: String = \"demo_lib\""));
+        assert!(activity.contains("import android.content.ClipboardManager"));
+        assert!(activity.contains("\"set_clipboard\""));
+        assert!(activity.contains("clipboard.setPrimaryClip"));
+        assert!(activity.contains("\"share_text\""));
+        assert!(activity.contains("Intent(Intent.ACTION_SEND)"));
+        assert!(activity.contains("\"announce_accessibility\""));
+        assert!(activity.contains("root.announceForAccessibility"));
+        assert!(activity.contains("\"request_focus\""));
+        assert!(activity.contains("requestFocus()"));
         assert!(activity.contains("\"open_external_url\""));
         assert!(activity.contains("Intent(Intent.ACTION_VIEW, Uri.parse(url))"));
 
@@ -4188,6 +4325,16 @@ name = "demo_native"
         assert!(web_js.contains("type: \"text_changed\""));
         assert!(web_js.contains("node.style.color = attr.value"));
         assert!(web_js.contains("handlePlatformRequest(command.request ?? command)"));
+        assert!(web_js.contains("case \"set_clipboard\""));
+        assert!(web_js.contains("writeClipboardText(String(request.text ?? \"\"))"));
+        assert!(web_js.contains("case \"share_text\""));
+        assert!(web_js.contains("navigator.share({ text: String(request.text ?? \"\") })"));
+        assert!(web_js.contains("case \"announce_accessibility\""));
+        assert!(web_js.contains("aria-live"));
+        assert!(web_js.contains("case \"request_focus\""));
+        assert!(web_js.contains("focusNode(Number(request.id))"));
+        assert!(web_js.contains("case \"open_external_url\""));
+        assert!(web_js.contains("window.open(String(request.url)"));
 
         let web_index = fs::read_to_string(out_dir.join("web/index.html")).unwrap();
         assert!(web_index.contains("<title>Demo App</title>"));
@@ -4197,8 +4344,6 @@ name = "demo_native"
         assert!(web_main.contains("import { raxonWebBuild } from \"./raxon-web-build.js\""));
         assert!(web_main.contains("createRaxonWebHost(root"));
         assert!(web_main.contains("wasmUrl: raxonWebBuild.wasmUrl"));
-        assert!(web_main.contains("case \"open_external_url\""));
-        assert!(web_main.contains("window.open(request.url"));
         assert!(web_main.contains("ResizeObserver"));
         assert!(web_main.contains("window.requestAnimationFrame(frame)"));
 
