@@ -28,6 +28,9 @@ pub type WebHostSession = crate::host::HostSession<WebDriver>;
 /// Web host-session registry keyed by opaque browser-safe handles.
 pub type WebHostSessionRegistry = crate::host::HostSessionRegistry<WebDriver>;
 
+/// Web binding runtime used by generated browser glue.
+pub type WebHostBridge = crate::host::HostBridge<WebDriver>;
+
 /// Host-originated web event payload for JavaScript adapters.
 pub type DomWireEvent = crate::wire::WireEvent;
 
@@ -1317,6 +1320,17 @@ pub fn mount_web_host_session_in_registry<V: View>(
     registry.insert_driver(WebDriver::new(viewport, make_view))
 }
 
+impl crate::host::HostBridge<WebDriver> {
+    /// Mounts a web app into this binding runtime.
+    pub fn mount_web<V: View>(
+        &mut self,
+        viewport: Size,
+        make_view: impl FnOnce() -> V,
+    ) -> crate::host::HostSessionHandle {
+        self.insert_driver(WebDriver::new(viewport, make_view))
+    }
+}
+
 /// Converts a color into an `rgba(r, g, b, a)` CSS string.
 pub fn color_to_css(color: Color) -> String {
     let alpha = color.a as f32 / 255.0;
@@ -1578,5 +1592,74 @@ mod tests {
                 handle: handle.to_raw(),
             })
         );
+    }
+
+    #[test]
+    fn host_bridge_mounts_and_returns_json_replies() {
+        let count = create_signal(0);
+        let text_count = count;
+        let button_count = count;
+        let mut bridge = WebHostBridge::new();
+        let handle = bridge.mount_web(Size::new(320.0, 480.0), || {
+            column((
+                text(move || format!("Count {}", text_count.get())),
+                button("Tap", move || button_count.update(|value| *value += 1)),
+            ))
+        });
+        assert!(bridge.contains(handle));
+
+        let initial = bridge
+            .registry()
+            .get(handle)
+            .expect("session exists")
+            .driver()
+            .drain_command_batch();
+        let button_id = initial
+            .commands
+            .iter()
+            .find_map(|command| match command {
+                DomWireCommand::Create { id, tag_name, .. } if tag_name == "button" => Some(*id),
+                _ => None,
+            })
+            .expect("button create command is present");
+        let event_batch = DomWireEventBatch::new(vec![DomWireEvent::Tap { target: button_id }]);
+        let request = crate::host::HostBridgeJsonRequest::new(
+            crate::host::HostBridgeRequest::DispatchEventsTickAndDrainCommandBatch {
+                handle: handle.to_raw(),
+                batch: event_batch,
+            },
+        );
+        let reply = bridge
+            .handle_request_json_reply(&serde_json::to_string(&request).expect("request encodes"));
+        let reply: crate::host::HostBridgeJsonReply =
+            serde_json::from_str(&reply).expect("reply decodes");
+        match reply.result {
+            crate::host::HostBridgeJsonReplyResult::Ok {
+                response: crate::host::HostBridgeResponse::CommandBatch { batch },
+            } => {
+                assert!(batch.to_string().contains("\"Count 1\""));
+            }
+            _ => panic!("expected ok command batch reply"),
+        }
+
+        let reply = bridge.handle_request_json_reply(
+            &serde_json::to_string(&crate::host::HostBridgeJsonRequest::new(
+                crate::host::HostBridgeRequest::DrainCommandBatch { handle: 999 },
+            ))
+            .expect("request encodes"),
+        );
+        match serde_json::from_str::<crate::host::HostBridgeJsonReply>(&reply)
+            .expect("reply decodes")
+            .result
+        {
+            crate::host::HostBridgeJsonReplyResult::Error { error } => {
+                assert_eq!(
+                    error.code,
+                    crate::host::HostBridgeJsonErrorCode::UnknownSession
+                );
+                assert_eq!(error.handle, Some(999));
+            }
+            _ => panic!("expected error reply"),
+        }
     }
 }

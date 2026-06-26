@@ -4,7 +4,7 @@ A **100% Rust**, signal-driven framework for building **native** mobile apps. No
 
 ```toml
 [dependencies]
-raxon = "0.0.1"
+raxon = "0.0.9"
 ```
 
 ```rust
@@ -40,8 +40,8 @@ Early but functional. A reactive multi-screen app with tab navigation, dynamic l
 | Animation (tweens, springs, keyframes) | ✅ |
 | Networking (HTTP, WebSocket, SSE) | ✅ |
 | SQLite, Keychain, local storage | ✅ |
-| Android backend | 🟡 command backend + driver + host session/registry/bridge + command/event wire |
-| Web/WASM backend | 🟡 DOM command backend + driver + host session/registry/bridge + command/event wire |
+| Android backend | 🟡 command backend + driver + binding runtime + host session/registry/versioned bridge + command/event wire |
+| Web/WASM backend | 🟡 DOM command backend + driver + binding runtime + host session/registry/versioned bridge + command/event wire |
 
 ## Structure
 
@@ -53,9 +53,9 @@ raxon::reactive   — signals, memos, effects, stores, context
 raxon::dom        — virtual element tree and platform seam
 raxon::view       — declarative view builder
 raxon::ios        — UIKit backend (cfg'd to iOS targets)
-raxon::android    — Android command backend, driver, and host-session adapter
-raxon::web        — WebAssembly DOM command backend, driver, and host-session adapter
-raxon::host       — shared mount/tick/resize/event-dispatch command-drain loop + opaque session registry + versioned JSON bridge protocol
+raxon::android    — Android command backend, driver, and host binding adapter
+raxon::web        — WebAssembly DOM command backend, driver, and host binding adapter
+raxon::host       — shared mount/tick/resize/event-dispatch command-drain loop + opaque session registry + binding runtime + versioned JSON bridge protocol
 raxon::wire       — versioned JSON event protocol shared by platform hosts
 raxon::runtime    — app driver: layout, events, frames
 raxon::nav        — stack/tab/modal navigation

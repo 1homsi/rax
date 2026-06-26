@@ -4,7 +4,7 @@ A reactive, signal-driven native UI framework for Rust.
 
 ```toml
 [dependencies]
-raxon = "0.0.2"
+raxon = "0.0.9"
 ```
 
 ```rust

@@ -419,6 +419,31 @@ impl<D: HostDriver> HostSessionRegistry<D> {
             .map_err(|error| HostSessionError::ResponseJson(error.to_string()))
     }
 
+    /// Applies one JSON host bridge request and returns a JSON reply envelope.
+    ///
+    /// Unlike [`handle_request_json`](Self::handle_request_json), this method
+    /// does not expose Rust `Result` errors to generated bindings. Malformed
+    /// requests, unsupported protocol versions, and missing handles become a
+    /// structured `status = "error"` JSON payload that JNI/JS glue can forward
+    /// without panicking or inventing a parallel error protocol.
+    pub fn handle_request_json_reply(&mut self, payload: &str) -> String {
+        match self.handle_request_json_reply_inner(payload) {
+            Ok(reply) => reply.encode_json(),
+            Err(error) => HostBridgeJsonReply::error(error).encode_json(),
+        }
+    }
+
+    fn handle_request_json_reply_inner(
+        &mut self,
+        payload: &str,
+    ) -> Result<HostBridgeJsonReply, HostSessionError> {
+        let request: HostBridgeJsonRequest = serde_json::from_str(payload)
+            .map_err(|error| HostSessionError::RequestJson(error.to_string()))?;
+        request.ensure_supported()?;
+        let response = self.handle_request(request.request)?;
+        Ok(HostBridgeJsonReply::ok(response))
+    }
+
     fn session(&self, handle: HostSessionHandle) -> Result<&HostSession<D>, HostSessionError> {
         self.sessions
             .get(&handle)
@@ -436,6 +461,96 @@ impl<D: HostDriver> HostSessionRegistry<D> {
             .ok_or(HostSessionError::UnknownSession {
                 handle: handle.to_raw(),
             })
+    }
+}
+
+/// Binding-owned host runtime for generated JNI/JS glue.
+///
+/// This thin wrapper centralizes the registry and JSON error-envelope behavior
+/// that platform bindings need. Platform modules add mount helpers for their
+/// concrete drivers, while generated glue can keep this type as process/module
+/// state and route every frame through one JSON request.
+pub struct HostBridge<D> {
+    registry: HostSessionRegistry<D>,
+}
+
+impl<D> Default for HostBridge<D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<D> HostBridge<D> {
+    /// Creates an empty binding runtime.
+    pub fn new() -> Self {
+        HostBridge {
+            registry: HostSessionRegistry::new(),
+        }
+    }
+
+    /// Creates a binding runtime around an existing session registry.
+    pub fn with_registry(registry: HostSessionRegistry<D>) -> Self {
+        HostBridge { registry }
+    }
+
+    /// Returns shared access to the underlying session registry.
+    pub fn registry(&self) -> &HostSessionRegistry<D> {
+        &self.registry
+    }
+
+    /// Returns mutable access to the underlying session registry.
+    pub fn registry_mut(&mut self) -> &mut HostSessionRegistry<D> {
+        &mut self.registry
+    }
+
+    /// Inserts an already-mounted session and returns its opaque handle.
+    pub fn insert_session(&mut self, session: HostSession<D>) -> HostSessionHandle {
+        self.registry.insert_session(session)
+    }
+
+    /// Inserts a platform driver by wrapping it in a [`HostSession`].
+    pub fn insert_driver(&mut self, driver: D) -> HostSessionHandle {
+        self.registry.insert_driver(driver)
+    }
+
+    /// Removes a session, returning it to Rust if the handle was valid.
+    pub fn remove(&mut self, handle: HostSessionHandle) -> Option<HostSession<D>> {
+        self.registry.remove(handle)
+    }
+
+    /// Returns whether `handle` names a live session.
+    pub fn contains(&self, handle: HostSessionHandle) -> bool {
+        self.registry.contains(handle)
+    }
+
+    /// Number of live sessions.
+    pub fn len(&self) -> usize {
+        self.registry.len()
+    }
+
+    /// Whether no sessions are registered.
+    pub fn is_empty(&self) -> bool {
+        self.registry.is_empty()
+    }
+}
+
+impl<D: HostDriver> HostBridge<D> {
+    /// Applies one decoded host bridge request.
+    pub fn handle_request(
+        &mut self,
+        request: HostBridgeRequest,
+    ) -> Result<HostBridgeResponse, HostSessionError> {
+        self.registry.handle_request(request)
+    }
+
+    /// Applies one JSON host bridge request and returns a JSON bridge response.
+    pub fn handle_request_json(&mut self, payload: &str) -> Result<String, HostSessionError> {
+        self.registry.handle_request_json(payload)
+    }
+
+    /// Applies one JSON host bridge request and returns a JSON reply envelope.
+    pub fn handle_request_json_reply(&mut self, payload: &str) -> String {
+        self.registry.handle_request_json_reply(payload)
     }
 }
 
@@ -544,6 +659,160 @@ impl HostBridgeJsonResponse {
             response,
         }
     }
+}
+
+/// Versioned JSON reply envelope for FFI-style generated bindings.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostBridgeJsonReply {
+    /// Bridge protocol version used by this runtime.
+    pub protocol_version: u32,
+    /// Success or error payload.
+    #[serde(flatten)]
+    pub result: HostBridgeJsonReplyResult,
+}
+
+impl HostBridgeJsonReply {
+    /// Creates a successful reply envelope.
+    pub const fn ok(response: HostBridgeResponse) -> Self {
+        HostBridgeJsonReply {
+            protocol_version: HOST_BRIDGE_PROTOCOL_VERSION,
+            result: HostBridgeJsonReplyResult::Ok { response },
+        }
+    }
+
+    /// Creates an error reply envelope.
+    pub fn error(error: HostSessionError) -> Self {
+        HostBridgeJsonReply {
+            protocol_version: HOST_BRIDGE_PROTOCOL_VERSION,
+            result: HostBridgeJsonReplyResult::Error {
+                error: HostBridgeJsonError::from_error(&error),
+            },
+        }
+    }
+
+    fn encode_json(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|error| {
+            let fallback = HostBridgeJsonReply {
+                protocol_version: HOST_BRIDGE_PROTOCOL_VERSION,
+                result: HostBridgeJsonReplyResult::Error {
+                    error: HostBridgeJsonError {
+                        code: HostBridgeJsonErrorCode::ResponseJson,
+                        message: error.to_string(),
+                        handle: None,
+                        expected_version: None,
+                        found_version: None,
+                    },
+                },
+            };
+            serde_json::to_string(&fallback).unwrap_or_else(|_| {
+                "{\"protocolVersion\":1,\"status\":\"error\",\"error\":{\"code\":\"response_json\",\"message\":\"failed to encode host bridge reply\"}}".to_string()
+            })
+        })
+    }
+}
+
+/// Success or error body for a [`HostBridgeJsonReply`].
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum HostBridgeJsonReplyResult {
+    /// The request succeeded.
+    Ok {
+        /// Successful response payload.
+        #[serde(flatten)]
+        response: HostBridgeResponse,
+    },
+    /// The request failed before a successful response could be produced.
+    Error {
+        /// Structured host bridge error.
+        error: HostBridgeJsonError,
+    },
+}
+
+/// Structured error payload returned by FFI-style JSON replies.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostBridgeJsonError {
+    /// Stable machine-readable error code.
+    pub code: HostBridgeJsonErrorCode,
+    /// Human-readable diagnostic message.
+    pub message: String,
+    /// Session handle involved in the failure, when applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handle: Option<u64>,
+    /// Runtime-supported protocol version, when applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_version: Option<u32>,
+    /// Protocol version received from generated glue, when applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub found_version: Option<u32>,
+}
+
+impl HostBridgeJsonError {
+    fn from_error(error: &HostSessionError) -> Self {
+        match error {
+            HostSessionError::RequestJson(message) => HostBridgeJsonError {
+                code: HostBridgeJsonErrorCode::RequestJson,
+                message: format!("invalid host request JSON: {message}"),
+                handle: None,
+                expected_version: None,
+                found_version: None,
+            },
+            HostSessionError::UnsupportedBridgeVersion { expected, found } => HostBridgeJsonError {
+                code: HostBridgeJsonErrorCode::UnsupportedBridgeVersion,
+                message: error.to_string(),
+                handle: None,
+                expected_version: Some(*expected),
+                found_version: Some(*found),
+            },
+            HostSessionError::UnknownSession { handle } => HostBridgeJsonError {
+                code: HostBridgeJsonErrorCode::UnknownSession,
+                message: error.to_string(),
+                handle: Some(*handle),
+                expected_version: None,
+                found_version: None,
+            },
+            HostSessionError::Event(_) => HostBridgeJsonError {
+                code: HostBridgeJsonErrorCode::Event,
+                message: error.to_string(),
+                handle: None,
+                expected_version: None,
+                found_version: None,
+            },
+            HostSessionError::CommandJson(message) => HostBridgeJsonError {
+                code: HostBridgeJsonErrorCode::CommandJson,
+                message: format!("failed to encode host command batch: {message}"),
+                handle: None,
+                expected_version: None,
+                found_version: None,
+            },
+            HostSessionError::ResponseJson(message) => HostBridgeJsonError {
+                code: HostBridgeJsonErrorCode::ResponseJson,
+                message: format!("failed to encode host response: {message}"),
+                handle: None,
+                expected_version: None,
+                found_version: None,
+            },
+        }
+    }
+}
+
+/// Stable machine-readable host bridge error codes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostBridgeJsonErrorCode {
+    /// Request JSON was malformed.
+    RequestJson,
+    /// Request used a bridge protocol version this runtime does not support.
+    UnsupportedBridgeVersion,
+    /// Request referenced a session that is not live.
+    UnknownSession,
+    /// Host event JSON could not be decoded or validated.
+    Event,
+    /// Platform command JSON could not be encoded.
+    CommandJson,
+    /// Bridge response JSON could not be encoded.
+    ResponseJson,
 }
 
 /// Host bridge response payload returned to generated platform glue.
@@ -722,5 +991,57 @@ mod tests {
             registry.handle_request(HostBridgeRequest::DrainCommandBatch { handle: 99 }),
             Err(HostSessionError::UnknownSession { handle: 99 })
         );
+    }
+
+    #[test]
+    fn host_bridge_owns_registry_and_returns_json_replies() {
+        let mut bridge = HostBridge::new();
+        let handle = bridge.insert_driver(RecordingDriver::new(vec![json!({
+            "commands": [{ "kind": "frame", "id": 11 }]
+        })]));
+        assert!(bridge.contains(handle));
+
+        let request = HostBridgeJsonRequest::new(HostBridgeRequest::TickAndDrainCommandBatch {
+            handle: handle.to_raw(),
+        });
+        let reply = bridge
+            .handle_request_json_reply(&serde_json::to_string(&request).expect("request encodes"));
+        let reply_json: Value = serde_json::from_str(&reply).expect("reply is valid JSON");
+        assert_eq!(reply_json["status"].as_str(), Some("ok"));
+        assert_eq!(reply_json["type"].as_str(), Some("command_batch"));
+        assert_eq!(
+            serde_json::from_str::<HostBridgeJsonReply>(&reply).expect("reply decodes"),
+            HostBridgeJsonReply::ok(HostBridgeResponse::CommandBatch {
+                batch: json!({ "commands": [{ "kind": "frame", "id": 11 }] }),
+            })
+        );
+
+        let reply = bridge.handle_request_json_reply(
+            &serde_json::to_string(&HostBridgeJsonRequest::new(
+                HostBridgeRequest::DrainCommandBatch { handle: 999 },
+            ))
+            .expect("request encodes"),
+        );
+        let reply_json: Value = serde_json::from_str(&reply).expect("reply is valid JSON");
+        assert_eq!(reply_json["status"].as_str(), Some("error"));
+        assert_eq!(
+            reply_json["error"]["code"].as_str(),
+            Some("unknown_session")
+        );
+        assert_eq!(
+            serde_json::from_str::<HostBridgeJsonReply>(&reply).expect("reply decodes"),
+            HostBridgeJsonReply::error(HostSessionError::UnknownSession { handle: 999 })
+        );
+
+        let reply = bridge.handle_request_json_reply("{not valid json");
+        match serde_json::from_str::<HostBridgeJsonReply>(&reply)
+            .expect("reply decodes")
+            .result
+        {
+            HostBridgeJsonReplyResult::Error { error } => {
+                assert_eq!(error.code, HostBridgeJsonErrorCode::RequestJson);
+            }
+            _ => panic!("expected error reply"),
+        }
     }
 }
