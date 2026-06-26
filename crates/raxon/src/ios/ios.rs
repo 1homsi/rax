@@ -102,6 +102,23 @@ thread_local! {
     static BATTERY_TICK: Cell<u64> = const { Cell::new(0) };
 }
 
+/// Send a selector that takes a single `NSInteger` argument via raw
+/// `objc_msgSend`, bypassing objc2's debug method-verification.
+///
+/// `UITextInputTraits` setters (`setKeyboardType:` / `setReturnKeyType:`) are
+/// *forwarded* by `UITextField`/`UITextView` rather than implemented directly,
+/// so `class_getInstanceMethod` returns NULL and objc2's verified `msg_send!`
+/// aborts with "method not found" — even though the real send succeeds through
+/// the ObjC forwarding machinery. This calls the runtime directly.
+unsafe fn send_set_int(obj: *const AnyObject, sel: objc2::runtime::Sel, value: isize) {
+    extern "C" {
+        fn objc_msgSend();
+    }
+    let f: unsafe extern "C" fn(*const AnyObject, objc2::runtime::Sel, isize) =
+        std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+    f(obj, sel, value);
+}
+
 fn handle_tap(tag_bits: u64) {
     // Enqueue only. The CADisplayLink tick drains and rebuilds on the next
     // frame — never synchronously inside this UIKit action, so a view (e.g. the
@@ -382,6 +399,30 @@ define_class!(
         fn did_tap(&self, sender: &UIButton) {
             let tag = unsafe { sender.tag() };
             handle_tap(tag as u64);
+        }
+
+        #[unsafe(method(togglePassword:))]
+        fn toggle_password(&self, sender: &UIButton) {
+            // The eye button is a UITextField rightView; walk up to the owning
+            // field, flip secureTextEntry, and swap the eye glyph. Self-contained
+            // so app code gets a password reveal toggle for free on `.secure()`.
+            unsafe {
+                let mut cur: Option<Retained<UIView>> = msg_send![sender, superview];
+                while let Some(v) = cur {
+                    if let Ok(field) = v.clone().downcast::<UITextField>() {
+                        let secure: bool = msg_send![&*field, isSecureTextEntry];
+                        let now = !secure;
+                        let _: () = msg_send![&*field, setSecureTextEntry: now];
+                        let name = if now { "eye.slash" } else { "eye" };
+                        let ns = NSString::from_str(name);
+                        if let Some(img) = UIImage::systemImageNamed(&ns) {
+                            let _: () = msg_send![sender, setImage: &*img, forState: 0usize];
+                        }
+                        return;
+                    }
+                    cur = msg_send![&*v, superview];
+                }
+            }
         }
 
         #[unsafe(method(valueChanged:))]
@@ -1708,13 +1749,58 @@ impl Backend for UiKitBackend {
                                 crate::dom::ReturnKeyType::Done => 9,
                             };
                             unsafe {
-                                let _: () = msg_send![&*field, setReturnKeyType: v];
+                                send_set_int(
+                                    &*field as *const _ as *const AnyObject,
+                                    sel!(setReturnKeyType:),
+                                    v,
+                                );
                             }
                         }
                     }
                     Attribute::Secure(secure) => {
                         if let Ok(field) = view.clone().downcast::<UITextField>() {
-                            unsafe { field.setSecureTextEntry(secure) };
+                            unsafe {
+                                field.setSecureTextEntry(secure);
+                                if secure {
+                                    // Install a native eye reveal toggle as the rightView.
+                                    let btn = UIButton::buttonWithType(
+                                        UIButtonType::System,
+                                        self.mtm,
+                                    );
+                                    let ns = NSString::from_str("eye.slash");
+                                    if let Some(img) = UIImage::systemImageNamed(&ns) {
+                                        let _: () =
+                                            msg_send![&*btn, setImage: &*img, forState: 0usize];
+                                    }
+                                    btn.addTarget_action_forControlEvents(
+                                        Some(&self.action_target),
+                                        sel!(togglePassword:),
+                                        UIControlEvents::TouchUpInside,
+                                    );
+                                    let frame = CGRect {
+                                        origin: CGPoint { x: 0.0, y: 0.0 },
+                                        size: CGSize {
+                                            width: 38.0,
+                                            height: 24.0,
+                                        },
+                                    };
+                                    let _: () = msg_send![&*btn, setFrame: frame];
+                                    let gray: Retained<UIColor> = msg_send![
+                                        class!(UIColor),
+                                        colorWithRed: 0.6f64,
+                                        green: 0.6f64,
+                                        blue: 0.62f64,
+                                        alpha: 1.0f64
+                                    ];
+                                    let _: () = msg_send![&*btn, setTintColor: &*gray];
+                                    let _: () = msg_send![&*field, setRightView: &*btn];
+                                    let _: () = msg_send![&*field, setRightViewMode: 3isize];
+                                } else {
+                                    let nilv: *const AnyObject = std::ptr::null();
+                                    let _: () = msg_send![&*field, setRightView: nilv];
+                                    let _: () = msg_send![&*field, setRightViewMode: 0isize];
+                                }
+                            }
                         }
                     }
                     Attribute::QrScanning(enabled) => {
@@ -1811,9 +1897,21 @@ impl Backend for UiKitBackend {
                             KeyboardType::DecimalPad => 8,
                         };
                         if let Ok(field) = view.clone().downcast::<UITextField>() {
-                            unsafe { let _: () = msg_send![&*field, setKeyboardType: ktype]; }
+                            unsafe {
+                                send_set_int(
+                                    &*field as *const _ as *const AnyObject,
+                                    sel!(setKeyboardType:),
+                                    ktype,
+                                );
+                            }
                         } else if let Ok(tv) = view.clone().downcast::<UITextView>() {
-                            unsafe { let _: () = msg_send![&*tv, setKeyboardType: ktype]; }
+                            unsafe {
+                                send_set_int(
+                                    &*tv as *const _ as *const AnyObject,
+                                    sel!(setKeyboardType:),
+                                    ktype,
+                                );
+                            }
                         }
                     }
                     Attribute::AccessibilityHint(hint) => {
