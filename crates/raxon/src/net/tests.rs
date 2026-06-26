@@ -1,7 +1,17 @@
 use crate::async_rt::run_until_stalled;
 use crate::reactive::create_root;
 
-use super::{get, post, set_client, MockClient, MultipartForm, Response};
+use super::{
+    add_interceptor, clear_interceptors, get, get_json, post, set_client, MockClient,
+    MultipartForm, Request, Response,
+};
+
+fn header_value<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
+    req.headers
+        .iter()
+        .find(|(k, _)| k == name)
+        .map(|(_, v)| v.as_str())
+}
 
 #[test]
 fn multipart_serializes_fields_and_files() {
@@ -67,6 +77,61 @@ fn post_sends_body_and_errors_propagate() {
     run_until_stalled();
     assert_eq!(bad.error().as_deref(), Some("bad body"));
     scope2.dispose();
+}
+
+#[test]
+fn interceptor_applies_to_async_get_path() {
+    // Regression: a globally-registered interceptor must reach the
+    // async/reactive fetch path (send -> dispatch), not just the blocking
+    // config helpers.
+    clear_interceptors();
+    add_interceptor(|_url, headers| {
+        headers.push(("Authorization".into(), "Bearer tok".into()));
+    });
+    set_client(MockClient::new(|req| {
+        Ok(Response::ok(
+            header_value(req, "Authorization").unwrap_or("MISSING"),
+        ))
+    }));
+
+    let (res, scope) = create_root(|| get("https://api.test/secure"));
+    run_until_stalled();
+    assert_eq!(res.data().unwrap().body, "Bearer tok");
+    scope.dispose();
+    clear_interceptors();
+}
+
+#[test]
+fn interceptor_applies_to_get_json_path() {
+    // Regression: get_json bypassed send(); it must still apply interceptors.
+    clear_interceptors();
+    add_interceptor(|_url, headers| {
+        headers.push(("Authorization".into(), "Bearer tok".into()));
+    });
+    set_client(MockClient::new(|req| {
+        let v = header_value(req, "Authorization").unwrap_or("MISSING");
+        Ok(Response::ok(format!("{{\"auth\":{v:?}}}")))
+    }));
+
+    let (res, scope) = create_root(|| get_json::<serde_json::Value>("https://api.test/me"));
+    run_until_stalled();
+    assert_eq!(res.data().unwrap()["auth"].as_str(), Some("Bearer tok"));
+    scope.dispose();
+    clear_interceptors();
+}
+
+#[test]
+fn interceptors_apply_in_registration_order() {
+    clear_interceptors();
+    add_interceptor(|url, _| url.push_str("/a"));
+    add_interceptor(|url, _| url.push_str("/b"));
+    set_client(MockClient::new(|req| Ok(Response::ok(req.url.clone()))));
+
+    let (res, scope) = create_root(|| get("https://api.test"));
+    run_until_stalled();
+    assert_eq!(res.data().unwrap().body, "https://api.test/a/b");
+    scope.dispose();
+    clear_interceptors();
 }
 
 #[test]

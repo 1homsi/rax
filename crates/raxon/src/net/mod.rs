@@ -163,10 +163,28 @@ pub fn set_client(client: impl HttpClient + 'static) {
     CLIENT.with(|c| *c.borrow_mut() = Box::new(client));
 }
 
+/// The single choke point every async/reactive request passes through.
+///
+/// Applies the registered [interceptors](add_interceptor) to the request's URL
+/// and headers **on the calling (UI) thread**, then hands the finished request
+/// to the client. Interceptors must run here rather than inside the client
+/// because the client's `execute` runs on a background thread where the
+/// `INTERCEPTORS` thread-local is not set.
+fn build_response_future(mut request: Request) -> ResponseFuture {
+    apply_interceptors(&mut request.url, &mut request.headers);
+    CLIENT.with(|c| c.borrow().send(request))
+}
+
+/// Applies interceptors and dispatches `request` as a `Resource<Response>`.
+fn dispatch(request: Request) -> Resource<Response> {
+    create_resource(build_response_future(request))
+}
+
 /// Sends `request` and returns a `Resource` that resolves when it completes.
+///
+/// Registered [interceptors](add_interceptor) are applied first.
 pub fn send(request: Request) -> Resource<Response> {
-    let future = CLIENT.with(|c| c.borrow().send(request));
-    create_resource(future)
+    dispatch(request)
 }
 
 /// Convenience: GET `url` as a `Resource<Response>`.
@@ -465,6 +483,12 @@ thread_local! {
 /// The closure is called once per HTTP request, just before the network call,
 /// and may modify the URL or add / remove headers. Interceptors are applied
 /// in registration order.
+///
+/// This covers **every** request path: the async/reactive fetches
+/// ([`send`], [`get`], [`post`], [`graphql`], [`get_json`], [`use_query`],
+/// [`use_query_stale`]) as well as the blocking config helpers
+/// ([`get_with_config`], [`post_with_config`], the upload helpers). So a single
+/// registration — e.g. adding `Authorization: Bearer <token>` — applies app-wide.
 ///
 /// ```rust,ignore
 /// add_interceptor(|url, headers| {
@@ -1050,11 +1074,10 @@ pub fn get_json<T: serde::de::DeserializeOwned + Clone + 'static>(
     url: impl Into<String>,
 ) -> crate::async_rt::Resource<T> {
     let url = url.into();
-    let future = async move {
-        let resp = CLIENT.with(|c| c.borrow().send(Request::get(&url)));
-        let resp = resp.await?;
-        resp.json::<T>()
-    };
+    // Build + intercept on the UI thread (same choke point as `send`), then
+    // chain JSON decoding onto the response.
+    let resp_future = build_response_future(Request::get(url));
+    let future = async move { resp_future.await?.json::<T>() };
     create_resource(Box::pin(future))
 }
 
