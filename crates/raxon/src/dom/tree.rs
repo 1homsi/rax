@@ -190,6 +190,11 @@ impl Tree {
         self.create(WidgetKind::MapView)
     }
 
+    /// Creates a vector drawing canvas (a `CALayer`-backed `UIView` on iOS).
+    pub fn create_canvas(&mut self) -> WidgetId {
+        self.create(WidgetKind::Canvas)
+    }
+
     /// Starts CoreLocation GPS updates. Results arrive as global `Event::LocationUpdated`.
     pub fn start_location(&mut self) {
         self.host.emit(Mutation::StartLocation);

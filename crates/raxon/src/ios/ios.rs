@@ -19,7 +19,7 @@ use objc2_core_foundation::{CGAffineTransform, CGPoint, CGRect, CGSize};
 use objc2_foundation::{
     NSDate, NSData, NSMutableArray, NSNotification, NSNotificationCenter, NSRange, NSString,
 };
-use objc2_quartz_core::{CADisplayLink, CAGradientLayer};
+use objc2_quartz_core::{CADisplayLink, CAGradientLayer, CALayer, CAShapeLayer, CATextLayer};
 use objc2_ui_kit::{
     NSTextAlignment, UIActivityIndicatorView, UIApplication, UIApplicationDelegate, UIButton,
     UIButtonType, UIColor, UIControl, UIControlEvents, UIControlState, UIFont, UIGestureRecognizer,
@@ -35,8 +35,9 @@ use block2::RcBlock;
 
 use crate::core::{Color, ColorScheme, EdgeInsets, Point, Rect, Size};
 use crate::dom::{
-    Attribute, Backend, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host,
-    KeyboardType, LayoutDirection, Mutation, TextDecoration, TextSelection, WidgetId, WidgetKind,
+    Attribute, Backend, DrawCmd, Event, EventSink, GestureKind, GesturePhase, HapticStyle, Host,
+    KeyboardType, LayoutDirection, MenuItem, Mutation, TextDecoration, TextSelection, WidgetId,
+    WidgetKind,
 };
 // TextStyle is referenced as crate::dom::TextStyle in the match arms.
 use crate::runtime::App;
@@ -511,6 +512,15 @@ define_class!(
             if unsafe { recognizer.state() } == UIGestureRecognizerState::Began {
                 if let Some(tag) = recognizer_tag(recognizer) {
                     dispatch_target_event(|target| Event::LongPress { target }, tag);
+                }
+            }
+        }
+
+        #[unsafe(method(contextMenuLongPress:))]
+        fn context_menu_long_press(&self, recognizer: &UILongPressGestureRecognizer) {
+            if unsafe { recognizer.state() } == UIGestureRecognizerState::Began {
+                if let Some(tag) = recognizer_tag(recognizer) {
+                    present_context_menu(tag);
                 }
             }
         }
@@ -1139,6 +1149,27 @@ impl UiKitBackend {
     fn view(&self, id: WidgetId) -> Option<&Retained<UIView>> {
         self.views.get(&id.to_u64())
     }
+
+    /// Installs a long-press context menu on `view`: stores the items keyed by
+    /// the widget id (recovered from the view tag on fire) and attaches a
+    /// `UILongPressGestureRecognizer` that presents them as a native action
+    /// sheet via [`present_context_menu`].
+    fn install_context_menu(&self, id: WidgetId, view: &UIView, items: Vec<MenuItem>) {
+        CONTEXT_MENUS.with(|m| {
+            m.borrow_mut().insert(id.to_u64(), items);
+        });
+        unsafe {
+            view.setUserInteractionEnabled(true);
+            // Same tag convention as AddGesture so `recognizer_tag` recovers the id.
+            view.setTag(id.to_u64() as isize);
+            let r = UILongPressGestureRecognizer::initWithTarget_action(
+                self.mtm.alloc(),
+                Some(&self.action_target),
+                Some(sel!(contextMenuLongPress:)),
+            );
+            view.addGestureRecognizer(&r);
+        }
+    }
 }
 
 fn to_cg_rect(rect: Rect) -> CGRect {
@@ -1162,6 +1193,206 @@ fn to_ui_color(c: Color) -> Retained<UIColor> {
             c.b as f64 / 255.0,
             c.a as f64 / 255.0,
         )
+    }
+}
+
+fn to_cg_color(c: Color) -> Retained<objc2_core_graphics::CGColor> {
+    unsafe { to_ui_color(c).CGColor() }
+}
+
+fn cg_rect(x: f32, y: f32, w: f32, h: f32) -> CGRect {
+    CGRect {
+        origin: CGPoint { x: x as f64, y: y as f64 },
+        size: CGSize { width: w as f64, height: h as f64 },
+    }
+}
+
+/// Renders a [`DrawCmd`] list into `view`'s layer, replacing any previous
+/// canvas content. Rects/circles map to plain `CALayer`s (crisp rounded
+/// corners), lines/paths to `CAShapeLayer`s, and text to a `CATextLayer`.
+/// Coordinates are the canvas's local space (origin top-left).
+fn render_canvas(view: &UIView, cmds: &[DrawCmd]) {
+    use objc2_core_graphics::CGMutablePath;
+
+    let host = view.layer();
+    let nil = std::ptr::null::<AnyObject>();
+    // Canvas views hold only canvas content, so clear all sublayers first.
+    unsafe {
+        let _: () = msg_send![&*host, setSublayers: nil];
+    }
+
+    unsafe {
+        for cmd in cmds {
+            match cmd {
+                DrawCmd::Rect { x, y, w, h, radius, fill, stroke } => {
+                    let layer = CALayer::new();
+                    let _: () = msg_send![&*layer, setFrame: cg_rect(*x, *y, *w, *h)];
+                    if let Some(f) = fill {
+                        let cg = to_cg_color(*f);
+                        let _: () = msg_send![&*layer, setBackgroundColor: &*cg];
+                    }
+                    if *radius > 0.0 {
+                        let _: () = msg_send![&*layer, setCornerRadius: *radius as f64];
+                    }
+                    if let Some(s) = stroke {
+                        let cg = to_cg_color(s.color);
+                        let _: () = msg_send![&*layer, setBorderWidth: s.width as f64];
+                        let _: () = msg_send![&*layer, setBorderColor: &*cg];
+                    }
+                    let _: () = msg_send![&*host, addSublayer: &*layer];
+                }
+                DrawCmd::Circle { cx, cy, r, fill, stroke } => {
+                    let layer = CALayer::new();
+                    let _: () = msg_send![&*layer, setFrame: cg_rect(cx - r, cy - r, r * 2.0, r * 2.0)];
+                    let _: () = msg_send![&*layer, setCornerRadius: *r as f64];
+                    if let Some(f) = fill {
+                        let cg = to_cg_color(*f);
+                        let _: () = msg_send![&*layer, setBackgroundColor: &*cg];
+                    }
+                    if let Some(s) = stroke {
+                        let cg = to_cg_color(s.color);
+                        let _: () = msg_send![&*layer, setBorderWidth: s.width as f64];
+                        let _: () = msg_send![&*layer, setBorderColor: &*cg];
+                    }
+                    let _: () = msg_send![&*host, addSublayer: &*layer];
+                }
+                DrawCmd::Line { x1, y1, x2, y2, width, color } => {
+                    let path = CGMutablePath::new();
+                    CGMutablePath::move_to_point(Some(&path), std::ptr::null(), *x1 as f64, *y1 as f64);
+                    CGMutablePath::add_line_to_point(Some(&path), std::ptr::null(), *x2 as f64, *y2 as f64);
+                    let sl = CAShapeLayer::new();
+                    let cg = to_cg_color(*color);
+                    let _: () = msg_send![&*sl, setPath: &*path];
+                    let _: () = msg_send![&*sl, setStrokeColor: &*cg];
+                    let _: () = msg_send![&*sl, setFillColor: nil];
+                    let _: () = msg_send![&*sl, setLineWidth: *width as f64];
+                    let _: () = msg_send![&*host, addSublayer: &*sl];
+                }
+                DrawCmd::Path { points, closed, fill, stroke } => {
+                    if points.is_empty() {
+                        continue;
+                    }
+                    let path = CGMutablePath::new();
+                    let (x0, y0) = points[0];
+                    CGMutablePath::move_to_point(Some(&path), std::ptr::null(), x0 as f64, y0 as f64);
+                    for &(x, y) in &points[1..] {
+                        CGMutablePath::add_line_to_point(Some(&path), std::ptr::null(), x as f64, y as f64);
+                    }
+                    if *closed {
+                        CGMutablePath::close_subpath(Some(&path));
+                    }
+                    let sl = CAShapeLayer::new();
+                    let _: () = msg_send![&*sl, setPath: &*path];
+                    match fill {
+                        Some(f) => {
+                            let cg = to_cg_color(*f);
+                            let _: () = msg_send![&*sl, setFillColor: &*cg];
+                        }
+                        None => {
+                            let _: () = msg_send![&*sl, setFillColor: nil];
+                        }
+                    }
+                    if let Some(s) = stroke {
+                        let cg = to_cg_color(s.color);
+                        let _: () = msg_send![&*sl, setStrokeColor: &*cg];
+                        let _: () = msg_send![&*sl, setLineWidth: s.width as f64];
+                    } else {
+                        let _: () = msg_send![&*sl, setStrokeColor: nil];
+                    }
+                    let _: () = msg_send![&*host, addSublayer: &*sl];
+                }
+                DrawCmd::Text { x, y, text, size, color, align } => {
+                    let tl = CATextLayer::new();
+                    let ns = NSString::from_str(text);
+                    let cg = to_cg_color(*color);
+                    let _: () = msg_send![&*tl, setString: &*ns];
+                    let _: () = msg_send![&*tl, setForegroundColor: &*cg];
+                    let _: () = msg_send![&*tl, setFontSize: *size as f64];
+                    let _: () = msg_send![&*tl, setContentsScale: 2.0f64];
+                    let box_w = (text.chars().count() as f32 * size * 0.62).max(*size);
+                    let _: () = msg_send![&*tl, setFrame: cg_rect(*x, *y, box_w, size * 1.3)];
+                    let mode = match align {
+                        crate::dom::TextAlign::Start => "left",
+                        crate::dom::TextAlign::Center => "center",
+                        crate::dom::TextAlign::End => "right",
+                    };
+                    let m = NSString::from_str(mode);
+                    let _: () = msg_send![&*tl, setAlignmentMode: &*m];
+                    let _: () = msg_send![&*host, addSublayer: &*tl];
+                }
+            }
+        }
+    }
+}
+
+thread_local! {
+    /// Context-menu items keyed by widget id, populated by
+    /// `install_context_menu` and read when a long-press fires.
+    static CONTEXT_MENUS: RefCell<HashMap<u64, Vec<MenuItem>>> = RefCell::new(HashMap::new());
+}
+
+/// Presents the context menu registered for `tag` as a native action sheet.
+fn present_context_menu(tag: u64) {
+    let items = CONTEXT_MENUS.with(|m| m.borrow().get(&tag).cloned());
+    let Some(items) = items else {
+        return;
+    };
+    if items.is_empty() {
+        return;
+    }
+    unsafe {
+        let nil = std::ptr::null::<AnyObject>();
+        // UIAlertControllerStyleActionSheet == 1.
+        let ac: *mut AnyObject = msg_send![
+            class!(UIAlertController),
+            alertControllerWithTitle: nil,
+            message: nil,
+            preferredStyle: 1isize,
+        ];
+        if ac.is_null() {
+            return;
+        }
+        for item in &items {
+            let title = NSString::from_str(&item.title);
+            // UIAlertActionStyleDefault == 0, Destructive == 2.
+            let style: isize = if item.destructive { 2 } else { 0 };
+            let action = item.action.clone();
+            let handler = RcBlock::new(move |_action: *mut AnyObject| {
+                action();
+            });
+            let alert_action: *mut AnyObject = msg_send![
+                class!(UIAlertAction),
+                actionWithTitle: &*title,
+                style: style,
+                handler: &*handler,
+            ];
+            let _: () = msg_send![ac, addAction: alert_action];
+        }
+        // A trailing Cancel (UIAlertActionStyleCancel == 1) to dismiss.
+        let cancel_title = NSString::from_str("Cancel");
+        let cancel: *mut AnyObject = msg_send![
+            class!(UIAlertAction),
+            actionWithTitle: &*cancel_title,
+            style: 1isize,
+            handler: nil,
+        ];
+        let _: () = msg_send![ac, addAction: cancel];
+
+        STATE.with(|s| {
+            if let Some(state) = s.borrow().as_ref() {
+                let vc: &UIViewController = &state._view_controller;
+                // On iPad an action sheet needs a popover anchor; anchor it to
+                // the presenting controller's view to avoid an exception.
+                let pop: *mut AnyObject = msg_send![ac, popoverPresentationController];
+                if !pop.is_null() {
+                    let view: Retained<UIView> = msg_send![vc, view];
+                    let _: () = msg_send![pop, setSourceView: &*view];
+                    let bounds: CGRect = msg_send![&*view, bounds];
+                    let _: () = msg_send![pop, setSourceRect: bounds];
+                }
+                let _: () = msg_send![vc, presentViewController: ac, animated: true, completion: nil];
+            }
+        });
     }
 }
 
@@ -1354,6 +1585,13 @@ impl Backend for UiKitBackend {
                             let mv_view: *mut UIView = mv as *mut UIView;
                             Retained::retain(mv_view).expect("MKMapView init failed")
                         }
+                    }
+                    WidgetKind::Canvas => {
+                        // Plain UIView; the DrawList attribute populates its layer
+                        // with CAShapeLayer/CALayer/CATextLayer content.
+                        let v = unsafe { UIView::initWithFrame(self.mtm.alloc(), zero) };
+                        unsafe { v.setTag(id.to_u64() as isize) };
+                        v
                     }
                 };
                 self.views.insert(id.to_u64(), view);
@@ -1652,6 +1890,12 @@ impl Backend for UiKitBackend {
                             y: g.end.1 as f64,
                         });
                         layer.setFrame(view.bounds());
+                    }
+                    Attribute::DrawList(cmds) => {
+                        render_canvas(&view, &cmds);
+                    }
+                    Attribute::ContextMenu(items) => {
+                        self.install_context_menu(id, &view, items);
                     }
                     Attribute::NumberOfLines(n) => {
                         if let Ok(label) = view.clone().downcast::<UILabel>() {

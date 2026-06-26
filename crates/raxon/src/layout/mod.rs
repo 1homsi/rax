@@ -269,7 +269,7 @@ fn measure_leaf(
         WidgetKind::DatePicker => (180.0, line_h.max(34.0)),
         // TextArea grows to fill; give a sensible minimum height.
         WidgetKind::TextArea => (180.0, line_h.max(80.0)),
-        WidgetKind::View | WidgetKind::Scroll | WidgetKind::Stack | WidgetKind::Camera | WidgetKind::WebView | WidgetKind::LazyList | WidgetKind::MapView => (0.0, 0.0),
+        WidgetKind::View | WidgetKind::Scroll | WidgetKind::Stack | WidgetKind::Camera | WidgetKind::WebView | WidgetKind::LazyList | WidgetKind::MapView | WidgetKind::Canvas => (0.0, 0.0),
     };
 
     taffy::Size {

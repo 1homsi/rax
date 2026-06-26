@@ -35,6 +35,7 @@
 
 mod button;
 mod camera;
+pub mod canvas;
 mod composite;
 mod container;
 mod controls;
@@ -59,6 +60,7 @@ mod web_view;
 pub use button::{button, Button};
 pub use map::{map_view, MapView};
 pub use camera::{camera_scanner, CameraScanner};
+pub use canvas::{canvas, charts, Canvas};
 pub use composite::{
     accordion, action_sheet, alert, app_bar, avatar, badge, banner, backdrop, bottom_sheet,
     breadcrumbs, calendar, card, carousel, checkbox, chip, collapsible, color_picker, dev_tools,
@@ -86,7 +88,7 @@ pub use qr::{qr_code, qr_matrix, QrCode, QrError, QrMatrix};
 pub use scroll::{scroll, Scroll};
 pub use spacer::{spacer, Spacer};
 pub use text::{rich_text, text, DynamicText, IntoText, RichText, StaticText, Text};
-pub use crate::dom::TextSpan;
+pub use crate::dom::{DrawCmd, MenuItem, Stroke, TextSpan};
 pub use text_input::{text_area, text_input, TextArea, TextInput};
 pub use theme::{
     provide_theme, try_use_theme, use_theme, ColorTokens, CustomTokens, MotionTokens, RadiusTokens,

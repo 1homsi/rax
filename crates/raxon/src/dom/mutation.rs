@@ -83,6 +83,10 @@ pub enum WidgetKind {
     LazyList,
     /// A map view (MKMapView).
     MapView,
+    /// A vector drawing surface rendered from a [`DrawList`](Attribute::DrawList)
+    /// of [`DrawCmd`]s (maps to a `CALayer`-backed `UIView` on iOS). The chart
+    /// builders in `crate::view` produce one of these.
+    Canvas,
 }
 
 /// A local notification to schedule via the UserNotifications framework.
@@ -681,6 +685,78 @@ pub enum Attribute {
     /// The `String` argument carries a short error description.
     /// iOS: stub (TODO: wire up via image-load observer pattern).
     ImageOnError(ImageErrorCallback),
+    /// The list of vector commands to render on a [`WidgetKind::Canvas`].
+    /// Re-applying replaces the previous drawing.
+    DrawList(Vec<DrawCmd>),
+    /// A long-press context menu for any view: an ordered list of menu items.
+    /// On iOS this installs a `UIContextMenuInteraction`.
+    ContextMenu(Vec<MenuItem>),
+}
+
+/// One entry in a [`ContextMenu`](Attribute::ContextMenu).
+///
+/// Selecting the item invokes its `action`. `Clone` bumps the `Arc`; equality
+/// compares title, icon, and action pointer identity.
+#[derive(Clone)]
+pub struct MenuItem {
+    /// The menu row's title.
+    pub title: String,
+    /// Optional leading SF Symbol name (e.g. `"trash"`); `None` for no icon.
+    pub icon: Option<String>,
+    /// Whether the item is rendered in a destructive (red) style.
+    pub destructive: bool,
+    /// Invoked when the user selects this item.
+    pub action: std::sync::Arc<dyn Fn() + Send + Sync>,
+}
+
+impl MenuItem {
+    /// A menu item titled `title` that runs `action` when selected.
+    pub fn new(title: impl Into<String>, action: impl Fn() + Send + Sync + 'static) -> Self {
+        Self {
+            title: title.into(),
+            icon: None,
+            destructive: false,
+            action: std::sync::Arc::new(action),
+        }
+    }
+
+    /// Adds a leading SF Symbol icon (e.g. `"trash"`).
+    #[must_use]
+    pub fn icon(mut self, name: impl Into<String>) -> Self {
+        self.icon = Some(name.into());
+        self
+    }
+
+    /// Renders the item in a destructive (red) style.
+    #[must_use]
+    pub fn destructive(mut self) -> Self {
+        self.destructive = true;
+        self
+    }
+
+    /// Invoke this item's action.
+    pub fn call(&self) {
+        (self.action)();
+    }
+}
+
+impl std::fmt::Debug for MenuItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MenuItem")
+            .field("title", &self.title)
+            .field("icon", &self.icon)
+            .field("destructive", &self.destructive)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for MenuItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.title == other.title
+            && self.icon == other.icon
+            && self.destructive == other.destructive
+            && std::sync::Arc::ptr_eq(&self.action, &other.action)
+    }
 }
 
 /// How an image view scales/positions its content to fit its bounds.
@@ -952,6 +1028,105 @@ pub struct Shadow {
     pub dx: f32,
     /// Vertical offset in points.
     pub dy: f32,
+}
+
+/// A stroke (outline) style for a [`DrawCmd`]: a line width and color.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stroke {
+    /// Line width in logical points.
+    pub width: f32,
+    /// Stroke color.
+    pub color: Color,
+}
+
+impl Stroke {
+    /// A stroke of `width` points in `color`.
+    pub const fn new(width: f32, color: Color) -> Self {
+        Self { width, color }
+    }
+}
+
+/// A single vector drawing command for a [`WidgetKind::Canvas`].
+///
+/// Coordinates are in the canvas's local space — logical points, origin at the
+/// top-left with `y` growing downward (matching screen space). The chart
+/// builders in `crate::view` emit a `Vec<DrawCmd>` for a fixed size; the iOS
+/// backend renders each command with CoreGraphics into a `CALayer`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DrawCmd {
+    /// A straight line segment from `(x1, y1)` to `(x2, y2)`.
+    Line {
+        /// Start x.
+        x1: f32,
+        /// Start y.
+        y1: f32,
+        /// End x.
+        x2: f32,
+        /// End y.
+        y2: f32,
+        /// Line width in points.
+        width: f32,
+        /// Line color.
+        color: Color,
+    },
+    /// An axis-aligned (optionally rounded) rectangle, optionally filled and/or
+    /// stroked.
+    Rect {
+        /// Left edge.
+        x: f32,
+        /// Top edge.
+        y: f32,
+        /// Width.
+        w: f32,
+        /// Height.
+        h: f32,
+        /// Corner radius (0 = square corners).
+        radius: f32,
+        /// Fill color, if any.
+        fill: Option<Color>,
+        /// Outline stroke, if any.
+        stroke: Option<Stroke>,
+    },
+    /// A circle centered at `(cx, cy)` with radius `r`.
+    Circle {
+        /// Center x.
+        cx: f32,
+        /// Center y.
+        cy: f32,
+        /// Radius.
+        r: f32,
+        /// Fill color, if any.
+        fill: Option<Color>,
+        /// Outline stroke, if any.
+        stroke: Option<Stroke>,
+    },
+    /// A polyline (or polygon when `closed`) through `points`. A `fill` paints
+    /// the enclosed area (closed shapes); a `stroke` outlines the path.
+    Path {
+        /// Vertices, in order, as `(x, y)`.
+        points: Vec<(f32, f32)>,
+        /// Whether the last point connects back to the first.
+        closed: bool,
+        /// Fill color for the enclosed area, if any.
+        fill: Option<Color>,
+        /// Outline stroke, if any.
+        stroke: Option<Stroke>,
+    },
+    /// A run of text with its top-left anchored at `(x, y)`.
+    Text {
+        /// Anchor x.
+        x: f32,
+        /// Anchor y.
+        y: f32,
+        /// The string to draw.
+        text: String,
+        /// Font size in points.
+        size: f32,
+        /// Text color.
+        color: Color,
+        /// Horizontal alignment within the text's natural box.
+        align: TextAlign,
+    },
 }
 
 /// One atomic change to the native view tree.

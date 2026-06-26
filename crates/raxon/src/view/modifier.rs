@@ -6,7 +6,7 @@
 use crate::core::{AlignItems, Color, Dimension, EdgeInsets, LayoutStyle, Point, Position};
 use crate::dom::{
     Attribute, Callback, CursorStyle, EventKind, GesturePhase, GestureKind, LayoutDirection,
-    LinearGradient, Role, Shadow, SwipeDirection, Transform, Tree, WidgetId,
+    LinearGradient, MenuItem, Role, Shadow, SwipeDirection, Transform, Tree, WidgetId,
 };
 
 use super::view::View;
@@ -545,6 +545,28 @@ pub trait ViewExt: View + Sized {
         is_group: bool,
     ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |t, id| t.set(id, Attribute::AccessibilityGroup(is_group)))
+    }
+
+    /// Attaches a long-press context menu to this view.
+    ///
+    /// Long-pressing presents the `items` as a native action sheet on iOS;
+    /// selecting one runs its action. Build items with [`MenuItem::new`].
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use raxon::prelude::*;
+    /// # use raxon::dom::MenuItem;
+    /// # let row = text("Document.pdf");
+    /// row.context_menu(vec![
+    ///     MenuItem::new("Rename", || {}).icon("pencil"),
+    ///     MenuItem::new("Delete", || {}).icon("trash").destructive(),
+    /// ]);
+    /// ```
+    fn context_menu(
+        self,
+        items: Vec<MenuItem>,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.set(id, Attribute::ContextMenu(items)))
     }
 
     /// Marks this element as a heading at the given level (1–6).
