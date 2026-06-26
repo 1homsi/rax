@@ -736,3 +736,50 @@ pub trait ViewExt: View + Sized {
 }
 
 impl<V: View> ViewExt for V {}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use crate::dom::{Event, GestureKind, Host, Mutation, RecordingBackend, Tree};
+
+    use super::super::container::column;
+    use super::super::text::text;
+    use super::{View, ViewExt};
+
+    #[test]
+    fn on_tap_emits_tap_gesture_for_plain_views() {
+        let backend = RecordingBackend::new();
+        let log = backend.log();
+        let mut tree = Tree::new(Host::new(backend));
+
+        let root = column(()).on_tap(|| {}).build(&mut tree);
+
+        assert!(log.borrow().iter().any(|mutation| {
+            matches!(
+                mutation,
+                Mutation::AddGesture {
+                    id,
+                    gesture: GestureKind::Tap
+                } if *id == root
+            )
+        }));
+    }
+
+    #[test]
+    fn tap_events_bubble_from_children_to_parent_containers() {
+        let mut tree = Tree::new(Host::new(RecordingBackend::new()));
+        let tapped = Rc::new(Cell::new(false));
+        let seen = tapped.clone();
+
+        let root = column((text("child"),))
+            .on_tap(move || seen.set(true))
+            .build(&mut tree);
+        let child = tree.children_of(root)[0];
+
+        tree.dispatch(&Event::Tap { target: child });
+
+        assert!(tapped.get());
+    }
+}
