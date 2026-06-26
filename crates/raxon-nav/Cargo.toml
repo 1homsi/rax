@@ -1,0 +1,23 @@
+[package]
+name = "raxon-nav"
+description = "Stack navigation for rax: a signal-backed route stack and a routes view."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[dependencies]
+raxon-reactive = { path = "../raxon-reactive" }
+raxon-view = { path = "../raxon-view" }
+raxon-anim = { path = "../raxon-anim" }
+raxon-dom = { path = "../raxon-dom" }
+
+[dev-dependencies]
+raxon-dom = { path = "../raxon-dom" }
+raxon-runtime = { path = "../raxon-runtime" }
+raxon-test = { path = "../raxon-test" }

@@ -761,84 +761,84 @@ dependencies = [
 ]
 
 [[package]]
-name = "rax"
+name = "raxon"
 version = "0.0.1"
 dependencies = [
- "rax-anim",
- "rax-async",
- "rax-core",
- "rax-intl",
- "rax-ios",
- "rax-keychain",
- "rax-nav",
- "rax-net",
- "rax-plugin",
- "rax-reactive",
- "rax-runtime",
- "rax-store",
- "rax-style",
- "rax-test",
- "rax-view",
+ "raxon-anim",
+ "raxon-async",
+ "raxon-core",
+ "raxon-intl",
+ "raxon-ios",
+ "raxon-keychain",
+ "raxon-nav",
+ "raxon-net",
+ "raxon-plugin",
+ "raxon-reactive",
+ "raxon-runtime",
+ "raxon-store",
+ "raxon-style",
+ "raxon-test",
+ "raxon-view",
 ]
 
 [[package]]
-name = "rax-anim"
+name = "raxon-anim"
 version = "0.0.1"
 dependencies = [
- "rax-reactive",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-async"
+name = "raxon-async"
 version = "0.0.1"
 dependencies = [
  "futures",
- "rax-reactive",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-cli"
+name = "raxon-cli"
 version = "0.1.0"
 
 [[package]]
-name = "rax-core"
+name = "raxon-core"
 version = "0.0.1"
 
 [[package]]
-name = "rax-dom"
+name = "raxon-dom"
 version = "0.0.1"
 dependencies = [
- "rax-core",
- "rax-reactive",
+ "raxon-core",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-form"
+name = "raxon-form"
 version = "0.0.1"
 dependencies = [
- "rax-reactive",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-fs"
+name = "raxon-fs"
 version = "0.0.1"
 
 [[package]]
-name = "rax-i18n"
+name = "raxon-i18n"
 version = "0.0.1"
 dependencies = [
- "rax-reactive",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-intl"
+name = "raxon-intl"
 version = "0.0.1"
 dependencies = [
- "rax-reactive",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-ios"
+name = "raxon-ios"
 version = "0.0.1"
 dependencies = [
  "block2",
@@ -849,52 +849,52 @@ dependencies = [
  "objc2-foundation",
  "objc2-quartz-core",
  "objc2-ui-kit",
- "rax-core",
- "rax-dom",
- "rax-net",
- "rax-plugin",
- "rax-runtime",
- "rax-store",
- "rax-view",
+ "raxon-core",
+ "raxon-dom",
+ "raxon-net",
+ "raxon-plugin",
+ "raxon-runtime",
+ "raxon-store",
+ "raxon-view",
  "ureq",
 ]
 
 [[package]]
-name = "rax-keychain"
+name = "raxon-keychain"
 version = "0.0.1"
 
 [[package]]
-name = "rax-layout"
+name = "raxon-layout"
 version = "0.0.1"
 dependencies = [
- "rax-core",
- "rax-dom",
- "rax-reactive",
+ "raxon-core",
+ "raxon-dom",
+ "raxon-reactive",
  "taffy",
 ]
 
 [[package]]
-name = "rax-log"
+name = "raxon-log"
 version = "0.0.1"
 
 [[package]]
-name = "rax-nav"
+name = "raxon-nav"
 version = "0.0.1"
 dependencies = [
- "rax-anim",
- "rax-dom",
- "rax-reactive",
- "rax-runtime",
- "rax-test",
- "rax-view",
+ "raxon-anim",
+ "raxon-dom",
+ "raxon-reactive",
+ "raxon-runtime",
+ "raxon-test",
+ "raxon-view",
 ]
 
 [[package]]
-name = "rax-net"
+name = "raxon-net"
 version = "0.0.1"
 dependencies = [
- "rax-async",
- "rax-reactive",
+ "raxon-async",
+ "raxon-reactive",
  "serde",
  "serde_json",
  "tungstenite",
@@ -902,85 +902,85 @@ dependencies = [
 ]
 
 [[package]]
-name = "rax-plugin"
+name = "raxon-plugin"
 version = "0.0.1"
 
 [[package]]
-name = "rax-reactive"
+name = "raxon-reactive"
 version = "0.0.1"
 dependencies = [
- "rax-core",
+ "raxon-core",
 ]
 
 [[package]]
-name = "rax-runtime"
+name = "raxon-runtime"
 version = "0.0.1"
 dependencies = [
- "rax-anim",
- "rax-async",
- "rax-core",
- "rax-dom",
- "rax-layout",
- "rax-reactive",
- "rax-view",
+ "raxon-anim",
+ "raxon-async",
+ "raxon-core",
+ "raxon-dom",
+ "raxon-layout",
+ "raxon-reactive",
+ "raxon-view",
 ]
 
 [[package]]
-name = "rax-scheduler"
+name = "raxon-scheduler"
 version = "0.0.1"
 
 [[package]]
-name = "rax-sqlite"
+name = "raxon-sqlite"
 version = "0.0.1"
 dependencies = [
- "rax-reactive",
+ "raxon-reactive",
  "rusqlite",
 ]
 
 [[package]]
-name = "rax-store"
+name = "raxon-store"
 version = "0.0.1"
 dependencies = [
- "rax-reactive",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-style"
+name = "raxon-style"
 version = "0.0.1"
 dependencies = [
- "rax-core",
- "rax-reactive",
+ "raxon-core",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-test"
+name = "raxon-test"
 version = "0.0.1"
 dependencies = [
- "rax-core",
- "rax-dom",
- "rax-reactive",
- "rax-runtime",
- "rax-view",
+ "raxon-core",
+ "raxon-dom",
+ "raxon-reactive",
+ "raxon-runtime",
+ "raxon-view",
 ]
 
 [[package]]
-name = "rax-testing"
+name = "raxon-testing"
 version = "0.1.0"
 dependencies = [
- "rax-dom",
- "rax-reactive",
+ "raxon-dom",
+ "raxon-reactive",
 ]
 
 [[package]]
-name = "rax-view"
+name = "raxon-view"
 version = "0.0.1"
 dependencies = [
- "rax-anim",
- "rax-async",
- "rax-core",
- "rax-dom",
- "rax-net",
- "rax-reactive",
+ "raxon-anim",
+ "raxon-async",
+ "raxon-core",
+ "raxon-dom",
+ "raxon-net",
+ "raxon-reactive",
 ]
 
 [[package]]

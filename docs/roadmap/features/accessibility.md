@@ -23,7 +23,7 @@ release that fails the a11y gate does not ship. ⬜ planned.
 - ✅ Dynamic Type / font scaling (`dynamic_type(bool)` → `Attribute::DynamicType` → `setAdjustsFontForContentSizeCategory:`)
 - ⬜ high-contrast / increased-contrast modes
 - ⬜ color-blind-safe defaults, contrast checks in CI
-- ✅ reduced-motion respected by animation (`use_reduced_motion()` signal + `animate_unless_reduced()` in rax-anim; platform sets via `set_reduced_motion`)
+- ✅ reduced-motion respected by animation (`use_reduced_motion()` signal + `animate_unless_reduced()` in raxon-anim; platform sets via `set_reduced_motion`)
 - 🟡 large touch targets, hit-slop (`hit_slop(top,right,bottom,left)` modifier — stored, custom hit-test pending)
 - ⬜ switch control / keyboard-only operation
 - ⬜ voice control compatibility

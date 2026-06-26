@@ -40,7 +40,7 @@ the union of RN community modules + Flutter plugins + Expo SDK. ⬜ planned.
 
 ## Identity & security
 - ✅ biometrics (`authenticate_biometric(reason)` — LAContext, Face/Touch ID → `Event::BiometricResult`)
-- ✅ secure storage / keychain (`rax-keychain`: `set/get/delete_secret` — Security.framework on iOS)
+- ✅ secure storage / keychain (`raxon-keychain`: `set/get/delete_secret` — Security.framework on iOS)
 - ⬜ auth helpers (OAuth, sign-in-with-Apple/Google), deep-link auth
 - ⬜ app attest / integrity, encryption primitives
 

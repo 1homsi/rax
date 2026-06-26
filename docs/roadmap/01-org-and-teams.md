@@ -13,21 +13,21 @@ schedule.
 
 | # | Squad | Charter | Owns | Size |
 |---|---|---|---|---:|
-| 1 | **Core & Reactivity** | Signals, ownership, scheduler hooks, arena, geometry | `rax-core`, `rax-reactive` | 5 |
+| 1 | **Core & Reactivity** | Signals, ownership, scheduler hooks, arena, geometry | `raxon-core`, `raxon-reactive` | 5 |
 | 2 | **Layout & Styling** | Flexbox/grid engine, style resolution, density | `rax-layout`, `rax-style` | 5 |
-| 3 | **Rendering, Scheduler & Compositor** | Render seam, command buffer, frame pipeline, off-main-thread layout | `rax-scheduler`, `rax-dom` seam, `rax-render` | 5 |
-| 4 | **iOS Platform** | UIKit backend, bootstrap, packaging | `rax-ios` | 5 |
+| 3 | **Rendering, Scheduler & Compositor** | Render seam, command buffer, frame pipeline, off-main-thread layout | `rax-scheduler`, `raxon-dom` seam, `rax-render` | 5 |
+| 4 | **iOS Platform** | UIKit backend, bootstrap, packaging | `raxon-ios` | 5 |
 | 5 | **Android Platform** | JNI backend, View interop, packaging | `rax-android` | 6 |
 | 6 | **Desktop Platform** | macOS/Windows/Linux backends | `rax-macos`, `rax-windows`, `rax-linux` | 5 |
 | 7 | **Web / WASM Platform** | WASM target, DOM/canvas backend | `rax-web` | 5 |
 | 8 | **Text, Fonts & IME** | Text layout, shaping, input, composition, keyboard | `rax-text` | 5 |
 | 9 | **Components (widget library)** | The standard widget set + their semantics | `rax-widgets` | 6 |
-| 10 | **Navigation & Routing** | Stack/tab/modal nav, deep links, state restoration | `rax-navigation` | 4 |
-| 11 | **Animation, Gestures & Input** | Animation engine, transitions, gesture arena | `rax-animation`, `rax-gesture` | 5 |
+| 10 | **Navigation & Routing** | Stack/tab/modal nav, deep links, state restoration | `raxon-navigation` | 4 |
+| 11 | **Animation, Gestures & Input** | Animation engine, transitions, gesture arena | `raxon-animation`, `rax-gesture` | 5 |
 | 12 | **Accessibility & i18n** | Platform a11y mapping, l10n, RTL, dynamic type | `rax-a11y`, `rax-intl` | 5 |
-| 13 | **Async, Networking, Data & Storage** | Executor, HTTP, persistence, secure storage | `rax-async`, `rax-net`, `rax-store` | 5 |
-| 14 | **Native Modules & Plugin Platform** | Plugin ABI, platform-channel codegen, first-party modules | `rax-plugin`, `rax-modules/*` | 5 |
-| 15 | **CLI, Build & Toolchain** | `rax` CLI, generators, cross-compile, packaging | `rax-cli` | 5 |
+| 13 | **Async, Networking, Data & Storage** | Executor, HTTP, persistence, secure storage | `raxon-async`, `raxon-net`, `rax-store` | 5 |
+| 14 | **Native Modules & Plugin Platform** | Plugin ABI, platform-channel codegen, first-party modules | `raxon-plugin`, `rax-modules/*` | 5 |
+| 15 | **CLI, Build & Toolchain** | `rax` CLI, generators, cross-compile, packaging | `raxon-cli` | 5 |
 | 16 | **DevTools, Inspector & Hot Reload** | Inspector, tree/state viewer, fast refresh, error overlay | `rax-devtools` | 5 |
 | 17 | **Testing, QA & Conformance** | Headless host, finder/query API, the conformance suite | `rax-test` | 5 |
 | 18 | **Performance & Security** | Benchmarks, profiling, supply-chain, fuzzing | tooling, CI gates | 4 |

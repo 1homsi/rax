@@ -4,7 +4,7 @@
 > developers and millions of devices. Optimize for *maintainability over a
 > decade*, not for shipping more code this week.
 
-Date: 2026-06-25 · Reviewed commit state: `rax-core`, `rax-reactive`, `rax-dom`.
+Date: 2026-06-25 · Reviewed commit state: `raxon-core`, `raxon-reactive`, `raxon-dom`.
 
 ---
 
@@ -18,14 +18,14 @@ Date: 2026-06-25 · Reviewed commit state: `rax-core`, `rax-reactive`, `rax-dom`
 
 | Layer | Built | Tested | Verdict |
 |---|---|---|---|
-| `rax-core` — geometry, arena, color, layout style | ✅ | ✅ | Solid leaf |
-| `rax-reactive` — signals/memos/effects + Runtime + ownership (R1) | ✅ | ✅ | Glitch-free, isolatable |
+| `raxon-core` — geometry, arena, color, layout style | ✅ | ✅ | Solid leaf |
+| `raxon-reactive` — signals/memos/effects + Runtime + ownership (R1) | ✅ | ✅ | Glitch-free, isolatable |
 | `rax-scheduler` — frame phases, tasks, marshaling (R2) | ✅ | ✅ | Built; runtime hot-path still uses direct ticks |
-| `rax-dom` — element tree, mutation + event seam (R3) | ✅ | ✅ | Bidirectional |
+| `raxon-dom` — element tree, mutation + event seam (R3) | ✅ | ✅ | Bidirectional |
 | `rax-layout` — taffy flexbox → frames | ✅ | ✅ | Leaf text-measure is a heuristic (see M1 debt) |
-| `rax-view` — macro-free builder (R4) | ✅ | ✅ | Dynamic lists/conditionals still TODO |
-| `rax-runtime` — App: mount + layout + events + frames | ✅ | ✅ | Drives ticks directly (scheduler wiring pending) |
-| `rax-ios` — UIKit backend via objc2 (pure Rust) | ✅ | runs on sim | Bootstrap uses deprecated UIScreen/window (M3 debt) |
+| `raxon-view` — macro-free builder (R4) | ✅ | ✅ | Dynamic lists/conditionals still TODO |
+| `raxon-runtime` — App: mount + layout + events + frames | ✅ | ✅ | Drives ticks directly (scheduler wiring pending) |
+| `raxon-ios` — UIKit backend via objc2 (pure Rust) | ✅ | runs on sim | Bootstrap uses deprecated UIScreen/window (M3 debt) |
 | 30+ subsystems (text/IME, nav, animation, a11y, async, CLI, …) | ❌ | — | Greenfield |
 
 ~66 host tests, clippy-clean. The load-bearing decisions (R1–R3) are locked; the
@@ -38,7 +38,7 @@ on. Known debt is tracked in the milestone notes.
 
 These are ranked. Each is a **STOP**: do not write more code on top of the current shape until these are resolved, because they change the *signature of every call site* downstream.
 
-> **R1 — RESOLVED (2026-06-25).** `rax-reactive` rewritten: explicit `Runtime`
+> **R1 — RESOLVED (2026-06-25).** `raxon-reactive` rewritten: explicit `Runtime`
 > (multi-instance, isolated) + `Owner`/`Scope` ownership tree + per-thread default
 > for ergonomics. Re-running effects now dispose their nested reactivity (leak
 > closed). Verified by `tests/ownership.rs` and `tests/isolation.rs`. Module split
@@ -52,7 +52,7 @@ These are ranked. Each is a **STOP**: do not write more code on top of the curre
 
 **Why it is fatal long-term:**
 - **No isolation.** You cannot host two independent UI roots on one thread (multi-window, an embedded preview pane, the inspector rendering its own tree, server-driven UI snapshots, SSR-style prerender for tests). Every serious framework needs this eventually; retrofitting it means changing every signal signature.
-- **No ownership/disposal tree.** Effects created inside effects/components are not auto-disposed. We patched *one* level of this in `rax-dom` (effects die with their widget), but that is a band-aid: memos, derived signals, and nested scopes still leak. Leptos shipped, then spent two major versions rebuilding ownership. We can avoid that tax by doing it once, now.
+- **No ownership/disposal tree.** Effects created inside effects/components are not auto-disposed. We patched *one* level of this in `raxon-dom` (effects die with their widget), but that is a band-aid: memos, derived signals, and nested scopes still leak. Leptos shipped, then spent two major versions rebuilding ownership. We can avoid that tax by doing it once, now.
 - **Threading correctness landmine.** Thread-local + "async-first" = silent bugs. An async task that resolves on a worker thread and calls `signal.set()` touches a *different* reactor (or panics). The rule "all signal mutation happens on the UI thread" must be **enforced by the type system or the scheduler**, not left as folklore.
 - **Testing fragility.** Tests pass today only because libtest happens to use one thread per test. A single-threaded test runner, `#[tokio::test]`, or doctests sharing a thread would cause cross-test contamination.
 
@@ -69,13 +69,13 @@ These are ranked. Each is a **STOP**: do not write more code on top of the curre
 
 **Recommendation:** Split the frame into phases: **(1)** signals mark dependents dirty (no eager run); **(2)** a `Scheduler` flushes effects once per frame to produce attribute/structure mutations; **(3)** the layout engine computes geometry → emits `SetFrame` mutations; **(4)** the command buffer is handed to the backend in one commit. The reactive runtime's `flush_effects` becomes scheduler-owned, not `set`-owned. **Freeze the Scheduler interface before the layout engine.**
 
-> **R3 — RESOLVED (2026-06-25).** `rax-dom` gained the inbound dual of `Mutation`:
+> **R3 — RESOLVED (2026-06-25).** `raxon-dom` gained the inbound dual of `Mutation`:
 > an `Event`/`EventKind` schema, a `Send` `EventSink` for backends, a per-widget
 > handler registry with bubbling, app-global handlers, and a `drain_events` path
 > for the scheduler's `PreFrame` phase. Round trip verified in `tests/events.rs`
 > (platform event → handler → signal write → one mutation). **M0 complete.**
 > Deferred to M1 integration: wiring the scheduler `Commit` phase to a buffered
-> `Host` flush, and `PreFrame` to `Tree::drain_events` — both live in `rax-runtime`.
+> `Host` flush, and `PreFrame` to `Tree::drain_events` — both live in `raxon-runtime`.
 
 ### R3 — The command buffer is one-directional. Native → engine events have no defined channel.
 
@@ -87,7 +87,7 @@ These are ranked. Each is a **STOP**: do not write more code on top of the curre
 
 **Recommendation:** Define the inbound dual of `Mutation` now: an `Event`/`HostMessage` enum (`Tap{id}`, `ScrollChanged{id, offset}`, `TextChanged{id, value, selection}`, `FocusChanged`, `KeyboardWillShow{rect}`, `Lifecycle(...)`, `BackPressed`) delivered through the Scheduler onto the UI thread, where it lands as signal writes. The `Backend` trait gains an outbound sink (`EventSink`) the platform calls. **Freeze the `Event` schema alongside `Mutation`.**
 
-> **R4 — IN PROGRESS (2026-06-25).** `rax-view` built: a macro-free typed
+> **R4 — IN PROGRESS (2026-06-25).** `raxon-view` built: a macro-free typed
 > tuple-builder (`column`/`row`/`text`/`button` + modifiers) lowering to the
 > `Tree`. `View::build(self) -> WidgetId` (build-once; signals update values,
 > dedicated views will handle dynamic structure). The counter is proven
@@ -117,24 +117,24 @@ Fully expanded for the load-bearing subsystems. Far-future subsystems (Part II.C
 
 ### II.A — Built or imminent
 
-#### Reactive runtime / Signals (`rax-reactive`) — exists
+#### Reactive runtime / Signals (`raxon-reactive`) — exists
 - **Purpose:** Fine-grained dependency tracking so a state change updates only the views that read it.
 - **Responsibilities:** signals (sources), memos (cached derivations), effects (sinks), automatic dep tracking, glitch-free propagation, batching.
 - **Public API:** `create_signal/memo/effect`, `Signal::{get,set,with,update}`, `Memo::{get,with}`, `Effect::dispose`, `batch`, `untrack`.
-- **Internal:** thread-local `Reactor` over `rax-core::Arena`; Clean/Check/Dirty pull algorithm; `Box<dyn Any>` value erasure (the only RTTI in the framework).
-- **Dependencies:** `rax-core`.
+- **Internal:** thread-local `Reactor` over `raxon-core::Arena`; Clean/Check/Dirty pull algorithm; `Box<dyn Any>` value erasure (the only RTTI in the framework).
+- **Dependencies:** `raxon-core`.
 - **Bottlenecks:** `Vec<Index>` source/observer lists do linear `contains` on subscribe (fine for small fan-out, quadratic for pathological graphs); `Box<dyn Any>` + clone on every `get` for non-Copy types.
 - **Scalability concerns:** **R1 (global), R2 (eager flush)**. No owner tree → leaks. No batching to frame.
 - **Testing:** 13 behavioural tests incl. diamond/glitch-freedom, dynamic deps, batch, dispose. Strong. Needs: property tests for graph invariants; leak assertions once owners exist.
 - **Missing:** explicit runtime, owner/scope tree, scheduler integration, cross-thread write marshaling.
 - **Blocks shipping:** **YES** (via R1/R2).
 
-#### Element tree + Mutation buffer + Renderer seam (`rax-dom`) — exists
+#### Element tree + Mutation buffer + Renderer seam (`raxon-dom`) — exists
 - **Purpose:** Retained tree of widgets; produce a backend-agnostic mutation stream; define the one trait platforms implement.
 - **Responsibilities:** node identity/lifetime, parent/child structure, reactive attribute binding→mutation, subtree teardown + effect disposal.
 - **Public API:** `Tree`, `WidgetId`, `WidgetKind`, `Attribute`, `Mutation`, `Backend`, `Host`, `RecordingBackend`.
 - **Internal:** `Arena<ElementNode>`; effects own attribute bindings; `Host` = `Rc<RefCell<dyn Backend>>`.
-- **Dependencies:** `rax-core`, `rax-reactive`.
+- **Dependencies:** `raxon-core`, `raxon-reactive`.
 - **Bottlenecks:** `Attribute` carries owned `String`/values → per-update allocation; `Mutation` is heap-y; **no `SetFrame`/layout output**; per-mutation FFI (R5).
 - **Scalability concerns:** flat `Attribute` enum will balloon and every backend must exhaustively match it (versioning hazard); one-directional (R3); no reconciler for dynamic children.
 - **Testing:** 7 e2e tests via `RecordingBackend` incl. the "one mutation per change" thesis and teardown ordering. Good pattern; reuse everywhere.
@@ -144,7 +144,7 @@ Fully expanded for the load-bearing subsystems. Far-future subsystems (Part II.C
 #### Scheduler — **does not exist (critical gap)**
 - **Purpose:** Own the frame loop; coalesce reactive flushes, layout, and commit into ordered phases at display cadence; prioritize work.
 - **Public API (proposed, freeze early):** `Scheduler::request_frame()`, phase callbacks, `spawn_on_ui(task)`, priority lanes (Input/Animation/Default/Idle).
-- **Dependencies:** `rax-reactive`, `rax-dom`, platform vsync (Choreographer/CADisplayLink).
+- **Dependencies:** `raxon-reactive`, `raxon-dom`, platform vsync (Choreographer/CADisplayLink).
 - **Risks:** wrong phase ordering is an architectural mistake (R2). Integration with async runtime wakers.
 - **Blocks shipping:** **YES.** This is the missing spine connecting reactivity→layout→render.
 
@@ -289,7 +289,7 @@ Each milestone lists blockers, debt, risks, expected perf issues, and the APIs t
 - **Stabilize:** plugin ABI, platform-channel protocol.
 
 ### Pre-1.0 — Versioning & stability
-- Pre-1.0: minor = breaking is acceptable, but **document a stability tier per crate** (`rax-core` stable; `rax-view` evolving; backends internal).
+- Pre-1.0: minor = breaking is acceptable, but **document a stability tier per crate** (`raxon-core` stable; `raxon-view` evolving; backends internal).
 - Adopt SemVer + a deprecation policy + MSRV policy (stable Rust, N-2 versions).
 - A public **API-stability doc** and `cargo-semver-checks` in CI before 1.0.
 - Conformance test suite is a **release gate**, not optional.

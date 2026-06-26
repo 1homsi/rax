@@ -34,14 +34,14 @@ the flexbox engine, driven entirely by Rust.
 ## Workspace layout
 
 ```
-rax-core       geometry, generational arena, color, layout style   (no deps, no_std)
-rax-reactive   signals / memos / effects, Runtime, ownership scopes
+raxon-core       geometry, generational arena, color, layout style   (no deps, no_std)
+raxon-reactive   signals / memos / effects, Runtime, ownership scopes
 rax-scheduler  frame phases, priority tasks, cross-thread marshaling
-rax-dom        retained element tree, mutation + event seam, dynamic structure
+raxon-dom        retained element tree, mutation + event seam, dynamic structure
 rax-layout     flexbox via taffy, behind a neutral LayoutStyle
-rax-view       declarative, macro-free view builder (column/row/text/button/dynamic)
-rax-runtime    the App driver: mount + layout + events + frames
-rax-ios        UIKit backend (pure Rust via objc2)
+raxon-view       declarative, macro-free view builder (column/row/text/button/dynamic)
+raxon-runtime    the App driver: mount + layout + events + frames
+raxon-ios        UIKit backend (pure Rust via objc2)
 ```
 
 The dependency graph is a strict DAG; the render seam (`Backend` trait +

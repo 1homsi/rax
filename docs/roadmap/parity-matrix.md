@@ -101,7 +101,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Resource (async data + loading state) | community | community | ✅ |
 | Query cache (react-query-like) | community | community | ✅ `use_query` + `use_query_stale(url, secs)` + `invalidate_query` + `gc_query_cache` |
 | KV storage (+ persisted signals) | community | ✓ | ✅ |
-| SQLite + secure storage | community | ✓ | ✅ SQLite (`rax-sqlite`) + Keychain (`rax-keychain` — SecItemAdd/Copy/Delete FFI) |
+| SQLite + secure storage | community | ✓ | ✅ SQLite (`raxon-sqlite`) + Keychain (`raxon-keychain` — SecItemAdd/Copy/Delete FFI) |
 | Offline-first sync | community | community | ⬜ |
 | Async runtime (no GC pauses) | JS event loop | Dart isolates | ✅ **(Rust async)** |
 
@@ -115,7 +115,7 @@ Flutter offer, plus Rust-only advantages. Columns: does the ecosystem support it
 | Biometrics / secure auth | ✓ | ✓ | 🟡 biometrics ✅ (`authenticate_biometric`); OAuth/passkeys ⬜ |
 | In-app purchases | ✓ | ✓ | ⬜ (StoreKit delegate pattern requires additional objc2 bindings) |
 | Sensors / haptics / background tasks | ✓ | ✓ | ✅ haptics + sensors + background tasks (`register_background_task` + BGTaskScheduler) |
-| Plugin system / native modules | ✓ | ✓ | ✅ (`rax-plugin`: Plugin trait + PluginRegistry; on_start/tick/stop/event hooks) |
+| Plugin system / native modules | ✓ | ✓ | ✅ (`raxon-plugin`: Plugin trait + PluginRegistry; on_start/tick/stop/event hooks) |
 
 ## Platforms
 | Capability | RN | Flutter | rax |

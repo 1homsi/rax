@@ -10,7 +10,7 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 - ✅ reactive storage (persisted signals)
 
 ## Structured / database
-- ✅ SQLite (`rax-sqlite::Database` — rusqlite bundled, open/execute/query/query_with)
+- ✅ SQLite (`raxon-sqlite::Database` — rusqlite bundled, open/execute/query/query_with)
 - ✅ migrations (versioned, automatic — `Database::migrate(&[(version, sql)])` tracks applied versions in `_rax_migrations`)
 - ✅ reactive SQLite queries (`use_reactive_query(initial) -> ReactiveQuery<T>`; `.invalidate()` bumps version signal; `.refresh(fetch_fn)` re-runs query; `.get()` returns current `Vec<T>`)
 - ⬜ embedded document/KV DB option (sled/redb)
@@ -18,12 +18,12 @@ shared_preferences/sqflite/hive/secure_storage. ⬜ planned.
 - ✅ reactive KV queries (`watch_kv(key) -> Signal<Option<String>>`; `kv_set_reactive/kv_delete_reactive` for push notifications)
 
 ## Files & blobs
-- ✅ file system access (`rax-fs`: `app_documents_dir/cache_dir/temp_dir/support_dir`; `read_text/bytes`, `write_text/bytes`, `append_text`, `delete_file`, `list_files`, `exists`, `file_size`, `create_dir`)
+- ✅ file system access (`raxon-fs`: `app_documents_dir/cache_dir/temp_dir/support_dir`; `read_text/bytes`, `write_text/bytes`, `append_text`, `delete_file`, `list_files`, `exists`, `file_size`, `create_dir`)
 - ⬜ streaming read/write, large files
 - ⬜ blob/asset storage + image cache integration
 
 ## Secure & sensitive
-- ✅ secure storage (`rax-keychain`: `set_secret/get_secret/delete_secret` — Security.framework SecItem* on iOS; in-memory fallback on other platforms)
+- ✅ secure storage (`raxon-keychain`: `set_secret/get_secret/delete_secret` — Security.framework SecItem* on iOS; in-memory fallback on other platforms)
 - ⬜ encryption at rest
 - ⬜ biometric-gated storage
 

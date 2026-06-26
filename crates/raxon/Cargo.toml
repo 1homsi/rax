@@ -1,0 +1,37 @@
+[package]
+name = "raxon"
+description = "The rax framework facade: one dependency and a prelude for building rax apps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints.rust]
+missing_docs = "warn"
+
+[features]
+default = []
+# Pulls in the host-side testing harness (`rax::test`).
+testing = ["dep:raxon-test"]
+
+[dependencies]
+raxon-core = { path = "../raxon-core" }
+raxon-reactive = { path = "../raxon-reactive" }
+raxon-view = { path = "../raxon-view" }
+raxon-runtime = { path = "../raxon-runtime" }
+raxon-nav = { path = "../raxon-nav" }
+raxon-store = { path = "../raxon-store" }
+raxon-net = { path = "../raxon-net" }
+raxon-anim = { path = "../raxon-anim" }
+raxon-async = { path = "../raxon-async" }
+raxon-intl = { path = "../raxon-intl" }
+raxon-style = { path = "../raxon-style" }
+raxon-plugin = { path = "../raxon-plugin" }
+raxon-keychain = { path = "../raxon-keychain" }
+raxon-test = { path = "../raxon-test", optional = true }
+
+# The iOS backend only exists on Apple mobile targets; gate it so `rax` builds
+# everywhere (host tests, future desktop/web) without dragging in UIKit.
+[target.'cfg(target_os = "ios")'.dependencies]
+raxon-ios = { path = "../raxon-ios" }

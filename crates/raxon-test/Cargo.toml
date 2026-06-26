@@ -1,0 +1,21 @@
+[package]
+name = "raxon-test"
+description = "Headless test harness and finder/query API for rax apps (no platform needed)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[dependencies]
+raxon-core = { path = "../raxon-core" }
+raxon-dom = { path = "../raxon-dom" }
+raxon-runtime = { path = "../raxon-runtime" }
+raxon-view = { path = "../raxon-view" }
+
+[dev-dependencies]
+raxon-reactive = { path = "../raxon-reactive" }
