@@ -4276,6 +4276,7 @@ export type RaxonNavigationCommand =
   | { type: "dismiss_modal" }
   | { type: "set_query_param"; key: string; value: string; replace?: boolean }
   | { type: "set_query_param_values"; key: string; values: string[]; replace?: boolean }
+  | { type: "set_query_params"; params: Record<string, string[]>; replace?: boolean }
   | { type: "remove_query_param"; key: string; replace?: boolean }
   | { type: "set_fragment"; fragment: string; replace?: boolean }
   | { type: "remove_fragment"; replace?: boolean };
@@ -4289,6 +4290,7 @@ export type RaxonNavigationCommandKind =
   | "dismiss_modal"
   | "set_query_param"
   | "set_query_param_values"
+  | "set_query_params"
   | "remove_query_param"
   | "set_fragment"
   | "remove_fragment";
@@ -5548,6 +5550,10 @@ name = "demo_native"
         assert!(web_dts.contains("interface RaxonNavigationCommandOutcome"));
         assert!(web_dts.contains("syncBrowserNavigation?: boolean"));
         assert!(web_dts.contains("queryAll: Record<string, string[]>"));
+        assert!(web_dts.contains(
+            "{ type: \"set_query_params\"; params: Record<string, string[]>; replace?: boolean }"
+        ));
+        assert!(web_dts.contains("| \"set_query_params\""));
         assert!(web_dts.contains("routeFragment?: string | null"));
         assert!(web_dts.contains("navigationDebugSnapshot(): RaxonNavigationDebugSnapshot | null"));
         assert!(web_dts.contains("location: RaxonRouteLocation"));

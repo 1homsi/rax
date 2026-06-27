@@ -1160,6 +1160,69 @@ mod tests {
         );
         assert_eq!(snapshot_json["snapshot"]["modals"][0], "/filters");
 
+        let replace_query_request = json!({
+            "protocolVersion": HOST_BRIDGE_PROTOCOL_VERSION,
+            "type": "apply_navigation_command",
+            "handle": handle.to_raw(),
+            "command": {
+                "type": "set_query_params",
+                "params": {
+                    "tag": ["paid", "pickup"],
+                    "sort": ["recent"],
+                    "empty": []
+                },
+                "replace": true
+            }
+        });
+        let replace_query_response = registry
+            .handle_request_json(
+                &serde_json::to_string(&replace_query_request).expect("request encodes"),
+            )
+            .expect("replace-query request succeeds");
+        let replace_query_json: Value =
+            serde_json::from_str(&replace_query_response).expect("response is JSON");
+        let replace_query_decoded =
+            serde_json::from_str::<HostBridgeJsonResponse>(&replace_query_response)
+                .expect("response decodes");
+
+        assert_eq!(
+            replace_query_json["type"].as_str(),
+            Some("navigation_command_outcome")
+        );
+        assert_eq!(
+            replace_query_json["outcome"]["kind"].as_str(),
+            Some("set_query_params")
+        );
+        assert_eq!(
+            replace_query_json["outcome"]["current"],
+            "/orders?sort=recent&tag=paid&tag=pickup"
+        );
+        assert_eq!(
+            replace_query_json["outcome"]["location"]["queryAll"]["tag"],
+            json!(["paid", "pickup"])
+        );
+        assert_eq!(
+            replace_query_json["outcome"]["location"]["query"]["sort"],
+            "recent"
+        );
+        assert_eq!(
+            replace_query_json["outcome"]["location"]["query"].get("empty"),
+            None
+        );
+        match replace_query_decoded.response {
+            HostBridgeResponse::NavigationCommandOutcome { outcome } => {
+                assert_eq!(
+                    outcome.kind,
+                    crate::nav::NavigationCommandKind::SetQueryParams
+                );
+                assert_eq!(
+                    outcome.location.query_values("tag"),
+                    Some(&["paid".to_string(), "pickup".to_string()][..])
+                );
+            }
+            other => panic!("expected navigation outcome response, got {other:?}"),
+        }
+
         assert_eq!(
             registry.handle_request(HostBridgeRequest::ApplyNavigationCommand {
                 handle: 999,

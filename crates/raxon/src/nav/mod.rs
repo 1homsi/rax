@@ -866,6 +866,15 @@ pub enum NavigationCommand {
         #[serde(default)]
         replace: bool,
     },
+    /// Replace the full query string on the current route.
+    SetQueryParams {
+        /// Full query map to apply. Empty value arrays are omitted.
+        #[serde(default)]
+        params: HashMap<String, Vec<String>>,
+        /// Replace the current route instead of pushing a history entry.
+        #[serde(default)]
+        replace: bool,
+    },
     /// Remove a query parameter from the current route.
     RemoveQueryParam {
         /// Query key to remove.
@@ -910,6 +919,8 @@ pub enum NavigationCommandKind {
     SetQueryParam,
     /// Set repeated query parameter values command.
     SetQueryParamValues,
+    /// Replace full query string command.
+    SetQueryParams,
     /// Remove query parameter command.
     RemoveQueryParam,
     /// Set URL fragment/hash command.
@@ -956,6 +967,7 @@ impl NavigationCommand {
             NavigationCommand::SetQueryParamValues { .. } => {
                 NavigationCommandKind::SetQueryParamValues
             }
+            NavigationCommand::SetQueryParams { .. } => NavigationCommandKind::SetQueryParams,
             NavigationCommand::RemoveQueryParam { .. } => NavigationCommandKind::RemoveQueryParam,
             NavigationCommand::SetFragment { .. } => NavigationCommandKind::SetFragment,
             NavigationCommand::RemoveFragment { .. } => NavigationCommandKind::RemoveFragment,
@@ -1127,6 +1139,23 @@ impl RouteLocation {
         } else {
             next.query_all.insert(key.to_string(), values);
         }
+        sync_first_query_values(&mut next);
+        next
+    }
+
+    /// Returns a copy with the whole decoded query string replaced.
+    ///
+    /// Empty value arrays are omitted. Other route pieces, including
+    /// hash-router form and app fragments, are preserved.
+    pub fn with_query_params<I, K, Values, Value>(&self, params: I) -> Self
+    where
+        I: IntoIterator<Item = (K, Values)>,
+        K: Into<String>,
+        Values: IntoIterator<Item = Value>,
+        Value: Into<String>,
+    {
+        let mut next = self.clone();
+        next.query_all = query_params_from_entries(params);
         sync_first_query_values(&mut next);
         next
     }
@@ -1534,6 +1563,17 @@ pub fn apply_navigation_command(command: NavigationCommand) -> NavigationCommand
             }
             true
         }
+        NavigationCommand::SetQueryParams { params, replace } => {
+            let route = current_route_location()
+                .with_query_params(params)
+                .to_route_string();
+            if replace {
+                replace_route(&route);
+            } else {
+                navigate(&route);
+            }
+            true
+        }
         NavigationCommand::RemoveQueryParam { key, replace } => {
             let route = current_route_location()
                 .without_query_param(&key)
@@ -1898,6 +1938,39 @@ where
 {
     let route = current_route_location()
         .with_query_values(key, values)
+        .to_route_string();
+    replace_route(&route)
+}
+
+/// Pushes a new route with the whole query string replaced.
+///
+/// Empty value arrays are omitted. Existing path, fragment, and hash-route
+/// style are preserved.
+pub fn set_query_params<I, K, Values, Value>(params: I) -> String
+where
+    I: IntoIterator<Item = (K, Values)>,
+    K: Into<String>,
+    Values: IntoIterator<Item = Value>,
+    Value: Into<String>,
+{
+    let route = current_route_location()
+        .with_query_params(params)
+        .to_route_string();
+    navigate(&route)
+}
+
+/// Replaces the current route with the whole query string replaced.
+///
+/// Empty value arrays are omitted and no browser/back-stack entry is added.
+pub fn replace_query_params<I, K, Values, Value>(params: I) -> String
+where
+    I: IntoIterator<Item = (K, Values)>,
+    K: Into<String>,
+    Values: IntoIterator<Item = Value>,
+    Value: Into<String>,
+{
+    let route = current_route_location()
+        .with_query_params(params)
         .to_route_string();
     replace_route(&route)
 }
@@ -2527,6 +2600,23 @@ fn first_query_values(query_all: &HashMap<String, Vec<String>>) -> HashMap<Strin
         .collect()
 }
 
+fn query_params_from_entries<I, K, Values, Value>(params: I) -> HashMap<String, Vec<String>>
+where
+    I: IntoIterator<Item = (K, Values)>,
+    K: Into<String>,
+    Values: IntoIterator<Item = Value>,
+    Value: Into<String>,
+{
+    let mut query_all = HashMap::new();
+    for (key, values) in params {
+        let values: Vec<String> = values.into_iter().map(Into::into).collect();
+        if !values.is_empty() {
+            query_all.insert(key.into(), values);
+        }
+    }
+    query_all
+}
+
 fn sync_first_query_values(location: &mut RouteLocation) {
     location.query = first_query_values(&location.query_all);
 }
@@ -3015,12 +3105,14 @@ mod tests {
         navigation_state, on_appear, on_disappear, on_navigate, on_transition_complete,
         on_transition_start, parse_deep_link, parse_query, parse_query_all, parse_route_location,
         pending_route_result_route, pending_route_result_type, present_modal, remove_fragment,
-        replace_fragment, replace_remove_fragment, replace_route, reset_route,
-        restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
-        save_navigation_state, set_fragment, try_navigate_for_result, NavigationCommand,
-        NavigationCommandKind, NavigationState, NavigatorTransitionKind, RouteTransitionKind,
+        replace_fragment, replace_query_params, replace_remove_fragment, replace_route,
+        reset_route, restore_navigation_state, restore_saved_navigation_state, return_route_result,
+        route, save_navigation_state, set_fragment, set_query_params, try_navigate_for_result,
+        NavigationCommand, NavigationCommandKind, NavigationState, NavigatorTransitionKind,
+        RouteTransitionKind,
     };
     use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::rc::Rc;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3231,6 +3323,35 @@ mod tests {
     }
 
     #[test]
+    fn route_location_replaces_entire_query_map() {
+        let location = parse_route_location("/search?page=2&tag=old#results");
+        let replaced = location.with_query_params([
+            ("tag", vec!["paid", "pickup"]),
+            ("sort", vec!["recent"]),
+            ("empty", Vec::<&str>::new()),
+        ]);
+
+        assert_eq!(
+            replaced.query_values("tag"),
+            Some(&["paid".to_string(), "pickup".to_string()][..])
+        );
+        assert_eq!(replaced.query_value("sort"), Some("recent"));
+        assert_eq!(replaced.query_value("page"), None);
+        assert_eq!(
+            replaced.to_route_string(),
+            "/search?sort=recent&tag=paid&tag=pickup#results"
+        );
+
+        let hash_route = parse_route_location("/#/checkout?step=pay&stale=1#notes")
+            .with_query_params([("step", vec!["confirm"]), ("coupon", vec!["VIP 10"])]);
+        assert_eq!(
+            hash_route.to_route_string(),
+            "/#/checkout?coupon=VIP+10&step=confirm#notes"
+        );
+        assert_eq!(hash_route.route_fragment(), Some("notes"));
+    }
+
+    #[test]
     fn route_location_encodes_query_and_fragment_values() {
         let location = parse_route_location("/search")
             .with_query_param("sort by", "new first")
@@ -3390,13 +3511,14 @@ mod tests {
             r#"[
                 {"type":"navigate","route":"/orders/42"},
                 {"type":"set_query_param","key":"tab","value":"items","replace":true},
+                {"type":"set_query_params","params":{"tag":["paid","pickup"],"sort":["recent"],"empty":[]},"replace":true},
                 {"type":"set_fragment","fragment":"notes","replace":true},
                 {"type":"remove_fragment","replace":true},
                 {"type":"back"}
             ]"#,
         )
         .expect("command list should decode");
-        assert_eq!(commands.len(), 5);
+        assert_eq!(commands.len(), 6);
         assert_eq!(
             commands[0],
             NavigationCommand::Navigate {
@@ -3405,13 +3527,27 @@ mod tests {
         );
         assert_eq!(
             commands[2],
+            NavigationCommand::SetQueryParams {
+                params: HashMap::from([
+                    (
+                        "tag".to_string(),
+                        vec!["paid".to_string(), "pickup".to_string()]
+                    ),
+                    ("sort".to_string(), vec!["recent".to_string()]),
+                    ("empty".to_string(), Vec::new()),
+                ]),
+                replace: true,
+            }
+        );
+        assert_eq!(
+            commands[3],
             NavigationCommand::SetFragment {
                 fragment: "notes".to_string(),
                 replace: true,
             }
         );
         assert_eq!(
-            commands[3],
+            commands[4],
             NavigationCommand::RemoveFragment { replace: true }
         );
 
@@ -3434,9 +3570,15 @@ mod tests {
             NavigationCommand::Navigate {
                 route: "/orders/42".to_string(),
             },
-            NavigationCommand::SetQueryParamValues {
-                key: "tag".to_string(),
-                values: vec!["paid".to_string(), "pickup".to_string()],
+            NavigationCommand::SetQueryParams {
+                params: HashMap::from([
+                    (
+                        "tag".to_string(),
+                        vec!["paid".to_string(), "pickup".to_string()],
+                    ),
+                    ("sort".to_string(), vec!["recent".to_string()]),
+                    ("empty".to_string(), Vec::new()),
+                ]),
                 replace: true,
             },
             NavigationCommand::SetFragment {
@@ -3452,19 +3594,27 @@ mod tests {
 
         assert_eq!(outcomes.len(), 6);
         assert_eq!(outcomes[0].kind, NavigationCommandKind::Navigate);
-        assert_eq!(outcomes[1].kind, NavigationCommandKind::SetQueryParamValues);
-        assert_eq!(outcomes[1].current, "/orders/42?tag=paid&tag=pickup");
+        assert_eq!(outcomes[1].kind, NavigationCommandKind::SetQueryParams);
+        assert_eq!(
+            outcomes[1].current,
+            "/orders/42?sort=recent&tag=paid&tag=pickup"
+        );
         assert_eq!(outcomes[1].location.path, "/orders/42");
         assert_eq!(
             outcomes[1].location.query_values("tag"),
             Some(&["paid".to_string(), "pickup".to_string()][..])
         );
+        assert_eq!(outcomes[1].location.query_value("sort"), Some("recent"));
+        assert_eq!(outcomes[1].location.query_value("empty"), None);
         assert_eq!(outcomes[1].route_fragment, None);
-        assert_eq!(outcomes[1].history, vec!["/orders/42?tag=paid&tag=pickup"]);
+        assert_eq!(
+            outcomes[1].history,
+            vec!["/orders/42?sort=recent&tag=paid&tag=pickup"]
+        );
         assert_eq!(outcomes[2].kind, NavigationCommandKind::SetFragment);
         assert_eq!(
             outcomes[2].current,
-            "/orders/42?tag=paid&tag=pickup#line%20item%207"
+            "/orders/42?sort=recent&tag=paid&tag=pickup#line%20item%207"
         );
         assert_eq!(
             outcomes[2].location.fragment.as_deref(),
@@ -3475,7 +3625,10 @@ mod tests {
         assert_eq!(outcome_json["location"]["queryAll"]["tag"][0], "paid");
         assert_eq!(outcome_json["routeFragment"], "line item 7");
         assert_eq!(outcomes[3].kind, NavigationCommandKind::RemoveFragment);
-        assert_eq!(outcomes[3].current, "/orders/42?tag=paid&tag=pickup");
+        assert_eq!(
+            outcomes[3].current,
+            "/orders/42?sort=recent&tag=paid&tag=pickup"
+        );
         assert_eq!(outcomes[3].location.fragment, None);
         assert_eq!(outcomes[3].route_fragment, None);
         assert_eq!(outcomes[4].modals, vec!["/filters".to_string()]);
@@ -3525,6 +3678,45 @@ mod tests {
             "/checkout?step=pay#notes"
         );
         assert_eq!(outcome_json["routeFragment"], "notes");
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn query_helpers_replace_whole_url_state_with_push_or_replace() {
+        super::reset_navigation_for_tests();
+        reset_route("/search?page=2&tag=old#results");
+
+        let pushed = set_query_params([
+            ("tag", vec!["paid", "pickup"]),
+            ("sort", vec!["recent"]),
+            ("empty", Vec::<&str>::new()),
+        ]);
+        assert_eq!(pushed, "/search?sort=recent&tag=paid&tag=pickup#results");
+        assert_eq!(
+            navigation_state().history,
+            vec![
+                "/search?page=2&tag=old#results".to_string(),
+                "/search?sort=recent&tag=paid&tag=pickup#results".to_string(),
+            ]
+        );
+
+        let replaced =
+            replace_query_params([("tag", vec!["curbside"]), ("coupon", vec!["VIP 10"])]);
+        assert_eq!(replaced, "/search?coupon=VIP+10&tag=curbside#results");
+        assert_eq!(
+            navigation_state().history,
+            vec![
+                "/search?page=2&tag=old#results".to_string(),
+                "/search?coupon=VIP+10&tag=curbside#results".to_string(),
+            ]
+        );
+
+        super::reset_navigation_for_tests();
+        reset_route("/#/checkout?stale=1&step=pay#notes");
+
+        let hash_replaced = replace_query_params([("step", vec!["confirm"])]);
+        assert_eq!(hash_replaced, "/#/checkout?step=confirm#notes");
 
         super::reset_navigation_for_tests();
     }
