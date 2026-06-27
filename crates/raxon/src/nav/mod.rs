@@ -230,7 +230,7 @@ pub fn use_focus_effect(route: &str, f: impl Fn() + 'static) {
 // String-based programmatic navigation
 // ---------------------------------------------------------------------------
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 thread_local! {
     /// The current route as a reactive signal (string-based router).
@@ -456,9 +456,10 @@ impl UrlRoute {
 
 /// Creates a declarative URL route.
 ///
-/// `pattern` supports static path segments and `:param` captures. Query keys
-/// and fragments in the pattern act as constraints, so `"/orders/:id?tab=items"`
-/// only matches routes whose first `tab` query value is `"items"`.
+/// `pattern` supports static path segments, `:param` captures, optional
+/// `:param?` segments, and final `*splat` catchalls. Query keys and fragments
+/// in the pattern act as constraints, so `"/orders/:id?tab=items"` only matches
+/// routes whose first `tab` query value is `"items"`.
 ///
 /// # Example
 /// ```
@@ -772,9 +773,11 @@ pub fn handle_back() -> bool {
 // Route pattern matching
 // ---------------------------------------------------------------------------
 
-/// Match a route `pattern` (e.g. `"/user/:id/post/:postId"`) against a
-/// concrete `route` (e.g. `"/user/42/post/7"`). Returns a map of parameter
-/// names to their values on success, or `None` if the shapes don't match.
+/// Match a route `pattern` against a concrete `route`.
+///
+/// Patterns support static segments, `:param` captures, optional `:param?`
+/// captures, and final `*splat` catchalls. Returns a map of parameter names to
+/// their decoded values on success, or `None` if the shapes don't match.
 ///
 /// # Example
 /// ```
@@ -784,7 +787,7 @@ pub fn handle_back() -> bool {
 /// assert_eq!(params["postId"], "7");
 /// ```
 pub fn match_route(pattern: &str, route: &str) -> Option<HashMap<String, String>> {
-    let pattern_location = parse_route_location(pattern);
+    let pattern_location = parse_route_pattern_location(pattern);
     let route_location = parse_route_location(route);
     match_path_params(&pattern_location.path, &route_location.path)
 }
@@ -796,8 +799,76 @@ pub fn match_route_location(pattern: &str, route: &str) -> Option<RouteMatch> {
     match_route_definition(pattern, location)
 }
 
+/// Builds a concrete route from a pattern and decoded path parameters.
+///
+/// Missing required `:param` or named `*splat` values return `None`. Optional
+/// `:param?` segments are omitted when their value is missing or empty.
+///
+/// # Example
+/// ```
+/// use raxon::nav::build_route;
+/// let route = build_route("/orders/:id", [("id", "abc 123")]).unwrap();
+/// assert_eq!(route, "/orders/abc%20123");
+/// ```
+pub fn build_route<K, V, I>(pattern: &str, params: I) -> Option<String>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    build_route_with_query(pattern, params, std::iter::empty::<(&str, &str)>())
+}
+
+/// Builds a concrete route from a pattern, decoded path parameters, and decoded
+/// query pairs.
+///
+/// Query pairs may repeat keys. Pairs passed here replace same-named query
+/// constraints from the pattern, while other pattern query constraints remain.
+pub fn build_route_with_query<K, V, I, QK, QV, QI>(
+    pattern: &str,
+    params: I,
+    query: QI,
+) -> Option<String>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+    QI: IntoIterator<Item = (QK, QV)>,
+    QK: AsRef<str>,
+    QV: AsRef<str>,
+{
+    let pattern_location = parse_route_pattern_location(pattern);
+    let params = collect_route_params(params);
+    let path = build_route_path(&pattern_location.path, &params)?;
+    let mut location = RouteLocation {
+        path,
+        query: pattern_location.query,
+        query_all: pattern_location.query_all,
+        fragment: pattern_location.fragment,
+    };
+
+    let mut replaced_query_keys = HashSet::new();
+    for (key, value) in query {
+        let key = key.as_ref();
+        if key.is_empty() {
+            continue;
+        }
+        if replaced_query_keys.insert(key.to_string()) {
+            location.query_all.remove(key);
+        }
+        location
+            .query_all
+            .entry(key.to_string())
+            .or_default()
+            .push(value.as_ref().to_string());
+    }
+
+    sync_first_query_values(&mut location);
+    Some(location.to_route_string())
+}
+
 fn match_route_definition(pattern: &str, location: RouteLocation) -> Option<RouteMatch> {
-    let pattern_location = parse_route_location(pattern);
+    let pattern_location = parse_route_pattern_location(pattern);
     let params = match_path_params(&pattern_location.path, &location.path)?;
 
     if !query_constraints_match(&pattern_location.query, &location.query) {
@@ -823,24 +894,166 @@ fn match_route_definition(pattern: &str, location: RouteLocation) -> Option<Rout
 fn match_path_params(pattern_path: &str, route_path: &str) -> Option<HashMap<String, String>> {
     let pattern_segs: Vec<&str> = pattern_path.split('/').filter(|s| !s.is_empty()).collect();
     let route_segs: Vec<&str> = route_path.split('/').filter(|s| !s.is_empty()).collect();
+    match_path_segments(&pattern_segs, &route_segs, 0, 0, HashMap::new())
+}
 
-    if pattern_segs.len() != route_segs.len() {
+fn match_path_segments(
+    pattern_segs: &[&str],
+    route_segs: &[&str],
+    pattern_index: usize,
+    route_index: usize,
+    params: HashMap<String, String>,
+) -> Option<HashMap<String, String>> {
+    if pattern_index == pattern_segs.len() {
+        return (route_index == route_segs.len()).then_some(params);
+    }
+
+    let pattern_segment = pattern_segs[pattern_index];
+
+    if let Some(splat_name) = pattern_segment.strip_prefix('*') {
+        if pattern_index + 1 != pattern_segs.len() {
+            return None;
+        }
+        let mut params = params;
+        if !splat_name.is_empty() {
+            let value = route_segs[route_index..]
+                .iter()
+                .map(|segment| decode_url_component(segment, false))
+                .collect::<Vec<_>>()
+                .join("/");
+            params.insert(splat_name.to_string(), value);
+        }
+        return Some(params);
+    }
+
+    if let Some(param_name) = optional_param_name(pattern_segment) {
+        if route_index < route_segs.len() {
+            let mut consumed_params = params.clone();
+            consumed_params.insert(
+                param_name.to_string(),
+                decode_url_component(route_segs[route_index], false),
+            );
+            if let Some(matched) = match_path_segments(
+                pattern_segs,
+                route_segs,
+                pattern_index + 1,
+                route_index + 1,
+                consumed_params,
+            ) {
+                return Some(matched);
+            }
+        }
+        return match_path_segments(
+            pattern_segs,
+            route_segs,
+            pattern_index + 1,
+            route_index,
+            params,
+        );
+    }
+
+    if let Some(param_name) = required_param_name(pattern_segment) {
+        if route_index >= route_segs.len() {
+            return None;
+        }
+        let mut params = params;
+        params.insert(
+            param_name.to_string(),
+            decode_url_component(route_segs[route_index], false),
+        );
+        return match_path_segments(
+            pattern_segs,
+            route_segs,
+            pattern_index + 1,
+            route_index + 1,
+            params,
+        );
+    }
+
+    if route_index >= route_segs.len()
+        || decode_url_component(pattern_segment, false)
+            != decode_url_component(route_segs[route_index], false)
+    {
         return None;
     }
 
-    let mut params = HashMap::new();
-    for (p, r) in pattern_segs.iter().zip(route_segs.iter()) {
-        if let Some(param_name) = p.strip_prefix(':') {
-            if param_name.is_empty() {
+    match_path_segments(
+        pattern_segs,
+        route_segs,
+        pattern_index + 1,
+        route_index + 1,
+        params,
+    )
+}
+
+fn build_route_path(pattern_path: &str, params: &HashMap<String, String>) -> Option<String> {
+    let pattern_segs: Vec<&str> = pattern_path.split('/').filter(|s| !s.is_empty()).collect();
+    let mut route_segs = Vec::new();
+
+    for (index, segment) in pattern_segs.iter().enumerate() {
+        if let Some(splat_name) = segment.strip_prefix('*') {
+            if index + 1 != pattern_segs.len() {
                 return None;
             }
-            params.insert(param_name.to_string(), decode_url_component(r, false));
-        } else if decode_url_component(p, false) != decode_url_component(r, false) {
-            return None;
+            if !splat_name.is_empty() {
+                let value = params.get(splat_name)?;
+                route_segs.extend(
+                    value
+                        .split('/')
+                        .filter(|part| !part.is_empty())
+                        .map(encode_path_segment),
+                );
+            }
+            break;
         }
+
+        if let Some(param_name) = optional_param_name(segment) {
+            if let Some(value) = params.get(param_name).filter(|value| !value.is_empty()) {
+                route_segs.push(encode_path_segment(value));
+            }
+            continue;
+        }
+
+        if let Some(param_name) = required_param_name(segment) {
+            let value = params.get(param_name).filter(|value| !value.is_empty())?;
+            route_segs.push(encode_path_segment(value));
+            continue;
+        }
+
+        route_segs.push(encode_path_segment(&decode_url_component(segment, false)));
     }
 
-    Some(params)
+    if route_segs.is_empty() {
+        Some("/".to_string())
+    } else {
+        Some(format!("/{}", route_segs.join("/")))
+    }
+}
+
+fn collect_route_params<K, V, I>(params: I) -> HashMap<String, String>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    params
+        .into_iter()
+        .map(|(key, value)| (key.as_ref().to_string(), value.as_ref().to_string()))
+        .collect()
+}
+
+fn optional_param_name(segment: &str) -> Option<&str> {
+    let name = segment.strip_prefix(':')?.strip_suffix('?')?;
+    (!name.is_empty()).then_some(name)
+}
+
+fn required_param_name(segment: &str) -> Option<&str> {
+    let name = segment.strip_prefix(':')?;
+    if name.is_empty() || name.ends_with('?') {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 fn query_constraints_match(
@@ -955,6 +1168,33 @@ pub fn parse_route_location(input: &str) -> RouteLocation {
     }
 }
 
+fn parse_route_pattern_location(input: &str) -> RouteLocation {
+    let trimmed = input.trim();
+    let (without_fragment, fragment_raw) = split_once(trimmed, '#');
+    let fragment = fragment_raw
+        .filter(|value| !value.is_empty())
+        .map(|value| decode_url_component(value, false));
+
+    if let Some(hash_route) = fragment_raw.and_then(hash_route_part) {
+        let mut location = parse_route_pattern_location(hash_route);
+        location.fragment = fragment;
+        return location;
+    }
+
+    let route_part = strip_url_prefix(without_fragment);
+    let (raw_path, query_raw) = split_pattern_path_query(route_part);
+    let path = normalize_route_path(raw_path);
+    let query_all = parse_query_all(query_raw.unwrap_or_default());
+    let query = first_query_values(&query_all);
+
+    RouteLocation {
+        path,
+        query,
+        query_all,
+        fragment,
+    }
+}
+
 /// Parses a query string into decoded first values.
 ///
 /// Accepts strings with or without a leading `?`. Repeated keys keep the first
@@ -1051,6 +1291,29 @@ fn split_once(input: &str, needle: char) -> (&str, Option<&str>) {
     }
 }
 
+fn split_pattern_path_query(input: &str) -> (&str, Option<&str>) {
+    for (index, ch) in input.char_indices() {
+        if ch == '?' && !is_optional_param_marker(input, index) {
+            return (&input[..index], Some(&input[index + ch.len_utf8()..]));
+        }
+    }
+    (input, None)
+}
+
+fn is_optional_param_marker(input: &str, question_index: usize) -> bool {
+    let next = input[question_index + '?'.len_utf8()..].chars().next();
+    if !matches!(next, None | Some('/')) {
+        return false;
+    }
+
+    let segment_start = input[..question_index]
+        .rfind('/')
+        .map(|index| index + '/'.len_utf8())
+        .unwrap_or(0);
+    let segment = &input[segment_start..question_index];
+    segment.starts_with(':') && segment.len() > 1
+}
+
 fn hash_route_part(fragment: &str) -> Option<&str> {
     let route = fragment.strip_prefix('!').unwrap_or(fragment);
     route.starts_with('/').then_some(route)
@@ -1140,6 +1403,10 @@ fn decode_url_component(input: &str, plus_as_space: bool) -> String {
 
 fn encode_query_component(input: &str) -> String {
     encode_url_component(input, true, false)
+}
+
+fn encode_path_segment(input: &str) -> String {
+    encode_url_component(input, false, false)
 }
 
 fn encode_fragment_component(input: &str) -> String {
@@ -1340,8 +1607,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        match_route, match_route_location, parse_deep_link, parse_query, parse_query_all,
-        parse_route_location, route,
+        build_route, build_route_with_query, match_route, match_route_location, parse_deep_link,
+        parse_query, parse_query_all, parse_route_location, route,
     };
 
     #[test]
@@ -1391,6 +1658,42 @@ mod tests {
     }
 
     #[test]
+    fn match_route_supports_optional_path_params() {
+        let without_id = match_route("/products/:id?", "/products").expect("route should match");
+        assert!(without_id.is_empty());
+
+        let with_id =
+            match_route("/products/:id?", "/products/abc%20123").expect("route should match");
+        assert_eq!(with_id["id"], "abc 123");
+
+        let nested_without_id =
+            match_route("/products/:id?/reviews", "/products/reviews").expect("route should match");
+        assert!(nested_without_id.is_empty());
+
+        let nested_with_id = match_route("/products/:id?/reviews", "/products/42/reviews")
+            .expect("route should match");
+        assert_eq!(nested_with_id["id"], "42");
+
+        assert!(match_route("/products/:id?", "/products/42/reviews").is_none());
+    }
+
+    #[test]
+    fn match_route_supports_splat_params_and_unnamed_catchalls() {
+        let file = match_route("/files/*path", "/files/docs/Annual%20Plan.pdf")
+            .expect("route should match");
+        assert_eq!(file["path"], "docs/Annual Plan.pdf");
+
+        let empty_splat = match_route("/files/*path", "/files").expect("route should match");
+        assert_eq!(empty_splat["path"], "");
+
+        let unnamed =
+            match_route("/settings/*", "/settings/profile/security").expect("route should match");
+        assert!(unnamed.is_empty());
+
+        assert!(match_route("/files/*path/edit", "/files/docs/edit").is_none());
+    }
+
+    #[test]
     fn match_route_location_carries_params_query_and_hash() {
         let matched = match_route_location(
             "/orders/:id?tab=items#notes",
@@ -1429,6 +1732,32 @@ mod tests {
         assert_eq!(detail.pattern(), "/orders/:id");
         assert_eq!(matched.param("id"), Some("42"));
         assert_eq!(matched.query_value("tab"), Some("items"));
+    }
+
+    #[test]
+    fn url_route_matches_optional_and_splat_patterns() {
+        let optional = route("/products/:id?/reviews", |_| {
+            crate::view::boxed(crate::view::text("reviews"))
+        });
+        assert!(optional.matches("/products/reviews").is_some());
+        assert_eq!(
+            optional
+                .matches("/products/42/reviews")
+                .expect("route should match")
+                .param("id"),
+            Some("42")
+        );
+
+        let catchall = route("/files/*path", |_| {
+            crate::view::boxed(crate::view::text("file"))
+        });
+        assert_eq!(
+            catchall
+                .matches("/files/docs/report.pdf")
+                .expect("route should match")
+                .param("path"),
+            Some("docs/report.pdf")
+        );
     }
 
     #[test]
@@ -1479,6 +1808,46 @@ mod tests {
             rewritten.to_route_string(),
             "/#/checkout?coupon=VIP+10&step=pay"
         );
+    }
+
+    #[test]
+    fn build_route_fills_optional_required_and_splat_params() {
+        let order = build_route(
+            "/orders/:id/reviews/:review_id",
+            [("id", "abc 123"), ("review_id", "R/9")],
+        );
+        assert_eq!(order.as_deref(), Some("/orders/abc%20123/reviews/R%2F9"));
+
+        let optional = build_route("/orders/:id?", std::iter::empty::<(&str, &str)>());
+        assert_eq!(optional.as_deref(), Some("/orders"));
+
+        let splat = build_route("/files/*path", [("path", "docs/Annual Plan.pdf")]);
+        assert_eq!(splat.as_deref(), Some("/files/docs/Annual%20Plan.pdf"));
+
+        assert!(build_route("/orders/:id", std::iter::empty::<(&str, &str)>()).is_none());
+    }
+
+    #[test]
+    fn build_route_with_query_handles_pattern_constraints_and_hash_routes() {
+        let route = build_route_with_query(
+            "/#/checkout/:step?mode=guest",
+            [("step", "pay")],
+            [("coupon", "VIP 10"), ("tag", "fast"), ("tag", "paid")],
+        )
+        .expect("route should build");
+
+        assert_eq!(
+            route,
+            "/#/checkout/pay?coupon=VIP+10&mode=guest&tag=fast&tag=paid"
+        );
+
+        let overridden = build_route_with_query(
+            "/orders/:id?tab=items",
+            [("id", "42")],
+            [("tab", "history")],
+        )
+        .expect("route should build");
+        assert_eq!(overridden, "/orders/42?tab=history");
     }
 
     #[test]
