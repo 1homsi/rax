@@ -221,6 +221,199 @@ impl<R: Clone + 'static> Navigator<R> {
     }
 }
 
+/// A tab navigator where each tab owns an independent route stack.
+///
+/// This is the typed "tabs containing stacks" primitive: switching tabs keeps
+/// each tab's stack alive, while push/pop/replace operate on the selected tab.
+/// Pair [`selected_signal`](Self::selected_signal) with your tab bar of choice,
+/// and render the selected stack with [`tab_stack_routes`].
+pub struct TabStackNavigator<R: 'static> {
+    stacks: Signal<Vec<Vec<R>>>,
+    selected: Signal<usize>,
+}
+
+impl<R: 'static> Clone for TabStackNavigator<R> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<R: 'static> Copy for TabStackNavigator<R> {}
+
+/// Creates a tab-stack navigator with one root route per tab.
+///
+/// The first tab is selected initially. The navigator is provided via context
+/// so descendants can call [`use_tab_stack_navigator`].
+pub fn create_tab_stack_navigator<R: Clone + 'static>(
+    roots: impl Into<Vec<R>>,
+) -> TabStackNavigator<R> {
+    create_tab_stack_navigator_at(roots, 0)
+}
+
+/// Creates a tab-stack navigator with `selected_index` selected initially.
+///
+/// If `selected_index` is out of range it is clamped to the last tab.
+/// Panics when `roots` is empty because every tab must have a root route.
+pub fn create_tab_stack_navigator_at<R: Clone + 'static>(
+    roots: impl Into<Vec<R>>,
+    selected_index: usize,
+) -> TabStackNavigator<R> {
+    let roots = roots.into();
+    assert!(
+        !roots.is_empty(),
+        "tab stack navigator requires at least one root route"
+    );
+
+    let tab_count = roots.len();
+    let nav = TabStackNavigator {
+        stacks: create_signal(roots.into_iter().map(|root| vec![root]).collect()),
+        selected: create_signal(selected_index.min(tab_count - 1)),
+    };
+    provide_context(nav);
+    nav
+}
+
+/// The tab-stack navigator of route type `R` in scope, if any.
+pub fn use_tab_stack_navigator<R: Clone + 'static>() -> Option<TabStackNavigator<R>> {
+    use_context::<TabStackNavigator<R>>()
+}
+
+impl<R: Clone + 'static> TabStackNavigator<R> {
+    /// Returns the selected tab index, clamped to the available tabs.
+    pub fn selected_index(&self) -> usize {
+        let count = self.tab_count();
+        if count == 0 {
+            return 0;
+        }
+        self.selected.get().min(count - 1)
+    }
+
+    /// Returns the reactive selected-tab signal.
+    ///
+    /// Use this to bind a visual tab bar to the navigator.
+    pub fn selected_signal(&self) -> Signal<usize> {
+        self.selected
+    }
+
+    /// Selects a tab by index. Returns `false` when the index is out of range.
+    pub fn select(&self, index: usize) -> bool {
+        if index >= self.tab_count() {
+            return false;
+        }
+        self.selected.set(index);
+        true
+    }
+
+    /// Number of tabs managed by this navigator.
+    pub fn tab_count(&self) -> usize {
+        self.stacks.with(|stacks| stacks.len())
+    }
+
+    /// Returns a clone of every tab stack.
+    pub fn stacks(&self) -> Vec<Vec<R>> {
+        self.stacks.get()
+    }
+
+    /// Returns a clone of one tab stack.
+    pub fn stack(&self, index: usize) -> Option<Vec<R>> {
+        self.stacks.with(|stacks| stacks.get(index).cloned())
+    }
+
+    /// Returns the current route for the selected tab.
+    pub fn top(&self) -> R {
+        let selected = self.selected_index();
+        self.stacks.with(|stacks| {
+            stacks
+                .get(selected)
+                .and_then(|stack| stack.last())
+                .expect("tab stacks are never empty")
+                .clone()
+        })
+    }
+
+    /// Depth of the selected tab's stack.
+    pub fn depth(&self) -> usize {
+        let selected = self.selected_index();
+        self.stacks
+            .with(|stacks| stacks.get(selected).map(Vec::len).unwrap_or_default())
+    }
+
+    /// Whether the selected tab can pop back to its root route.
+    pub fn can_pop(&self) -> bool {
+        self.depth() > 1
+    }
+
+    /// Pushes a route onto the selected tab stack.
+    pub fn push(&self, route: R) {
+        let selected = self.selected_index();
+        self.stacks.update(|stacks| stacks[selected].push(route));
+    }
+
+    /// Pops the selected tab stack. Returns `false` at the root.
+    pub fn pop(&self) -> bool {
+        let selected = self.selected_index();
+        let mut did_pop = false;
+        self.stacks.update(|stacks| {
+            if let Some(stack) = stacks.get_mut(selected) {
+                if stack.len() > 1 {
+                    stack.pop();
+                    did_pop = true;
+                }
+            }
+        });
+        did_pop
+    }
+
+    /// Replaces the selected tab's top route.
+    pub fn replace(&self, route: R) {
+        let selected = self.selected_index();
+        self.stacks.update(|stacks| {
+            let stack = &mut stacks[selected];
+            if let Some(top) = stack.last_mut() {
+                *top = route;
+            } else {
+                stack.push(route);
+            }
+        });
+    }
+
+    /// Resets the selected tab to a single root route.
+    pub fn reset(&self, route: R) {
+        let selected = self.selected_index();
+        let _ = self.reset_tab(selected, route);
+    }
+
+    /// Resets one tab to a single root route. Returns `false` when out of range.
+    pub fn reset_tab(&self, index: usize, route: R) -> bool {
+        if index >= self.tab_count() {
+            return false;
+        }
+        self.stacks.update(|stacks| stacks[index] = vec![route]);
+        true
+    }
+
+    /// Pops the selected tab back to its root route.
+    pub fn pop_to_root(&self) -> bool {
+        let selected = self.selected_index();
+        self.pop_tab_to_root(selected)
+    }
+
+    /// Pops one tab back to its root route. Returns `false` when nothing changed.
+    pub fn pop_tab_to_root(&self, index: usize) -> bool {
+        if index >= self.tab_count() {
+            return false;
+        }
+        let mut changed = false;
+        self.stacks.update(|stacks| {
+            let stack = &mut stacks[index];
+            if stack.len() > 1 {
+                stack.truncate(1);
+                changed = true;
+            }
+        });
+        changed
+    }
+}
+
 /// Renders the navigator's current route. `render` maps a route to a view; when
 /// the stack changes, the displayed screen swaps reactively.
 pub fn routes<R, F>(nav: Navigator<R>, mut render: F) -> impl View
@@ -229,6 +422,31 @@ where
     F: FnMut(R) -> BoxedView + 'static,
 {
     dynamic(move || render(nav.top()))
+}
+
+/// Renders the selected tab stack's current route.
+///
+/// Use this with [`create_tab_stack_navigator`] when a bottom/top tab UI should
+/// preserve an independent stack per tab.
+pub fn tab_stack_routes<R, F>(nav: TabStackNavigator<R>, mut render: F) -> impl View
+where
+    R: Clone + 'static,
+    F: FnMut(R) -> BoxedView + 'static,
+{
+    dynamic(move || render(nav.top()))
+}
+
+/// A batteries-included tab-stack navigator.
+///
+/// Creates a [`TabStackNavigator`] with one root route per tab, provides it via
+/// context, and renders the selected tab's current route.
+pub fn tab_stack<R, F>(roots: impl Into<Vec<R>>, render: F) -> impl View
+where
+    R: Clone + 'static,
+    F: FnMut(R) -> BoxedView + 'static,
+{
+    let nav = create_tab_stack_navigator(roots);
+    tab_stack_routes(nav, render)
 }
 
 /// A push/pop stack navigator that creates and provides its own [`Navigator`]
@@ -2118,15 +2336,15 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        build_route, build_route_with_query, cancel_route_result, create_navigator, current_route,
-        decode_navigation_state, encode_navigation_state, has_pending_route_result, match_route,
-        match_route_location, modal_stack, navigate, navigate_for_result, navigation_state,
-        on_appear, on_disappear, on_navigate, on_transition_complete, on_transition_start,
-        parse_deep_link, parse_query, parse_query_all, parse_route_location,
-        pending_route_result_route, pending_route_result_type, present_modal, replace_route,
-        restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
-        save_navigation_state, try_navigate_for_result, NavigationState, NavigatorTransitionKind,
-        RouteTransitionKind,
+        build_route, build_route_with_query, cancel_route_result, create_navigator,
+        create_tab_stack_navigator, current_route, decode_navigation_state,
+        encode_navigation_state, has_pending_route_result, match_route, match_route_location,
+        modal_stack, navigate, navigate_for_result, navigation_state, on_appear, on_disappear,
+        on_navigate, on_transition_complete, on_transition_start, parse_deep_link, parse_query,
+        parse_query_all, parse_route_location, pending_route_result_route,
+        pending_route_result_type, present_modal, replace_route, restore_navigation_state,
+        restore_saved_navigation_state, return_route_result, route, save_navigation_state,
+        try_navigate_for_result, NavigationState, NavigatorTransitionKind, RouteTransitionKind,
     };
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -2136,6 +2354,7 @@ mod tests {
         Home,
         Detail,
         Settings,
+        Search,
     }
 
     #[test]
@@ -2500,6 +2719,53 @@ mod tests {
         assert_eq!(reset.kind, NavigatorTransitionKind::Reset);
         assert_eq!(reset.from_depth, 1);
         assert_eq!(reset.to_depth, 1);
+    }
+
+    #[test]
+    fn tab_stack_navigator_preserves_independent_tab_stacks() {
+        let nav = create_tab_stack_navigator(vec![TestScreen::Home, TestScreen::Settings]);
+
+        assert_eq!(nav.tab_count(), 2);
+        assert_eq!(nav.selected_index(), 0);
+        assert_eq!(nav.top(), TestScreen::Home);
+        assert_eq!(nav.depth(), 1);
+
+        nav.push(TestScreen::Detail);
+        assert_eq!(nav.top(), TestScreen::Detail);
+        assert_eq!(nav.depth(), 2);
+        assert!(nav.can_pop());
+
+        assert!(nav.select(1));
+        assert_eq!(nav.selected_index(), 1);
+        assert_eq!(nav.top(), TestScreen::Settings);
+        assert_eq!(nav.depth(), 1);
+
+        nav.push(TestScreen::Search);
+        assert_eq!(nav.top(), TestScreen::Search);
+        assert_eq!(
+            nav.stack(1),
+            Some(vec![TestScreen::Settings, TestScreen::Search])
+        );
+
+        assert!(nav.select(0));
+        assert_eq!(nav.top(), TestScreen::Detail);
+        assert_eq!(
+            nav.stack(0),
+            Some(vec![TestScreen::Home, TestScreen::Detail])
+        );
+
+        assert!(nav.pop());
+        assert_eq!(nav.top(), TestScreen::Home);
+        assert!(!nav.pop());
+
+        assert!(nav.pop_tab_to_root(1));
+        assert_eq!(nav.stack(1), Some(vec![TestScreen::Settings]));
+        assert!(!nav.pop_tab_to_root(1));
+
+        assert!(nav.reset_tab(1, TestScreen::Search));
+        assert_eq!(nav.stack(1), Some(vec![TestScreen::Search]));
+        assert!(!nav.select(99));
+        assert!(!nav.reset_tab(99, TestScreen::Home));
     }
 
     #[test]
