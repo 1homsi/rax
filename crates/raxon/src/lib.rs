@@ -130,8 +130,9 @@ pub mod prelude {
         replace_query_param, replace_query_param_values, replace_remove_query_param, replace_route,
         restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
         routes, save_navigation_state, set_query_param, set_query_param_values, stack,
-        transition_routes, try_navigate_for_result, url_routes, use_navigator, use_params,
-        use_query_params, NavigationState, NavigationTransition, Navigator, RouteLocation,
+        transition_routes, transition_routes_with, try_navigate_for_result, url_routes,
+        use_navigator, use_params, use_query_params, NavigationState, NavigationTransition,
+        NavigationTransitionContext, Navigator, NavigatorTransitionKind, RouteLocation,
         RouteMatch, RouteTransitionEvent, RouteTransitionKind, UrlRoute, NAVIGATION_STATE_KEY,
     };
     pub use crate::net::{
