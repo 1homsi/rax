@@ -178,6 +178,34 @@ use std::cell::RefCell;
 thread_local! {
     static APPEAR_HANDLERS: RefCell<Vec<(String, Box<dyn Fn()>)>> = RefCell::new(vec![]);
     static DISAPPEAR_HANDLERS: RefCell<Vec<(String, Box<dyn Fn()>)>> = RefCell::new(vec![]);
+    static TRANSITION_START_HANDLERS: RefCell<Vec<Box<dyn Fn(&RouteTransitionEvent)>>> = RefCell::new(vec![]);
+    static TRANSITION_COMPLETE_HANDLERS: RefCell<Vec<Box<dyn Fn(&RouteTransitionEvent)>>> = RefCell::new(vec![]);
+}
+
+/// The kind of string-router route transition being committed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RouteTransitionKind {
+    /// A new route was pushed onto the history stack.
+    Push,
+    /// The current route was replaced without adding history.
+    Replace,
+    /// The router moved back to a previous history entry.
+    Pop,
+    /// Navigation state was restored from a snapshot or persisted storage.
+    Restore,
+    /// The browser supplied a route through back/forward or hash navigation.
+    Browser,
+}
+
+/// Route transition lifecycle event payload.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RouteTransitionEvent {
+    /// Previous route before the transition.
+    pub from: String,
+    /// Destination route after the transition.
+    pub to: String,
+    /// Transition kind.
+    pub kind: RouteTransitionKind,
 }
 
 /// Register a callback that fires when the screen with the given route key appears.
@@ -224,6 +252,38 @@ pub fn fire_disappear(route: &str) {
 /// Pass the current route key.
 pub fn use_focus_effect(route: &str, f: impl Fn() + 'static) {
     on_appear(route, f);
+}
+
+/// Register a callback that fires before a route transition commits focus/blur.
+pub fn on_transition_start(listener: impl Fn(&RouteTransitionEvent) + 'static) {
+    TRANSITION_START_HANDLERS.with(|handlers| {
+        handlers.borrow_mut().push(Box::new(listener));
+    });
+}
+
+/// Register a callback that fires after a route transition commits focus/blur.
+pub fn on_transition_complete(listener: impl Fn(&RouteTransitionEvent) + 'static) {
+    TRANSITION_COMPLETE_HANDLERS.with(|handlers| {
+        handlers.borrow_mut().push(Box::new(listener));
+    });
+}
+
+/// Fires all registered transition-start listeners.
+pub fn fire_transition_start(event: &RouteTransitionEvent) {
+    TRANSITION_START_HANDLERS.with(|handlers| {
+        for listener in handlers.borrow().iter() {
+            listener(event);
+        }
+    });
+}
+
+/// Fires all registered transition-complete listeners.
+pub fn fire_transition_complete(event: &RouteTransitionEvent) {
+    TRANSITION_COMPLETE_HANDLERS.with(|handlers| {
+        for listener in handlers.borrow().iter() {
+            listener(event);
+        }
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +377,37 @@ fn ensure_route_signal() -> Signal<String> {
             sig
         }
     })
+}
+
+fn commit_route_change(from: &str, to: &str, kind: RouteTransitionKind) {
+    let changed = from != to;
+    let event = changed.then(|| RouteTransitionEvent {
+        from: from.to_string(),
+        to: to.to_string(),
+        kind,
+    });
+
+    if let Some(event) = event.as_ref() {
+        fire_transition_start(event);
+    }
+
+    let sig = ensure_route_signal();
+    sig.set(to.to_string());
+
+    if changed {
+        if !from.is_empty() {
+            fire_disappear(from);
+        }
+        if !to.is_empty() {
+            fire_appear(to);
+        }
+    }
+
+    if let Some(event) = event.as_ref() {
+        fire_transition_complete(event);
+    }
+
+    fire_navigate_event(from, to);
 }
 
 // ---------------------------------------------------------------------------
@@ -536,12 +627,8 @@ pub fn navigate(route: &str) -> String {
 
     HISTORY_STACK.with(|s| s.borrow_mut().push(destination.clone()));
 
-    let sig = ensure_route_signal();
-    sig.set(destination.clone());
-
     crate::web::push_path(&destination);
-
-    fire_navigate_event(&from, &destination);
+    commit_route_change(&from, &destination, RouteTransitionKind::Push);
 
     destination
 }
@@ -673,12 +760,8 @@ pub fn replace_route(route: &str) -> String {
         from
     });
 
-    let sig = ensure_route_signal();
-    sig.set(destination.clone());
-
     crate::web::replace_path(&destination);
-
-    fire_navigate_event(&from, &destination);
+    commit_route_change(&from, &destination, RouteTransitionKind::Replace);
 
     destination
 }
@@ -686,23 +769,23 @@ pub fn replace_route(route: &str) -> String {
 /// Pop the current route from the history stack and return to the previous
 /// one. Returns `false` if the stack is already empty.
 pub fn go_back() -> bool {
-    let popped = HISTORY_STACK.with(|s| {
+    let transition = HISTORY_STACK.with(|s| {
         let mut stack = s.borrow_mut();
         if stack.len() <= 1 {
-            return false;
+            return None;
         }
-        stack.pop();
-        true
+        let from = stack.pop().unwrap_or_default();
+        let to = stack.last().cloned().unwrap_or_default();
+        Some((from, to))
     });
 
-    if popped {
-        let prev = HISTORY_STACK.with(|s| s.borrow().last().cloned().unwrap_or_default());
-        let sig = ensure_route_signal();
-        sig.set(prev.clone());
-        crate::web::replace_path(&prev);
+    if let Some((from, to)) = transition {
+        crate::web::replace_path(&to);
+        commit_route_change(&from, &to, RouteTransitionKind::Pop);
+        return true;
     }
 
-    popped
+    false
 }
 
 /// Returns `true` if there is at least one route to go back to.
@@ -750,10 +833,8 @@ pub fn restore_navigation_state(state: NavigationState) -> NavigationState {
     MODAL_STACK.with(|stack| *stack.borrow_mut() = state.modals.clone());
     ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
 
-    let sig = ensure_route_signal();
-    sig.set(state.current.clone());
     crate::web::replace_path(&state.current);
-    fire_navigate_event(&from, &state.current);
+    commit_route_change(&from, &state.current, RouteTransitionKind::Restore);
 
     state
 }
@@ -1759,23 +1840,23 @@ fn replace_route_from_browser(route: &str) {
         from
     });
 
-    let sig = ensure_route_signal();
-    sig.set(destination.clone());
-
     if destination != route {
         crate::web::replace_path(&destination);
     }
-
-    fire_navigate_event(&from, &destination);
+    commit_route_change(&from, &destination, RouteTransitionKind::Browser);
 }
 
 #[cfg(test)]
 fn reset_navigation_for_tests() {
+    APPEAR_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+    DISAPPEAR_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
     CURRENT_ROUTE.with(|route| *route.borrow_mut() = None);
     HISTORY_STACK.with(|stack| stack.borrow_mut().clear());
     ROUTE_GUARDS.with(|guards| guards.borrow_mut().clear());
     NAV_LISTENERS.with(|listeners| listeners.borrow_mut().clear());
     BACK_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+    TRANSITION_START_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+    TRANSITION_COMPLETE_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
     ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
     MODAL_STACK.with(|stack| stack.borrow_mut().clear());
     crate::store::store_remove(NAVIGATION_STATE_KEY);
@@ -1886,10 +1967,11 @@ mod tests {
         build_route, build_route_with_query, cancel_route_result, current_route,
         decode_navigation_state, encode_navigation_state, has_pending_route_result, match_route,
         match_route_location, modal_stack, navigate, navigate_for_result, navigation_state,
+        on_appear, on_disappear, on_navigate, on_transition_complete, on_transition_start,
         parse_deep_link, parse_query, parse_query_all, parse_route_location,
-        pending_route_result_route, pending_route_result_type, present_modal,
+        pending_route_result_route, pending_route_result_type, present_modal, replace_route,
         restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
-        save_navigation_state, try_navigate_for_result, NavigationState,
+        save_navigation_state, try_navigate_for_result, NavigationState, RouteTransitionKind,
     };
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -2131,6 +2213,104 @@ mod tests {
         )
         .expect("route should build");
         assert_eq!(overridden, "/orders/42?tab=history");
+    }
+
+    #[test]
+    fn route_changes_fire_transition_focus_and_navigation_lifecycle() {
+        super::reset_navigation_for_tests();
+
+        let log = Rc::new(RefCell::new(Vec::<String>::new()));
+        for route in ["/", "/orders", "/settings"] {
+            let appear_log = Rc::clone(&log);
+            on_appear(route, move || {
+                appear_log.borrow_mut().push(format!("appear:{route}"));
+            });
+
+            let disappear_log = Rc::clone(&log);
+            on_disappear(route, move || {
+                disappear_log
+                    .borrow_mut()
+                    .push(format!("disappear:{route}"));
+            });
+        }
+
+        let start_log = Rc::clone(&log);
+        on_transition_start(move |event| {
+            start_log.borrow_mut().push(format!(
+                "start:{:?}:{}->{}",
+                event.kind, event.from, event.to
+            ));
+        });
+
+        let complete_log = Rc::clone(&log);
+        on_transition_complete(move |event| {
+            complete_log.borrow_mut().push(format!(
+                "complete:{:?}:{}->{}",
+                event.kind, event.from, event.to
+            ));
+        });
+
+        let navigate_log = Rc::clone(&log);
+        on_navigate(move |from, to| {
+            navigate_log
+                .borrow_mut()
+                .push(format!("navigate:{from}->{to}"));
+        });
+
+        navigate("/");
+        navigate("/orders");
+        replace_route("/settings");
+        assert!(super::go_back());
+
+        assert_eq!(
+            log.borrow().as_slice(),
+            [
+                "start:Push:->/",
+                "appear:/",
+                "complete:Push:->/",
+                "navigate:->/",
+                "start:Push:/->/orders",
+                "disappear:/",
+                "appear:/orders",
+                "complete:Push:/->/orders",
+                "navigate:/->/orders",
+                "start:Replace:/orders->/settings",
+                "disappear:/orders",
+                "appear:/settings",
+                "complete:Replace:/orders->/settings",
+                "navigate:/orders->/settings",
+                "start:Pop:/settings->/",
+                "disappear:/settings",
+                "appear:/",
+                "complete:Pop:/settings->/",
+                "navigate:/settings->/",
+            ]
+        );
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn restoring_navigation_state_reports_restore_transition_kind() {
+        super::reset_navigation_for_tests();
+        navigate("/before");
+
+        let kinds = Rc::new(RefCell::new(Vec::new()));
+        let kinds_for_callback = Rc::clone(&kinds);
+        on_transition_start(move |event| {
+            kinds_for_callback.borrow_mut().push(event.kind);
+        });
+
+        restore_navigation_state(NavigationState::new(
+            "/after",
+            vec!["/".to_string(), "/after".to_string()],
+            vec![],
+        ));
+
+        assert_eq!(kinds.borrow().as_slice(), [RouteTransitionKind::Restore]);
+        assert_eq!(current_route().get(), "/after");
+
+        super::reset_navigation_for_tests();
     }
 
     #[test]
