@@ -1563,6 +1563,7 @@ pub fn frame_command(id: WidgetId, rect: Rect) -> DomCommand {
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod browser_history {
     use std::cell::RefCell;
+    use std::rc::Rc;
 
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::{JsCast, JsValue};
@@ -1630,10 +1631,23 @@ mod browser_history {
 
     /// Invokes `callback(route)` on browser back/forward navigation.
     pub fn on_popstate(callback: impl Fn(String) + 'static) {
+        register_location_listener("popstate", callback);
+    }
+
+    /// Invokes `callback(route)` on browser back/forward and hash-only URL changes.
+    pub fn on_location_change(callback: impl Fn(String) + 'static) {
+        let callback = Rc::new(callback);
+        for event in ["popstate", "hashchange"] {
+            let callback = Rc::clone(&callback);
+            register_location_listener(event, move |route| callback(route));
+        }
+    }
+
+    fn register_location_listener(event: &str, callback: impl Fn(String) + 'static) {
         let closure = Closure::<dyn FnMut()>::new(move || callback(location_route()));
         if let Some(window) = web_sys::window() {
-            let _ = window
-                .add_event_listener_with_callback("popstate", closure.as_ref().unchecked_ref());
+            let _ =
+                window.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
         }
         POPSTATE_HOOKS.with(|hooks| hooks.borrow_mut().push(closure));
     }
@@ -1642,8 +1656,8 @@ mod browser_history {
 /// The current URL path. Returns `"/"` off the web.
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub use browser_history::{
-    location_hash, location_path, location_route, location_search, on_popstate, push_path,
-    replace_path,
+    location_hash, location_path, location_route, location_search, on_location_change, on_popstate,
+    push_path, replace_path,
 };
 
 /// The current URL path. Returns `"/"` off the web.
@@ -1681,6 +1695,10 @@ pub fn replace_path(_path: &str) {}
 /// Registers a back/forward handler (no-op off the web).
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub fn on_popstate(_callback: impl Fn(String) + 'static) {}
+
+/// Registers a route-change handler for browser history/hash changes (no-op off the web).
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub fn on_location_change(_callback: impl Fn(String) + 'static) {}
 
 #[cfg(test)]
 mod tests {

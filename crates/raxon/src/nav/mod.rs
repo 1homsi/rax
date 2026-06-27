@@ -341,6 +341,61 @@ impl RouteLocation {
     pub fn query_values(&self, key: &str) -> Option<&[String]> {
         self.query_all.get(key).map(Vec::as_slice)
     }
+
+    /// Serializes this location back to a route string.
+    ///
+    /// Query keys are sorted for stability while repeated values keep their
+    /// original order. Hash-route locations such as `/#/checkout?step=pay`
+    /// stay in hash-route form.
+    pub fn to_route_string(&self) -> String {
+        format_route_location(self)
+    }
+
+    /// Returns a copy with `key` set to one decoded query value.
+    pub fn with_query_param(&self, key: &str, value: impl Into<String>) -> Self {
+        self.with_query_values(key, [value.into()])
+    }
+
+    /// Returns a copy with `key` set to the provided decoded query values.
+    ///
+    /// Passing no values removes the key.
+    pub fn with_query_values<I, V>(&self, key: &str, values: I) -> Self
+    where
+        I: IntoIterator<Item = V>,
+        V: Into<String>,
+    {
+        let mut next = self.clone();
+        let values: Vec<String> = values.into_iter().map(Into::into).collect();
+        if values.is_empty() {
+            next.query_all.remove(key);
+        } else {
+            next.query_all.insert(key.to_string(), values);
+        }
+        sync_first_query_values(&mut next);
+        next
+    }
+
+    /// Returns a copy without `key` in the query string.
+    pub fn without_query_param(&self, key: &str) -> Self {
+        let mut next = self.clone();
+        next.query_all.remove(key);
+        sync_first_query_values(&mut next);
+        next
+    }
+
+    /// Returns a copy with the URL fragment/hash set to `fragment`.
+    pub fn with_fragment(&self, fragment: impl Into<String>) -> Self {
+        let mut next = self.clone();
+        next.fragment = Some(fragment.into());
+        next
+    }
+
+    /// Returns a copy without a URL fragment/hash.
+    pub fn without_fragment(&self) -> Self {
+        let mut next = self.clone();
+        next.fragment = None;
+        next
+    }
 }
 
 /// A successful declarative route match.
@@ -445,6 +500,36 @@ pub fn navigate(route: &str) -> String {
     destination
 }
 
+/// Replaces the current string-router route without pushing a new history entry.
+///
+/// Guards still run, listeners still fire, and on web the address bar is updated
+/// with `history.replaceState`. Use this for URL state such as filters, tabs, and
+/// search params that should not create a browser back-stack entry for every
+/// keystroke.
+pub fn replace_route(route: &str) -> String {
+    let destination = check_guards(route).unwrap_or_else(|| route.to_string());
+
+    let from = HISTORY_STACK.with(|s| {
+        let mut stack = s.borrow_mut();
+        let from = stack.last().cloned().unwrap_or_default();
+        if stack.is_empty() {
+            stack.push(destination.clone());
+        } else if let Some(current) = stack.last_mut() {
+            *current = destination.clone();
+        }
+        from
+    });
+
+    let sig = ensure_route_signal();
+    sig.set(destination.clone());
+
+    crate::web::replace_path(&destination);
+
+    fire_navigate_event(&from, &destination);
+
+    destination
+}
+
 /// Pop the current route from the history stack and return to the previous
 /// one. Returns `false` if the stack is already empty.
 pub fn go_back() -> bool {
@@ -513,11 +598,76 @@ pub fn use_query_params() -> HashMap<String, String> {
     current_route_location().query
 }
 
+/// Pushes a new route with `key=value` in the current query string.
+///
+/// Existing path, other query keys, repeated query values, and hash-route style
+/// are preserved.
+pub fn set_query_param(key: &str, value: impl Into<String>) -> String {
+    let route = current_route_location()
+        .with_query_param(key, value)
+        .to_route_string();
+    navigate(&route)
+}
+
+/// Replaces the current route with `key=value` in the current query string.
+///
+/// This updates the URL without adding a browser/back-stack entry.
+pub fn replace_query_param(key: &str, value: impl Into<String>) -> String {
+    let route = current_route_location()
+        .with_query_param(key, value)
+        .to_route_string();
+    replace_route(&route)
+}
+
+/// Pushes a new route with all values for `key` replaced in the current query.
+///
+/// Passing no values removes the key.
+pub fn set_query_param_values<I, V>(key: &str, values: I) -> String
+where
+    I: IntoIterator<Item = V>,
+    V: Into<String>,
+{
+    let route = current_route_location()
+        .with_query_values(key, values)
+        .to_route_string();
+    navigate(&route)
+}
+
+/// Replaces the current route with all values for `key` changed in the query.
+///
+/// Passing no values removes the key and no browser/back-stack entry is added.
+pub fn replace_query_param_values<I, V>(key: &str, values: I) -> String
+where
+    I: IntoIterator<Item = V>,
+    V: Into<String>,
+{
+    let route = current_route_location()
+        .with_query_values(key, values)
+        .to_route_string();
+    replace_route(&route)
+}
+
+/// Pushes a new route with `key` removed from the current query string.
+pub fn remove_query_param(key: &str) -> String {
+    let route = current_route_location()
+        .without_query_param(key)
+        .to_route_string();
+    navigate(&route)
+}
+
+/// Replaces the current route with `key` removed from the current query string.
+pub fn replace_remove_query_param(key: &str) -> String {
+    let route = current_route_location()
+        .without_query_param(key)
+        .to_route_string();
+    replace_route(&route)
+}
+
 /// Renders the first declarative URL route that matches [`current_route`].
 ///
-/// Use this for web/deep-link-addressable screen shells. On web, call
-/// [`bind_web_history`] once during app startup to initialize the route from the
-/// browser URL and keep back/forward navigation in sync.
+/// Use this for web/deep-link-addressable screen shells. On web, this binds the
+/// string router to the browser URL so reloads, hash changes, and back/forward
+/// navigation stay in sync.
 ///
 /// # Example
 /// ```
@@ -532,6 +682,8 @@ pub fn use_query_params() -> HashMap<String, String> {
 /// ]);
 /// ```
 pub fn url_routes(routes: Vec<UrlRoute>) -> impl View {
+    bind_web_history();
+
     dynamic(move || {
         let location = current_route_location();
         for route in &routes {
@@ -839,6 +991,58 @@ fn first_query_values(query_all: &HashMap<String, Vec<String>>) -> HashMap<Strin
         .collect()
 }
 
+fn sync_first_query_values(location: &mut RouteLocation) {
+    location.query = first_query_values(&location.query_all);
+}
+
+fn format_route_location(location: &RouteLocation) -> String {
+    let path_and_query = format_path_and_query(&location.path, &location.query_all);
+
+    let Some(fragment) = location.fragment.as_deref() else {
+        return path_and_query;
+    };
+
+    if fragment.starts_with("!/") {
+        return format!("/#!{path_and_query}");
+    }
+
+    if fragment.starts_with('/') {
+        return format!("/#{path_and_query}");
+    }
+
+    let mut route = path_and_query;
+    route.push('#');
+    route.push_str(&encode_fragment_component(fragment));
+    route
+}
+
+fn format_path_and_query(path: &str, query_all: &HashMap<String, Vec<String>>) -> String {
+    let mut route = normalize_route_path(path);
+    if query_all.is_empty() {
+        return route;
+    }
+
+    let mut keys: Vec<&String> = query_all.keys().collect();
+    keys.sort();
+
+    let mut pairs = Vec::new();
+    for key in keys {
+        if let Some(values) = query_all.get(key) {
+            for value in values {
+                pairs.push(format!(
+                    "{}={}",
+                    encode_query_component(key),
+                    encode_query_component(value)
+                ));
+            }
+        }
+    }
+
+    route.push('?');
+    route.push_str(&pairs.join("&"));
+    route
+}
+
 fn split_once(input: &str, needle: char) -> (&str, Option<&str>) {
     if let Some(index) = input.find(needle) {
         (&input[..index], Some(&input[index + needle.len_utf8()..]))
@@ -934,6 +1138,47 @@ fn decode_url_component(input: &str, plus_as_space: bool) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+fn encode_query_component(input: &str) -> String {
+    encode_url_component(input, true, false)
+}
+
+fn encode_fragment_component(input: &str) -> String {
+    encode_url_component(input, false, true)
+}
+
+fn encode_url_component(input: &str, space_as_plus: bool, fragment_safe: bool) -> String {
+    let mut out = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        let unreserved = byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~');
+        let fragment_extra_safe = fragment_safe
+            && matches!(
+                byte,
+                b'/' | b'?'
+                    | b'&'
+                    | b'='
+                    | b':'
+                    | b'@'
+                    | b'!'
+                    | b'$'
+                    | b'\''
+                    | b'('
+                    | b')'
+                    | b'*'
+                    | b','
+                    | b';'
+            );
+
+        if unreserved || fragment_extra_safe {
+            out.push(byte as char);
+        } else if byte == b' ' && space_as_plus {
+            out.push('+');
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 fn hex_value(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
@@ -960,7 +1205,7 @@ pub fn bind_web_history() {
     }
 
     replace_route_from_browser(&crate::web::location_route());
-    crate::web::on_popstate(|route| replace_route_from_browser(&route));
+    crate::web::on_location_change(|route| replace_route_from_browser(&route));
 }
 
 /// Binds the string router to browser history on the web target.
@@ -1184,6 +1429,56 @@ mod tests {
         assert_eq!(detail.pattern(), "/orders/:id");
         assert_eq!(matched.param("id"), Some("42"));
         assert_eq!(matched.query_value("tab"), Some("items"));
+    }
+
+    #[test]
+    fn route_location_rewrites_query_params_with_stable_encoding() {
+        let location = parse_route_location("/orders/42?tag=paid&tag=pickup&name=Alice+Doe#notes");
+        let rewritten = location
+            .with_query_param("tab", "items")
+            .without_query_param("name");
+
+        assert_eq!(
+            rewritten.to_route_string(),
+            "/orders/42?tab=items&tag=paid&tag=pickup#notes"
+        );
+    }
+
+    #[test]
+    fn route_location_rewrites_repeated_values_and_removes_empty_sets() {
+        let location = parse_route_location("/search?tag=old&sort=recent");
+        let rewritten = location.with_query_values("tag", ["paid", "pickup"]);
+        let removed = rewritten.with_query_values("sort", std::iter::empty::<&str>());
+        let expected_tags = vec!["paid".to_string(), "pickup".to_string()];
+
+        assert_eq!(
+            rewritten.query_values("tag"),
+            Some(expected_tags.as_slice())
+        );
+        assert_eq!(removed.to_route_string(), "/search?tag=paid&tag=pickup");
+    }
+
+    #[test]
+    fn route_location_encodes_query_and_fragment_values() {
+        let location = parse_route_location("/search")
+            .with_query_param("sort by", "new first")
+            .with_fragment("section 1");
+
+        assert_eq!(
+            location.to_route_string(),
+            "/search?sort+by=new+first#section%201"
+        );
+    }
+
+    #[test]
+    fn route_location_keeps_hash_router_urls_in_hash_form() {
+        let location = parse_route_location("https://rtylr.com/#/checkout?step=pay");
+        let rewritten = location.with_query_param("coupon", "VIP 10");
+
+        assert_eq!(
+            rewritten.to_route_string(),
+            "/#/checkout?coupon=VIP+10&step=pay"
+        );
     }
 
     #[test]

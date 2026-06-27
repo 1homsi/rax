@@ -122,9 +122,11 @@ pub mod prelude {
     pub use crate::nav::{
         bind_web_history, can_go_back, create_navigator, current_route, current_route_location,
         go_back, match_route, match_route_location, navigate, parse_deep_link, parse_query,
-        parse_query_all, parse_route_location, route, routes, stack, transition_routes, url_routes,
-        use_navigator, use_params, use_query_params, NavigationTransition, Navigator,
-        RouteLocation, RouteMatch, UrlRoute,
+        parse_query_all, parse_route_location, remove_query_param, replace_query_param,
+        replace_query_param_values, replace_remove_query_param, replace_route, route, routes,
+        set_query_param, set_query_param_values, stack, transition_routes, url_routes,
+        use_navigator, use_params, use_query_params, NavigationTransition, Navigator, RouteLocation,
+        RouteMatch, UrlRoute,
     };
     pub use crate::net::{
         connect_sse, connect_ws, gc_query_cache, get, invalidate_query, post, send, use_query,
