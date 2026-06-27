@@ -373,6 +373,12 @@ impl<D: HostDriver> HostSessionRegistry<D> {
                     batch: command_batch_value(&json)?,
                 })
             }
+            HostBridgeRequest::NavigationDebugSnapshot { handle } => {
+                let _ = self.session(HostSessionHandle::from_raw(handle))?;
+                let snapshot = serde_json::to_value(crate::nav::navigation_debug_snapshot())
+                    .map_err(|error| HostSessionError::ResponseJson(error.to_string()))?;
+                Ok(HostBridgeResponse::NavigationDebugSnapshot { snapshot })
+            }
             HostBridgeRequest::TickAndDrainCommandBatch { handle } => {
                 let json =
                     self.tick_and_drain_command_batch_json(HostSessionHandle::from_raw(handle))?;
@@ -617,6 +623,11 @@ pub enum HostBridgeRequest {
         /// Opaque session handle.
         handle: u64,
     },
+    /// Return the current navigation debug snapshot for a live session.
+    NavigationDebugSnapshot {
+        /// Opaque session handle.
+        handle: u64,
+    },
     /// Tick a session and drain platform commands.
     TickAndDrainCommandBatch {
         /// Opaque session handle.
@@ -831,6 +842,11 @@ pub enum HostBridgeResponse {
         /// Command batch JSON as a nested value, not an escaped string.
         batch: serde_json::Value,
     },
+    /// Current navigation state as a nested devtools JSON object.
+    NavigationDebugSnapshot {
+        /// Navigation debug snapshot JSON.
+        snapshot: serde_json::Value,
+    },
 }
 
 fn command_batch_value(json: &str) -> Result<serde_json::Value, HostSessionError> {
@@ -920,6 +936,50 @@ mod tests {
         let driver = registry.get(handle).expect("session remains live").driver();
         assert_eq!(driver.ticks, 1);
         assert_eq!(driver.viewport, Size::new(375.0, 812.0));
+    }
+
+    #[test]
+    fn bridge_json_returns_navigation_debug_snapshot_for_live_sessions() {
+        let mut registry = HostSessionRegistry::new();
+        let handle = registry.insert_driver(RecordingDriver::new(Vec::new()));
+        crate::nav::reset_route("/orders/42?tab=items#notes");
+
+        let request = HostBridgeJsonRequest::new(HostBridgeRequest::NavigationDebugSnapshot {
+            handle: handle.to_raw(),
+        });
+        let response = registry
+            .handle_request_json(&serde_json::to_string(&request).expect("request encodes"))
+            .expect("bridge request succeeds");
+        let response_json: Value = serde_json::from_str(&response).expect("response is JSON");
+        let decoded =
+            serde_json::from_str::<HostBridgeJsonResponse>(&response).expect("response decodes");
+
+        assert_eq!(
+            response_json["type"].as_str(),
+            Some("navigation_debug_snapshot")
+        );
+        assert_eq!(
+            response_json["snapshot"]["current"],
+            "/orders/42?tab=items#notes"
+        );
+        assert_eq!(response_json["snapshot"]["location"]["path"], "/orders/42");
+        assert_eq!(
+            response_json["snapshot"]["location"]["queryAll"]["tab"][0],
+            "items"
+        );
+        assert_eq!(response_json["snapshot"]["location"]["fragment"], "notes");
+        match decoded.response {
+            HostBridgeResponse::NavigationDebugSnapshot { snapshot } => {
+                assert_eq!(snapshot["historyDepth"], 1);
+                assert_eq!(snapshot["canGoBack"], false);
+            }
+            other => panic!("expected navigation snapshot response, got {other:?}"),
+        }
+
+        assert_eq!(
+            registry.handle_request(HostBridgeRequest::NavigationDebugSnapshot { handle: 999 }),
+            Err(HostSessionError::UnknownSession { handle: 999 })
+        );
     }
 
     #[test]
