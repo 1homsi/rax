@@ -121,14 +121,17 @@ pub mod prelude {
     pub use crate::keychain::{delete_secret, get_secret, set_secret};
     pub use crate::nav::{
         bind_web_history, build_route, build_route_with_query, can_go_back, cancel_route_result,
-        create_navigator, current_route, current_route_location, go_back, has_pending_route_result,
-        match_route, match_route_location, navigate, navigate_for_result, parse_deep_link,
-        parse_query, parse_query_all, parse_route_location, pending_route_result_route,
-        pending_route_result_type, remove_query_param, replace_query_param,
-        replace_query_param_values, replace_remove_query_param, replace_route, return_route_result,
-        route, routes, set_query_param, set_query_param_values, stack, transition_routes,
-        try_navigate_for_result, url_routes, use_navigator, use_params, use_query_params,
-        NavigationTransition, Navigator, RouteLocation, RouteMatch, UrlRoute,
+        clear_saved_navigation_state, create_navigator, current_route, current_route_location,
+        decode_navigation_state, encode_navigation_state, go_back, has_pending_route_result,
+        match_route, match_route_location, navigate, navigate_for_result, navigation_state,
+        parse_deep_link, parse_query, parse_query_all, parse_route_location,
+        pending_route_result_route, pending_route_result_type, remove_query_param,
+        replace_query_param, replace_query_param_values, replace_remove_query_param, replace_route,
+        restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
+        routes, save_navigation_state, set_query_param, set_query_param_values, stack,
+        transition_routes, try_navigate_for_result, url_routes, use_navigator, use_params,
+        use_query_params, NavigationState, NavigationTransition, Navigator, RouteLocation,
+        RouteMatch, UrlRoute, NAVIGATION_STATE_KEY,
     };
     pub use crate::net::{
         connect_sse, connect_ws, gc_query_cache, get, invalidate_query, post, send, use_query,

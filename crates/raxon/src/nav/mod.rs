@@ -233,6 +233,11 @@ pub fn use_focus_effect(route: &str, f: impl Fn() + 'static) {
 use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 
+use serde::{Deserialize, Serialize};
+
+/// Default persistent storage key used by [`save_navigation_state`].
+pub const NAVIGATION_STATE_KEY: &str = "raxon.navigation.state";
+
 thread_local! {
     /// The current route as a reactive signal (string-based router).
     static CURRENT_ROUTE: RefCell<Option<Signal<String>>> = const { RefCell::new(None) };
@@ -405,6 +410,36 @@ impl RouteLocation {
         let mut next = self.clone();
         next.fragment = None;
         next
+    }
+}
+
+/// Serializable navigation state for app relaunch and process-restore flows.
+///
+/// The string router state is intentionally plain data so apps can store it
+/// through `raxon::store`, send it through their own persistence layer, or
+/// snapshot it during tests.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NavigationState {
+    /// Current route at the top of the string-router stack.
+    pub current: String,
+    /// String-router history from oldest to newest route.
+    pub history: Vec<String>,
+    /// Modal routes from bottom to top.
+    pub modals: Vec<String>,
+}
+
+impl NavigationState {
+    /// Creates a normalized navigation state snapshot.
+    pub fn new(
+        current: impl Into<String>,
+        history: impl Into<Vec<String>>,
+        modals: impl Into<Vec<String>>,
+    ) -> Self {
+        normalize_navigation_state(Self {
+            current: current.into(),
+            history: history.into(),
+            modals: modals.into(),
+        })
     }
 }
 
@@ -673,6 +708,118 @@ pub fn go_back() -> bool {
 /// Returns `true` if there is at least one route to go back to.
 pub fn can_go_back() -> bool {
     HISTORY_STACK.with(|s| s.borrow().len() > 1)
+}
+
+/// Captures the current string-router history and modal stack.
+pub fn navigation_state() -> NavigationState {
+    let history = HISTORY_STACK.with(|stack| stack.borrow().clone());
+    let current = history
+        .last()
+        .cloned()
+        .or_else(|| CURRENT_ROUTE.with(|route| route.borrow().map(|signal| signal.get())))
+        .unwrap_or_default();
+    let modals = MODAL_STACK.with(|stack| stack.borrow().clone());
+
+    NavigationState::new(current, history, modals)
+}
+
+/// Restores string-router history and modal stack from a snapshot.
+///
+/// Pending route-result callbacks are cleared because callback closures cannot
+/// be serialized safely across app relaunches. Guards are applied to the
+/// restored current route; if a guard redirects, the restored history is updated
+/// to end at the redirected destination.
+pub fn restore_navigation_state(state: NavigationState) -> NavigationState {
+    let mut state = normalize_navigation_state(state);
+
+    if let Some(destination) = check_guards(&state.current) {
+        state.current = destination;
+        if let Some(last) = state.history.last_mut() {
+            *last = state.current.clone();
+        } else {
+            state.history.push(state.current.clone());
+        }
+    }
+
+    let from = HISTORY_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let from = stack.last().cloned().unwrap_or_default();
+        *stack = state.history.clone();
+        from
+    });
+    MODAL_STACK.with(|stack| *stack.borrow_mut() = state.modals.clone());
+    ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+
+    let sig = ensure_route_signal();
+    sig.set(state.current.clone());
+    crate::web::replace_path(&state.current);
+    fire_navigate_event(&from, &state.current);
+
+    state
+}
+
+/// Serializes a navigation state snapshot as JSON.
+pub fn encode_navigation_state(state: &NavigationState) -> Result<String, String> {
+    serde_json::to_string(state).map_err(|err| err.to_string())
+}
+
+/// Parses a navigation state snapshot from JSON and normalizes it.
+pub fn decode_navigation_state(json: &str) -> Result<NavigationState, String> {
+    serde_json::from_str(json)
+        .map(normalize_navigation_state)
+        .map_err(|err| err.to_string())
+}
+
+/// Saves the current navigation state through `raxon::store`.
+///
+/// Uses [`NAVIGATION_STATE_KEY`]. Platform storage determines durability:
+/// browser `localStorage` on web, NSUserDefaults on iOS when installed, and the
+/// current configured storage backend elsewhere.
+pub fn save_navigation_state() -> Result<NavigationState, String> {
+    let state = navigation_state();
+    let json = encode_navigation_state(&state)?;
+    crate::store::store_set(NAVIGATION_STATE_KEY, &json);
+    Ok(state)
+}
+
+/// Restores navigation state previously saved by [`save_navigation_state`].
+pub fn restore_saved_navigation_state() -> Option<NavigationState> {
+    let json = crate::store::store_get(NAVIGATION_STATE_KEY)?;
+    let state = decode_navigation_state(&json).ok()?;
+    Some(restore_navigation_state(state))
+}
+
+/// Clears the persisted navigation state saved under [`NAVIGATION_STATE_KEY`].
+pub fn clear_saved_navigation_state() {
+    crate::store::store_remove(NAVIGATION_STATE_KEY);
+}
+
+fn normalize_navigation_state(mut state: NavigationState) -> NavigationState {
+    state.history = state
+        .history
+        .into_iter()
+        .filter_map(normalize_route_value)
+        .collect();
+    state.modals = state
+        .modals
+        .into_iter()
+        .filter_map(normalize_route_value)
+        .collect();
+
+    state.current = normalize_route_value(state.current)
+        .or_else(|| state.history.last().cloned())
+        .unwrap_or_else(|| "/".to_string());
+
+    if state.history.last() != Some(&state.current) {
+        state.history.push(state.current.clone());
+    }
+
+    state
+}
+
+fn normalize_route_value(route: impl AsRef<str>) -> Option<String> {
+    let route = route.as_ref().trim();
+    (!route.is_empty()).then(|| route.to_string())
 }
 
 /// Parse `:param` segments from the current route against all registered
@@ -1630,6 +1777,8 @@ fn reset_navigation_for_tests() {
     NAV_LISTENERS.with(|listeners| listeners.borrow_mut().clear());
     BACK_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
     ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+    MODAL_STACK.with(|stack| stack.borrow_mut().clear());
+    crate::store::store_remove(NAVIGATION_STATE_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -1735,10 +1884,12 @@ where
 mod tests {
     use super::{
         build_route, build_route_with_query, cancel_route_result, current_route,
-        has_pending_route_result, match_route, match_route_location, navigate, navigate_for_result,
+        decode_navigation_state, encode_navigation_state, has_pending_route_result, match_route,
+        match_route_location, modal_stack, navigate, navigate_for_result, navigation_state,
         parse_deep_link, parse_query, parse_query_all, parse_route_location,
-        pending_route_result_route, pending_route_result_type, return_route_result, route,
-        try_navigate_for_result,
+        pending_route_result_route, pending_route_result_type, present_modal,
+        restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
+        save_navigation_state, try_navigate_for_result, NavigationState,
     };
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -2052,6 +2203,81 @@ mod tests {
         assert!(!*called.borrow());
         assert_eq!(current_route().get(), "/checkout");
         assert!(!has_pending_route_result());
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn navigation_state_snapshots_history_and_modals() {
+        super::reset_navigation_for_tests();
+        navigate("/");
+        navigate("/orders/42?tab=items");
+        present_modal("/filters");
+
+        let state = navigation_state();
+
+        assert_eq!(state.current, "/orders/42?tab=items");
+        assert_eq!(
+            state.history,
+            vec!["/".to_string(), "/orders/42?tab=items".to_string()]
+        );
+        assert_eq!(state.modals, vec!["/filters".to_string()]);
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn restore_navigation_state_restores_stack_and_clears_result_callbacks() {
+        super::reset_navigation_for_tests();
+        navigate("/checkout");
+
+        let called = Rc::new(RefCell::new(false));
+        let called_for_callback = Rc::clone(&called);
+        navigate_for_result("/products/pick", move |_: String| {
+            *called_for_callback.borrow_mut() = true;
+        });
+        assert!(has_pending_route_result());
+
+        let restored = restore_navigation_state(NavigationState::new(
+            "/orders/42",
+            vec!["/".to_string(), "/orders/42".to_string()],
+            vec!["/filters".to_string()],
+        ));
+
+        assert_eq!(restored.current, "/orders/42");
+        assert_eq!(current_route().get(), "/orders/42");
+        assert_eq!(modal_stack(), vec!["/filters".to_string()]);
+        assert!(!has_pending_route_result());
+        assert!(!return_route_result("sku_789".to_string()));
+        assert!(!*called.borrow());
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn navigation_state_json_and_store_round_trip() {
+        super::reset_navigation_for_tests();
+        navigate("/");
+        navigate("/orders/42?tab=items");
+        present_modal("/filters");
+
+        let saved = save_navigation_state().expect("state should serialize");
+        let json = encode_navigation_state(&saved).expect("state should encode");
+        let decoded = decode_navigation_state(&json).expect("state should decode");
+
+        assert_eq!(decoded, saved);
+
+        restore_navigation_state(NavigationState::new(
+            "/placeholder",
+            vec!["/placeholder".into()],
+            vec![],
+        ));
+        assert_eq!(current_route().get(), "/placeholder");
+
+        let restored = restore_saved_navigation_state().expect("saved state should restore");
+        assert_eq!(restored.current, "/orders/42?tab=items");
+        assert_eq!(current_route().get(), "/orders/42?tab=items");
+        assert_eq!(modal_stack(), vec!["/filters".to_string()]);
 
         super::reset_navigation_for_tests();
     }
