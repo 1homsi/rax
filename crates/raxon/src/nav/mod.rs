@@ -874,6 +874,20 @@ pub enum NavigationCommand {
         #[serde(default)]
         replace: bool,
     },
+    /// Set the URL fragment/hash on the current route.
+    SetFragment {
+        /// Fragment value without a leading `#`.
+        fragment: String,
+        /// Replace the current route instead of pushing a history entry.
+        #[serde(default)]
+        replace: bool,
+    },
+    /// Remove the URL fragment/hash from the current route.
+    RemoveFragment {
+        /// Replace the current route instead of pushing a history entry.
+        #[serde(default)]
+        replace: bool,
+    },
 }
 
 /// Kind of a navigation command after it has been applied.
@@ -898,6 +912,10 @@ pub enum NavigationCommandKind {
     SetQueryParamValues,
     /// Remove query parameter command.
     RemoveQueryParam,
+    /// Set URL fragment/hash command.
+    SetFragment,
+    /// Remove URL fragment/hash command.
+    RemoveFragment,
 }
 
 /// Result of applying a [`NavigationCommand`].
@@ -929,6 +947,8 @@ impl NavigationCommand {
                 NavigationCommandKind::SetQueryParamValues
             }
             NavigationCommand::RemoveQueryParam { .. } => NavigationCommandKind::RemoveQueryParam,
+            NavigationCommand::SetFragment { .. } => NavigationCommandKind::SetFragment,
+            NavigationCommand::RemoveFragment { .. } => NavigationCommandKind::RemoveFragment,
         }
     }
 }
@@ -1475,6 +1495,24 @@ pub fn apply_navigation_command(command: NavigationCommand) -> NavigationCommand
             }
             true
         }
+        NavigationCommand::SetFragment { fragment, replace } => {
+            let route = route_with_fragment(Some(fragment));
+            if replace {
+                replace_route(&route);
+            } else {
+                navigate(&route);
+            }
+            true
+        }
+        NavigationCommand::RemoveFragment { replace } => {
+            let route = route_with_fragment(None);
+            if replace {
+                replace_route(&route);
+            } else {
+                navigate(&route);
+            }
+            true
+        }
     };
 
     navigation_command_outcome(kind, applied)
@@ -1801,6 +1839,43 @@ pub fn replace_remove_query_param(key: &str) -> String {
         .without_query_param(key)
         .to_route_string();
     replace_route(&route)
+}
+
+/// Pushes a new route with the current URL fragment/hash set.
+///
+/// Pass the decoded fragment value without `#`. An empty value removes the
+/// fragment.
+pub fn set_fragment(fragment: impl Into<String>) -> String {
+    let route = route_with_fragment(Some(fragment.into()));
+    navigate(&route)
+}
+
+/// Replaces the current route with the URL fragment/hash set.
+///
+/// This updates the URL without adding a browser/back-stack entry.
+pub fn replace_fragment(fragment: impl Into<String>) -> String {
+    let route = route_with_fragment(Some(fragment.into()));
+    replace_route(&route)
+}
+
+/// Pushes a new route with the current URL fragment/hash removed.
+pub fn remove_fragment() -> String {
+    let route = route_with_fragment(None);
+    navigate(&route)
+}
+
+/// Replaces the current route with the URL fragment/hash removed.
+pub fn replace_remove_fragment() -> String {
+    let route = route_with_fragment(None);
+    replace_route(&route)
+}
+
+fn route_with_fragment(fragment: Option<String>) -> String {
+    let location = current_route_location();
+    match fragment.filter(|fragment| !fragment.is_empty()) {
+        Some(fragment) => location.with_fragment(fragment).to_route_string(),
+        None => location.without_fragment().to_route_string(),
+    }
 }
 
 /// Renders the first declarative URL route that matches [`current_route`].
@@ -2809,9 +2884,10 @@ mod tests {
         modal_stack, navigate, navigate_for_result, navigation_debug_snapshot, navigation_state,
         on_appear, on_disappear, on_navigate, on_transition_complete, on_transition_start,
         parse_deep_link, parse_query, parse_query_all, parse_route_location,
-        pending_route_result_route, pending_route_result_type, present_modal, replace_route,
-        reset_route, restore_navigation_state, restore_saved_navigation_state, return_route_result,
-        route, save_navigation_state, try_navigate_for_result, NavigationCommand,
+        pending_route_result_route, pending_route_result_type, present_modal, remove_fragment,
+        replace_fragment, replace_remove_fragment, replace_route, reset_route,
+        restore_navigation_state, restore_saved_navigation_state, return_route_result, route,
+        save_navigation_state, set_fragment, try_navigate_for_result, NavigationCommand,
         NavigationCommandKind, NavigationState, NavigatorTransitionKind, RouteTransitionKind,
     };
     use std::cell::RefCell;
@@ -3014,6 +3090,19 @@ mod tests {
     }
 
     #[test]
+    fn route_location_rewrites_and_removes_fragments() {
+        let location = parse_route_location("/orders/42?tab=items#notes");
+        let rewritten = location.with_fragment("line item 7");
+        let removed = rewritten.without_fragment();
+
+        assert_eq!(
+            rewritten.to_route_string(),
+            "/orders/42?tab=items#line%20item%207"
+        );
+        assert_eq!(removed.to_route_string(), "/orders/42?tab=items");
+    }
+
+    #[test]
     fn route_location_keeps_hash_router_urls_in_hash_form() {
         let location = parse_route_location("https://rtylr.com/#/checkout?step=pay");
         let rewritten = location.with_query_param("coupon", "VIP 10");
@@ -3083,16 +3172,29 @@ mod tests {
             r#"[
                 {"type":"navigate","route":"/orders/42"},
                 {"type":"set_query_param","key":"tab","value":"items","replace":true},
+                {"type":"set_fragment","fragment":"notes","replace":true},
+                {"type":"remove_fragment","replace":true},
                 {"type":"back"}
             ]"#,
         )
         .expect("command list should decode");
-        assert_eq!(commands.len(), 3);
+        assert_eq!(commands.len(), 5);
         assert_eq!(
             commands[0],
             NavigationCommand::Navigate {
                 route: "/orders/42".to_string()
             }
+        );
+        assert_eq!(
+            commands[2],
+            NavigationCommand::SetFragment {
+                fragment: "notes".to_string(),
+                replace: true,
+            }
+        );
+        assert_eq!(
+            commands[3],
+            NavigationCommand::RemoveFragment { replace: true }
         );
 
         let outcome = apply_navigation_command_json(r#"{"type":"navigate","route":"/orders"}"#)
@@ -3117,20 +3219,32 @@ mod tests {
                 values: vec!["paid".to_string(), "pickup".to_string()],
                 replace: true,
             },
+            NavigationCommand::SetFragment {
+                fragment: "line item 7".to_string(),
+                replace: true,
+            },
+            NavigationCommand::RemoveFragment { replace: true },
             NavigationCommand::PresentModal {
                 route: "/filters".to_string(),
             },
             NavigationCommand::DismissModal,
         ]);
 
-        assert_eq!(outcomes.len(), 4);
+        assert_eq!(outcomes.len(), 6);
         assert_eq!(outcomes[0].kind, NavigationCommandKind::Navigate);
         assert_eq!(outcomes[1].kind, NavigationCommandKind::SetQueryParamValues);
         assert_eq!(outcomes[1].current, "/orders/42?tag=paid&tag=pickup");
         assert_eq!(outcomes[1].history, vec!["/orders/42?tag=paid&tag=pickup"]);
-        assert_eq!(outcomes[2].modals, vec!["/filters".to_string()]);
-        assert!(outcomes[3].applied);
-        assert!(outcomes[3].modals.is_empty());
+        assert_eq!(outcomes[2].kind, NavigationCommandKind::SetFragment);
+        assert_eq!(
+            outcomes[2].current,
+            "/orders/42?tag=paid&tag=pickup#line%20item%207"
+        );
+        assert_eq!(outcomes[3].kind, NavigationCommandKind::RemoveFragment);
+        assert_eq!(outcomes[3].current, "/orders/42?tag=paid&tag=pickup");
+        assert_eq!(outcomes[4].modals, vec!["/filters".to_string()]);
+        assert!(outcomes[5].applied);
+        assert!(outcomes[5].modals.is_empty());
 
         navigate_for_result("/products/pick", |_: String| {});
         assert!(has_pending_route_result());
@@ -3143,6 +3257,48 @@ mod tests {
         assert_eq!(reset.current, "/checkout");
         assert_eq!(reset.history, vec!["/checkout".to_string()]);
         assert!(!has_pending_route_result());
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn fragment_helpers_update_url_state_with_push_or_replace() {
+        super::reset_navigation_for_tests();
+        navigate("/orders/42?tab=items#notes");
+
+        let pushed = set_fragment("line item 7");
+        assert_eq!(pushed, "/orders/42?tab=items#line%20item%207");
+        assert_eq!(
+            navigation_state().history,
+            vec![
+                "/orders/42?tab=items#notes".to_string(),
+                "/orders/42?tab=items#line%20item%207".to_string(),
+            ]
+        );
+
+        let replaced = replace_fragment("summary");
+        assert_eq!(replaced, "/orders/42?tab=items#summary");
+        assert_eq!(
+            navigation_state().history,
+            vec![
+                "/orders/42?tab=items#notes".to_string(),
+                "/orders/42?tab=items#summary".to_string(),
+            ]
+        );
+
+        let removed = replace_remove_fragment();
+        assert_eq!(removed, "/orders/42?tab=items");
+        assert_eq!(
+            navigation_state().history,
+            vec![
+                "/orders/42?tab=items#notes".to_string(),
+                "/orders/42?tab=items".to_string(),
+            ]
+        );
+
+        let pushed_removed = remove_fragment();
+        assert_eq!(pushed_removed, "/orders/42?tab=items");
+        assert_eq!(navigation_state().history.len(), 3);
 
         super::reset_navigation_for_tests();
     }
