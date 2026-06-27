@@ -2186,6 +2186,24 @@ class __ANDROID_CLASS__(private val root: ViewGroup) {
                 .put("handle", ensureMounted())
         ).getJSONObject("snapshot")
 
+    fun applyNavigationCommand(command: JSONObject): JSONObject =
+        request(
+            JSONObject()
+                .put("protocolVersion", 1)
+                .put("type", "apply_navigation_command")
+                .put("handle", ensureMounted())
+                .put("command", command)
+        ).getJSONObject("outcome")
+
+    fun applyNavigationCommands(commands: JSONArray): JSONArray =
+        request(
+            JSONObject()
+                .put("protocolVersion", 1)
+                .put("type", "apply_navigation_commands")
+                .put("handle", ensureMounted())
+                .put("commands", commands)
+        ).getJSONArray("outcomes")
+
     fun destroy(): JSONObject {
         val current = ensureMounted()
         val reply = request(
@@ -3173,7 +3191,8 @@ module, or merge these files into an existing module. Override
 platform services and custom widgets. The generated Activity includes default
 handlers for clipboard writes, share text, external URLs, accessibility
 announcements, focus requests, network reachability, media picking, and document
-picking, plus system appearance, locale changes, and navigation debug snapshots.
+picking, plus system appearance, locale changes, navigation command helpers, and
+navigation debug snapshots.
 "#,
         package_path = options.android_package.replace('.', "/"),
         host_class = options.android_class,
@@ -3397,6 +3416,26 @@ export class RaxonWebHost {
       handle: Number(this.ensureMounted()),
     });
     return reply.snapshot ?? null;
+  }
+
+  applyNavigationCommand(command) {
+    const reply = this.request({
+      protocolVersion: 1,
+      type: "apply_navigation_command",
+      handle: Number(this.ensureMounted()),
+      command,
+    });
+    return reply.outcome ?? null;
+  }
+
+  applyNavigationCommands(commands) {
+    const reply = this.request({
+      protocolVersion: 1,
+      type: "apply_navigation_commands",
+      handle: Number(this.ensureMounted()),
+      commands,
+    });
+    return reply.outcomes ?? [];
   }
 
   browserNetworkStatus() {
@@ -4192,6 +4231,40 @@ export interface RaxonNavigationDebugSnapshot {
   pendingResultCount: number;
 }
 
+export type RaxonNavigationCommand =
+  | { type: "navigate"; route: string }
+  | { type: "replace"; route: string }
+  | { type: "back" }
+  | { type: "reset"; route: string }
+  | { type: "present_modal"; route: string }
+  | { type: "dismiss_modal" }
+  | { type: "set_query_param"; key: string; value: string; replace?: boolean }
+  | { type: "set_query_param_values"; key: string; values: string[]; replace?: boolean }
+  | { type: "remove_query_param"; key: string; replace?: boolean }
+  | { type: "set_fragment"; fragment: string; replace?: boolean }
+  | { type: "remove_fragment"; replace?: boolean };
+
+export type RaxonNavigationCommandKind =
+  | "navigate"
+  | "replace"
+  | "back"
+  | "reset"
+  | "present_modal"
+  | "dismiss_modal"
+  | "set_query_param"
+  | "set_query_param_values"
+  | "remove_query_param"
+  | "set_fragment"
+  | "remove_fragment";
+
+export interface RaxonNavigationCommandOutcome {
+  kind: RaxonNavigationCommandKind;
+  applied: boolean;
+  current: string;
+  history: string[];
+  modals: string[];
+}
+
 export function createRaxonWebHost(
   root: HTMLElement,
   options?: RaxonWebHostOptions,
@@ -4207,6 +4280,8 @@ export class RaxonWebHost {
   tick(): RaxonBridgeReply;
   dispatchEvents(events: unknown[]): RaxonBridgeReply;
   navigationDebugSnapshot(): RaxonNavigationDebugSnapshot | null;
+  applyNavigationCommand(command: RaxonNavigationCommand): RaxonNavigationCommandOutcome | null;
+  applyNavigationCommands(commands: RaxonNavigationCommand[]): RaxonNavigationCommandOutcome[];
   destroy(): RaxonBridgeReply;
   request(request: Record<string, any>): RaxonBridgeReply;
   applyCommandBatch(batch: { commands?: unknown[] }): void;
@@ -4608,7 +4683,8 @@ Run `npm run dev` from this directory and open the printed local URL. The
 generated host includes default handlers for clipboard writes, share text,
 external URLs, accessibility announcements, focus requests, network
 reachability, media/document picking, app lifecycle, system appearance, and
-locale changes, plus `navigationDebugSnapshot()` for host/devtools inspection.
+locale changes, plus `applyNavigationCommand(s)` and `navigationDebugSnapshot()`
+for host-driven navigation and devtools inspection.
 Customize `main.js` or pass `handlePlatformRequest` for
 app-specific platform requests such as notifications or media pickers. Set
 `HOST` or `PORT` to override the dev-server bind address.
@@ -5272,6 +5348,10 @@ name = "demo_native"
         assert!(kotlin.contains("commandHandler(command)"));
         assert!(kotlin.contains("fun navigationDebugSnapshot(): JSONObject"));
         assert!(kotlin.contains("\"navigation_debug_snapshot\""));
+        assert!(kotlin.contains("fun applyNavigationCommand(command: JSONObject): JSONObject"));
+        assert!(kotlin.contains("fun applyNavigationCommands(commands: JSONArray): JSONArray"));
+        assert!(kotlin.contains("\"apply_navigation_command\""));
+        assert!(kotlin.contains("\"apply_navigation_commands\""));
 
         let activity = fs::read_to_string(
             out_dir.join("android/app/src/main/java/dev/raxon/demo/DemoActivity.kt"),
@@ -5352,6 +5432,7 @@ name = "demo_native"
         let android_readme = fs::read_to_string(out_dir.join("android/README.md")).unwrap();
         assert!(android_readme.contains("./gradlew :app:assembleDebug"));
         assert!(android_readme.contains("app/src/main/jniLibs/<abi>/libdemo_lib.so"));
+        assert!(android_readme.contains("navigation command helpers"));
         assert!(android_readme.contains("navigation debug snapshots"));
 
         let web_rust = fs::read_to_string(out_dir.join("web/raxon_web_bridge.rs")).unwrap();
@@ -5365,6 +5446,10 @@ name = "demo_native"
         assert!(web_js.contains("dispatchEvents(events)"));
         assert!(web_js.contains("navigationDebugSnapshot()"));
         assert!(web_js.contains("type: \"navigation_debug_snapshot\""));
+        assert!(web_js.contains("applyNavigationCommand(command)"));
+        assert!(web_js.contains("type: \"apply_navigation_command\""));
+        assert!(web_js.contains("applyNavigationCommands(commands)"));
+        assert!(web_js.contains("type: \"apply_navigation_commands\""));
         assert!(web_js.contains("applyCommand(command)"));
         assert!(web_js.contains("command.tag_name"));
         assert!(web_js.contains("command.css_color"));
@@ -5407,8 +5492,16 @@ name = "demo_native"
 
         let web_dts = fs::read_to_string(out_dir.join("web/raxon-web-host.d.ts")).unwrap();
         assert!(web_dts.contains("interface RaxonNavigationDebugSnapshot"));
+        assert!(web_dts.contains("type RaxonNavigationCommand"));
+        assert!(web_dts.contains("interface RaxonNavigationCommandOutcome"));
         assert!(web_dts.contains("queryAll: Record<string, string[]>"));
         assert!(web_dts.contains("navigationDebugSnapshot(): RaxonNavigationDebugSnapshot | null"));
+        assert!(web_dts.contains(
+            "applyNavigationCommand(command: RaxonNavigationCommand): RaxonNavigationCommandOutcome | null"
+        ));
+        assert!(web_dts.contains(
+            "applyNavigationCommands(commands: RaxonNavigationCommand[]): RaxonNavigationCommandOutcome[]"
+        ));
 
         let web_index = fs::read_to_string(out_dir.join("web/index.html")).unwrap();
         assert!(web_index.contains("<title>Demo App</title>"));
@@ -5439,6 +5532,7 @@ name = "demo_native"
 
         let web_readme = fs::read_to_string(out_dir.join("web/README.md")).unwrap();
         assert!(web_readme.contains("navigationDebugSnapshot()"));
+        assert!(web_readme.contains("applyNavigationCommand(s)"));
 
         let manifest = fs::read_to_string(out_dir.join("raxon-bindings.json")).unwrap();
         assert!(manifest.contains("\"target\": \"all\""));
