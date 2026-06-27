@@ -59,7 +59,7 @@ pub use async_derived::{create_async_derived, create_deferred, AsyncState};
 pub use context::{expect_context, provide_context, use_context};
 pub use control::{batch, untrack};
 pub use effect::{create_effect, Effect};
-pub use handle::{create_memo, create_signal, Memo, Signal};
+pub use handle::{create_global_signal, create_memo, create_signal, Memo, Signal};
 pub use history::{use_history, History};
 pub use middleware::{add_signal_middleware, clear_signal_middlewares};
 pub use persisted::{

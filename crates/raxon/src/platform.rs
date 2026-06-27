@@ -98,3 +98,63 @@ pub fn platform_choice<T>(ios: T, android: T, web: T, other: T) -> T {
         other
     }
 }
+
+/// A monotonic instant that works on every target, including the browser.
+///
+/// `std::time::Instant::now()` **panics on `wasm32-unknown-unknown`** — there is
+/// no time source on that target — so any code that reads the clock per frame
+/// (animation deltas, cache staleness) must go through this instead. On native
+/// targets it wraps [`std::time::Instant`]; on the web it reads `Date.now()`.
+///
+/// # Example
+/// ```rust
+/// use raxon::platform::Monotonic;
+///
+/// let start = Monotonic::now();
+/// // ... do work ...
+/// let elapsed_secs = Monotonic::now().secs_since(start);
+/// assert!(elapsed_secs >= 0.0);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Monotonic(f64);
+
+impl Monotonic {
+    /// The current monotonic time.
+    #[inline]
+    pub fn now() -> Self {
+        Monotonic(now_millis())
+    }
+
+    /// Fractional seconds elapsed from `earlier` to `self`.
+    ///
+    /// Clamped to `0.0` if `earlier` is later than `self`, so a backwards clock
+    /// step (e.g. an NTP adjustment on the web's wall clock) never yields a
+    /// negative delta.
+    #[inline]
+    pub fn secs_since(self, earlier: Monotonic) -> f32 {
+        ((self.0 - earlier.0).max(0.0) / 1000.0) as f32
+    }
+
+    /// Whole seconds elapsed from `earlier` to `self` (clamped at `0`).
+    #[inline]
+    pub fn whole_secs_since(self, earlier: Monotonic) -> u64 {
+        ((self.0 - earlier.0).max(0.0) / 1000.0) as u64
+    }
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[inline]
+fn now_millis() -> f64 {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    // A process-wide epoch so values are comparable across `Monotonic`s.
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    EPOCH.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[inline]
+fn now_millis() -> f64 {
+    // `Date.now()` is wall-clock and can step backwards; callers clamp deltas.
+    js_sys::Date::now()
+}

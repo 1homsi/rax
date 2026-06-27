@@ -167,20 +167,7 @@ impl KvNamespace {
 // Reactive queries on the KV store
 // ---------------------------------------------------------------------------
 
-/// Watch a KV key for changes, returning a reactive `Signal<Option<String>>`.
-///
-/// The signal updates whenever `kv_set` is called with the same key via
-/// `kv_set_reactive`. Use `kv_set_reactive` instead of `kv_set` to get
-/// reactive updates.
-///
-/// # Example
-/// ```rust,ignore
-/// let name = watch_kv("user.name");
-/// create_effect(move || {
-///     if let Some(n) = name.get() { println!("name changed: {n}"); }
-/// });
-/// kv_set_reactive("user.name", "Alice"); // triggers effect
-/// ```
+// Per-key reactive watchers backing `watch_kv` / `kv_set_reactive`.
 thread_local! {
     static KV_WATCHERS: RefCell<HashMap<String, Signal<Option<String>>>> =
         RefCell::new(HashMap::new());

@@ -929,7 +929,7 @@ pub struct App {
     /// Last content size emitted per scroll widget.
     content_sizes: HashMap<WidgetId, Size>,
     /// Wall-clock of the previous tick, for animation deltas.
-    last_tick: Option<std::time::Instant>,
+    last_tick: Option<crate::platform::Monotonic>,
     /// Whether the system high-contrast / darker-colors accessibility setting is on.
     high_contrast: bool,
     /// Reactive signal for high contrast, read by [`use_high_contrast`].
@@ -1091,10 +1091,11 @@ impl App {
         });
 
         // Advance animations by the wall-clock delta since the last frame.
-        let now = std::time::Instant::now();
+        // `Monotonic` is wasm-safe; `std::time::Instant::now()` panics on web.
+        let now = crate::platform::Monotonic::now();
         let dt = self
             .last_tick
-            .map(|prev| now.duration_since(prev).as_secs_f32())
+            .map(|prev| now.secs_since(prev))
             .unwrap_or(0.0);
         self.last_tick = Some(now);
         crate::anim::tick(dt);

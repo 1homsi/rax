@@ -37,6 +37,18 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 gloo-net = { version = "0.6", default-features = false, features = ["http", "websocket"] }
 wasm-bindgen-futures = "0.4"
+# `std::time::Instant::now()` panics on wasm32-unknown-unknown (no time source),
+# so the monotonic clock in `platform` reads `Date.now()` through js-sys instead.
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+# Browser `localStorage` (store) + History API (URL routing) backing.
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Storage",
+    "History",
+    "Location",
+    "EventTarget",
+] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.6"

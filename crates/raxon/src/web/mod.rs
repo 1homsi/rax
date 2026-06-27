@@ -416,6 +416,9 @@ pub enum DomWireCommand {
         id: u64,
         tag_name: String,
         input_type: Option<String>,
+        /// Whether this node is a scroll container (needs `overflow: auto`).
+        #[serde(default)]
+        scrollable: bool,
     },
     SetAttribute {
         id: u64,
@@ -480,6 +483,7 @@ impl From<DomCommand> for DomWireCommand {
                 id,
                 tag_name: kind.tag_name().to_string(),
                 input_type: kind.input_type().map(str::to_string),
+                scrollable: matches!(kind, DomElementKind::ScrollDiv),
             },
             DomCommand::SetAttribute { id, attr } => DomWireCommand::SetAttribute {
                 id,
@@ -1485,6 +1489,81 @@ pub fn frame_command(id: WidgetId, rect: Rect) -> DomCommand {
         height: rect.size.height,
     }
 }
+
+// ---------------------------------------------------------------------------
+// Browser History API — URL-synced client-side routing.
+//
+// raxon's `nav` handles native push/pop; on the web a router also wants the
+// address bar to reflect the route (shareable URLs, back/forward, reload). These
+// thin helpers wrap `window.history` / `window.location`. They are no-ops off
+// the web so a router module compiles unchanged on every target.
+// ---------------------------------------------------------------------------
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod browser_history {
+    use std::cell::RefCell;
+
+    use wasm_bindgen::closure::Closure;
+    use wasm_bindgen::{JsCast, JsValue};
+
+    /// The current URL path (e.g. `/console/dashboard`).
+    pub fn location_path() -> String {
+        web_sys::window()
+            .and_then(|w| w.location().pathname().ok())
+            .unwrap_or_else(|| "/".to_string())
+    }
+
+    /// Pushes a new history entry with `path` (adds a back-stack entry).
+    pub fn push_path(path: &str) {
+        if let Some(history) = web_sys::window().and_then(|w| w.history().ok()) {
+            let _ = history.push_state_with_url(&JsValue::NULL, "", Some(path));
+        }
+    }
+
+    /// Replaces the current history entry with `path` (no back-stack entry).
+    pub fn replace_path(path: &str) {
+        if let Some(history) = web_sys::window().and_then(|w| w.history().ok()) {
+            let _ = history.replace_state_with_url(&JsValue::NULL, "", Some(path));
+        }
+    }
+
+    thread_local! {
+        // Keeps popstate closures alive for the page lifetime.
+        static POPSTATE_HOOKS: RefCell<Vec<Closure<dyn FnMut()>>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// Invokes `callback(path)` on browser back/forward navigation.
+    pub fn on_popstate(callback: impl Fn(String) + 'static) {
+        let closure = Closure::<dyn FnMut()>::new(move || callback(location_path()));
+        if let Some(window) = web_sys::window() {
+            let _ = window
+                .add_event_listener_with_callback("popstate", closure.as_ref().unchecked_ref());
+        }
+        POPSTATE_HOOKS.with(|hooks| hooks.borrow_mut().push(closure));
+    }
+}
+
+/// The current URL path. Returns `"/"` off the web.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub use browser_history::{location_path, on_popstate, push_path, replace_path};
+
+/// The current URL path. Returns `"/"` off the web.
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub fn location_path() -> String {
+    "/".to_string()
+}
+
+/// Pushes a history entry (no-op off the web).
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub fn push_path(_path: &str) {}
+
+/// Replaces the current history entry (no-op off the web).
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub fn replace_path(_path: &str) {}
+
+/// Registers a back/forward handler (no-op off the web).
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub fn on_popstate(_callback: impl Fn(String) + 'static) {}
 
 #[cfg(test)]
 mod tests {

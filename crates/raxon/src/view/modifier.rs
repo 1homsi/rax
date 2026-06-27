@@ -197,6 +197,23 @@ pub trait ViewExt: View + Sized {
     fn opacity(self, o: f32) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |t, id| t.set(id, Attribute::Opacity(o)))
     }
+    /// Binds an attribute **reactively**: `f` re-runs whenever the signals it
+    /// reads change, updating this node in place — no subtree rebuild. This is
+    /// the fine-grained primitive behind animated and signal-driven styling
+    /// (e.g. an animated opacity, or a colour that tracks a `Signal`).
+    ///
+    /// ```ignore
+    /// use raxon::anim::{animate, Easing};
+    /// use raxon::dom::Attribute;
+    /// let fade = animate(0.0, 1.0, 0.3, Easing::EaseOut);
+    /// my_view.bind_attr(move || Attribute::Opacity(fade.get()));
+    /// ```
+    fn bind_attr(
+        self,
+        f: impl FnMut() -> Attribute + 'static,
+    ) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
+        self.decorate(move |t, id| t.bind(id, f))
+    }
     /// A uniform border of `width` and `color`.
     fn border(self, width: f32, color: Color) -> Decorated<Self, impl FnOnce(&mut Tree, WidgetId)> {
         self.decorate(move |t, id| {

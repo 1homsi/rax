@@ -2,7 +2,8 @@
 //! frame timing is deterministic in tests.
 
 use std::cell::Cell;
-use std::time::Instant;
+
+use crate::platform::Monotonic;
 
 /// A monotonic time source, in nanoseconds.
 pub trait Clock {
@@ -42,10 +43,13 @@ impl Clock for ManualClock {
     }
 }
 
-/// A real monotonic clock backed by [`Instant`], for production drivers.
+/// A real monotonic clock backed by [`Monotonic`], for production drivers.
+///
+/// Works on every target, including the browser — unlike a raw
+/// [`std::time::Instant`], which panics on `wasm32-unknown-unknown`.
 #[derive(Debug)]
 pub struct SystemClock {
-    start: Instant,
+    start: Monotonic,
 }
 
 impl Default for SystemClock {
@@ -58,13 +62,13 @@ impl SystemClock {
     /// Creates a clock whose epoch is now.
     pub fn new() -> Self {
         SystemClock {
-            start: Instant::now(),
+            start: Monotonic::now(),
         }
     }
 }
 
 impl Clock for SystemClock {
     fn now_nanos(&self) -> u64 {
-        self.start.elapsed().as_nanos() as u64
+        (Monotonic::now().secs_since(self.start) as f64 * 1_000_000_000.0) as u64
     }
 }

@@ -800,6 +800,7 @@ dependencies = [
  "block2",
  "futures",
  "gloo-net",
+ "js-sys",
  "objc2",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -812,12 +813,14 @@ dependencies = [
  "taffy",
  "tungstenite",
  "ureq",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
 name = "raxon-cli"
-version = "0.1.0"
+version = "0.0.9"
 dependencies = [
  "serde_json",
 ]

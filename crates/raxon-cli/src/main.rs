@@ -621,6 +621,87 @@ fn serve_web(host: &str, port: u16, dry_run: bool) -> Result<(), i32> {
     }
 }
 
+/// Serves `web/` and rebuilds the wasm bundle whenever a source file changes.
+///
+/// The Node dev server live-reloads the browser when `web/pkg` updates, so a
+/// save turns into a refreshed page with no manual steps. Runs until Ctrl-C
+/// (which, sharing our process group, also stops the dev server).
+fn serve_web_watching(host: &str, port: u16, profile: BuildProfile) -> Result<(), i32> {
+    if !Path::new("web/dev-server.mjs").exists() {
+        eprintln!("No web/dev-server.mjs found; run `raxon generate --target web --out .` first.");
+        return Err(1);
+    }
+    let mut server = match Command::new("node")
+        .arg("./dev-server.mjs")
+        .current_dir("web")
+        .env("HOST", host)
+        .env("PORT", port.to_string())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            eprintln!("Failed to run node: {error}");
+            return Err(1);
+        }
+    };
+    println!("→ watching src/ + Cargo.toml — save to rebuild & live-reload (Ctrl-C to stop)");
+    println!("  http://{host}:{port}/");
+
+    let watched: &[&str] = &["src", "Cargo.toml"];
+    let mut last = latest_source_mtime(watched);
+    loop {
+        if let Ok(Some(status)) = server.try_wait() {
+            return if status.success() {
+                Ok(())
+            } else {
+                Err(status.code().unwrap_or(1))
+            };
+        }
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let now = latest_source_mtime(watched);
+        if now > last {
+            println!("\n↻ change detected — rebuilding wasm…");
+            match wasm_pack_build(profile, false) {
+                Ok(()) => println!("✓ rebuilt — browser reloading"),
+                Err(_) => eprintln!("✗ build failed — fix the error and save again"),
+            }
+            // Re-baseline so the rebuild's own writes don't retrigger.
+            last = latest_source_mtime(watched);
+        }
+    }
+}
+
+/// The newest modification time across `paths` (recursing into directories,
+/// skipping `target/`, `pkg/`, and hidden entries). Returns the Unix epoch when
+/// nothing is found, so an existing file always reads as newer.
+fn latest_source_mtime(paths: &[&str]) -> std::time::SystemTime {
+    fn walk(path: &Path, newest: &mut std::time::SystemTime) {
+        let Ok(meta) = fs::symlink_metadata(path) else {
+            return;
+        };
+        if meta.is_dir() {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name == "target" || name == "pkg" || name.starts_with('.') {
+                return;
+            }
+            if let Ok(entries) = fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    walk(&entry.path(), newest);
+                }
+            }
+        } else if let Ok(modified) = meta.modified() {
+            if modified > *newest {
+                *newest = modified;
+            }
+        }
+    }
+    let mut newest = std::time::SystemTime::UNIX_EPOCH;
+    for p in paths {
+        walk(Path::new(p), &mut newest);
+    }
+    newest
+}
+
 fn run_build(options: &BuildOptions) {
     // Web builds go through wasm-pack (wasm-bindgen), with the toolchain handled.
     if options.target == "web" {
@@ -1056,6 +1137,7 @@ struct RunOptions {
     port: u16,
     android_gradle_task: String,
     launch_android: bool,
+    watch: bool,
 }
 
 impl Default for RunOptions {
@@ -1070,6 +1152,9 @@ impl Default for RunOptions {
             port: 5173,
             android_gradle_task: ":app:installDebug".to_string(),
             launch_android: true,
+            // Web defaults to watch mode (rebuild + live-reload on source change),
+            // like a typical JS dev server. Disable with --no-watch.
+            watch: true,
         }
     }
 }
@@ -1104,6 +1189,8 @@ fn run_usage() -> String {
         "  --no-launch                           Install/build Android but skip adb launch",
         "  --no-build                            Skip cargo build and artifact copy",
         "  --no-copy                             Build only; skip generated host artifact copy",
+        "  --watch, -w                           Web: rebuild + live-reload on source change (default)",
+        "  --no-watch                            Web: build once and serve without watching",
         "  --dry-run, --print                    Print the run plan without executing it",
         "",
         "Environment:",
@@ -1204,6 +1291,12 @@ fn parse_run_options(args: &[String]) -> Result<RunOptions, String> {
             "--no-build" => {
                 options.no_build = true;
             }
+            "--watch" | "-w" => {
+                options.watch = true;
+            }
+            "--no-watch" => {
+                options.watch = false;
+            }
             "--copy" => {
                 options.build.copy_artifacts = true;
             }
@@ -1243,6 +1336,13 @@ fn run_run(options: &RunOptions) {
             if let Err(code) = wasm_pack_build(options.build.profile, options.dry_run) {
                 process::exit(code);
             }
+        }
+        if options.watch && !options.dry_run {
+            if let Err(code) = serve_web_watching(&options.host, options.port, options.build.profile)
+            {
+                process::exit(code);
+            }
+            return;
         }
         if let Err(code) = serve_web(&options.host, options.port, options.dry_run) {
             process::exit(code);
@@ -2965,6 +3065,7 @@ export class RaxonWebHost {
         if (command.input_type) element.type = command.input_type;
         element.dataset.raxonId = String(command.id);
         element.style.position = "absolute";
+        if (command.scrollable) element.style.overflow = "auto";
         this.nodes.set(command.id, element);
         this.installBuiltInListeners(command.id, element);
         break;
@@ -3142,6 +3243,9 @@ export class RaxonWebHost {
         break;
       case "corner_radius":
         node.style.borderRadius = `${attr.value}px`;
+        break;
+      case "shadow":
+        node.style.boxShadow = `${attr.value.dx}px ${attr.value.dy}px ${attr.value.radius}px ${attr.value.color}`;
         break;
       case "image_source":
         node.src = attr.value;
@@ -3548,8 +3652,8 @@ fn web_package_json_template(options: &GenerateOptions) -> String {
 }
 
 fn web_dev_server_template() -> String {
-    r#"import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+    r#"import { createReadStream, watch } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -3557,6 +3661,35 @@ import { fileURLToPath } from "node:url";
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number.parseInt(process.env.PORT ?? "5173", 10);
+
+// --- live reload ----------------------------------------------------------
+// Browsers subscribe to /__raxon_livereload (Server-Sent Events). When the
+// wasm bundle (pkg/) or any served asset changes, we push "reload" and the
+// injected client snippet refreshes the page. `raxon run` rebuilds pkg/ on
+// source changes, so saving a .rs file ends in a refreshed browser.
+const LIVE_RELOAD_PATH = "/__raxon_livereload";
+const LIVE_RELOAD_SNIPPET =
+  '\n<script>(function(){try{var s=new EventSource("' +
+  LIVE_RELOAD_PATH +
+  '");s.onmessage=function(){location.reload();};}catch(e){}})();</script>\n';
+const reloadClients = new Set();
+let reloadTimer = null;
+
+function scheduleReload() {
+  if (reloadTimer) clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null;
+    for (const client of reloadClients) client.write("data: reload\n\n");
+  }, 120);
+}
+
+for (const dir of [rootDir, join(rootDir, "pkg")]) {
+  try {
+    watch(dir, { persistent: true }, scheduleReload);
+  } catch {
+    // Directory may not exist yet (e.g. pkg before the first build).
+  }
+}
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -3613,11 +3746,24 @@ async function sendFile(req, res) {
       return;
     }
 
+    // HTML is read into memory so the live-reload snippet can be injected.
+    if (extname(filePath) === ".html") {
+      const source = await readFile(filePath, "utf8");
+      const body = source.includes(LIVE_RELOAD_PATH)
+        ? source
+        : source + LIVE_RELOAD_SNIPPET;
+      const buffer = Buffer.from(body, "utf8");
+      res.writeHead(200, {
+        "Content-Length": buffer.byteLength,
+        "Content-Type": contentTypes.get(".html"),
+      });
+      res.end(req.method === "HEAD" ? undefined : buffer);
+      return;
+    }
+
     res.writeHead(200, {
       "Content-Length": info.size,
       "Content-Type": contentTypes.get(extname(filePath)) ?? "application/octet-stream",
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
     });
 
     if (req.method === "HEAD") {
@@ -3635,6 +3781,13 @@ async function sendFile(req, res) {
     stream.pipe(res);
   } catch (error) {
     if (error && error.code === "ENOENT") {
+      // SPA fallback: client-side routes (no file extension) get index.html so
+      // deep links and reloads on e.g. /console/users work.
+      const pathname = new URL(req.url ?? "/", `http://${host}:${port}`).pathname;
+      if (!extname(pathname)) {
+        await sendIndexFallback(res);
+        return;
+      }
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("Not Found");
       return;
@@ -3644,7 +3797,36 @@ async function sendFile(req, res) {
   }
 }
 
-createServer(sendFile).listen(port, host, () => {
+async function sendIndexFallback(res) {
+  try {
+    const source = await readFile(join(rootDir, "index.html"), "utf8");
+    const body = source.includes(LIVE_RELOAD_PATH) ? source : source + LIVE_RELOAD_SNIPPET;
+    const buffer = Buffer.from(body, "utf8");
+    res.writeHead(200, {
+      "Content-Length": buffer.byteLength,
+      "Content-Type": contentTypes.get(".html"),
+    });
+    res.end(buffer);
+  } catch {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Not Found");
+  }
+}
+
+createServer((req, res) => {
+  if (req.url === LIVE_RELOAD_PATH) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    res.write("retry: 1000\n\n");
+    reloadClients.add(res);
+    req.on("close", () => reloadClients.delete(res));
+    return;
+  }
+  sendFile(req, res);
+}).listen(port, host, () => {
   console.log(`raxon web host: http://${host}:${port}/`);
 });
 "#
@@ -4436,9 +4618,10 @@ name = "demo_native"
         assert!(package_json.contains("\"dev\": \"node ./dev-server.mjs\""));
 
         let dev_server = fs::read_to_string(out_dir.join("web/dev-server.mjs")).unwrap();
-        assert!(dev_server.contains("createServer(sendFile)"));
         assert!(dev_server.contains("\"application/wasm\""));
-        assert!(dev_server.contains("\"Cross-Origin-Embedder-Policy\""));
+        // Live-reload: SSE endpoint + injected client snippet.
+        assert!(dev_server.contains("/__raxon_livereload"));
+        assert!(dev_server.contains("text/event-stream"));
 
         let manifest = fs::read_to_string(out_dir.join("raxon-bindings.json")).unwrap();
         assert!(manifest.contains("\"target\": \"all\""));

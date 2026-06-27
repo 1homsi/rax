@@ -64,8 +64,51 @@ impl Storage for MemoryStorage {
     }
 }
 
+/// Browser `localStorage` backend (wasm only). Values survive a page reload, so
+/// sessions, routing, and `persisted` signals are durable — this is the default
+/// backend on the web, no setup required.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[derive(Default, Clone)]
+pub struct WebLocalStorage;
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+impl WebLocalStorage {
+    fn storage() -> Option<web_sys::Storage> {
+        web_sys::window()?.local_storage().ok()?
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+impl Storage for WebLocalStorage {
+    fn get(&self, key: &str) -> Option<String> {
+        Self::storage()?.get_item(key).ok()?
+    }
+    fn set(&self, key: &str, value: &str) {
+        if let Some(storage) = Self::storage() {
+            let _ = storage.set_item(key, value);
+        }
+    }
+    fn remove(&self, key: &str) {
+        if let Some(storage) = Self::storage() {
+            let _ = storage.remove_item(key);
+        }
+    }
+}
+
+/// The default backend: browser `localStorage` on the web, in-memory elsewhere.
+fn default_storage() -> Box<dyn Storage> {
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    {
+        Box::new(WebLocalStorage)
+    }
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        Box::new(MemoryStorage::new())
+    }
+}
+
 thread_local! {
-    static STORAGE: RefCell<Box<dyn Storage>> = RefCell::new(Box::new(MemoryStorage::new()));
+    static STORAGE: RefCell<Box<dyn Storage>> = RefCell::new(default_storage());
 }
 
 /// Installs a storage backend for the current thread (e.g. a platform-backed

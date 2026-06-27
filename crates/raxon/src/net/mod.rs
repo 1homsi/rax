@@ -1004,7 +1004,8 @@ thread_local! {
         RefCell::new(HashMap::new());
 
     /// Records the wall-clock time when each URL was last fetched and cached.
-    static QUERY_TIMESTAMPS: RefCell<HashMap<String, std::time::Instant>> =
+    /// `Monotonic` is wasm-safe; `std::time::Instant::now()` panics on web.
+    static QUERY_TIMESTAMPS: RefCell<HashMap<String, crate::platform::Monotonic>> =
         RefCell::new(HashMap::new());
 }
 
@@ -1035,7 +1036,8 @@ pub fn use_query(url: impl Into<String>) -> Resource<Response> {
         // First caller — fire the request and cache the resource.
         let resource = get(url.clone());
         // Record the timestamp of this fetch.
-        QUERY_TIMESTAMPS.with(|t| t.borrow_mut().insert(url.clone(), std::time::Instant::now()));
+        QUERY_TIMESTAMPS
+            .with(|t| t.borrow_mut().insert(url.clone(), crate::platform::Monotonic::now()));
         cache.borrow_mut().insert(url, resource);
         resource
     })
@@ -1074,10 +1076,11 @@ pub fn use_query_stale(url: impl Into<String>, stale_after_secs: u64) -> Resourc
 
     // A stale_after_secs of 0 means "never revalidate".
     if stale_after_secs != 0 {
+        let now = crate::platform::Monotonic::now();
         let is_stale = QUERY_TIMESTAMPS.with(|t| {
             t.borrow()
                 .get(&url)
-                .map(|ts| ts.elapsed().as_secs() > stale_after_secs)
+                .map(|ts| now.whole_secs_since(*ts) > stale_after_secs)
                 .unwrap_or(true) // no entry = treat as stale
         });
         if is_stale {
@@ -1094,10 +1097,11 @@ pub fn use_query_stale(url: impl Into<String>, stale_after_secs: u64) -> Resourc
 /// memory growth from long-running sessions.
 pub fn gc_query_cache(max_age_secs: u64) {
     // Collect URLs that have expired.
+    let now = crate::platform::Monotonic::now();
     let expired: Vec<String> = QUERY_TIMESTAMPS.with(|t| {
         t.borrow()
             .iter()
-            .filter(|(_, ts)| ts.elapsed().as_secs() > max_age_secs)
+            .filter(|(_, ts)| now.whole_secs_since(**ts) > max_age_secs)
             .map(|(url, _)| url.clone())
             .collect()
     });
@@ -1280,6 +1284,48 @@ pub fn get_json<T: serde::de::DeserializeOwned + Clone + 'static>(
     let resp_future = build_response_future(Request::get(url));
     let future = async move { resp_future.await?.json::<T>() };
     create_resource(Box::pin(future))
+}
+
+thread_local! {
+    /// Cache of decoded query resources, keyed by (response type, URL). Lets a
+    /// screen be torn down and rebuilt (e.g. on navigation) without refiring the
+    /// request — the resolved data is reused, so there is no loading flash.
+    static TYPED_QUERY_CACHE: RefCell<HashMap<(core::any::TypeId, String), Box<dyn core::any::Any>>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Cached typed GET: like [`get_json`], but the first call per (`T`, URL) fires
+/// the request and every later call returns the **same** [`Resource<T>`].
+///
+/// This is the typed analogue of [`use_query`]: ideal for data screens that are
+/// rebuilt whenever the user navigates back to them. Use [`invalidate_query`]
+/// or [`get_json`] when you need a fresh fetch.
+///
+/// [`Resource<T>`]: crate::async_rt::Resource
+pub fn use_query_json<T: serde::de::DeserializeOwned + Clone + 'static>(
+    url: impl Into<String>,
+) -> crate::async_rt::Resource<T> {
+    let url = url.into();
+    let key = (core::any::TypeId::of::<T>(), url.clone());
+    TYPED_QUERY_CACHE.with(|cache| {
+        if let Some(cached) = cache.borrow().get(&key) {
+            if let Some(res) = cached.downcast_ref::<crate::async_rt::Resource<T>>() {
+                return *res;
+            }
+        }
+        let res = get_json::<T>(url);
+        cache.borrow_mut().insert(key, Box::new(res));
+        res
+    })
+}
+
+/// Drops the cached [`use_query_json`] entry for `T` + `url` so the next call
+/// refetches.
+pub fn invalidate_query_json<T: 'static>(url: impl Into<String>) {
+    let key = (core::any::TypeId::of::<T>(), url.into());
+    TYPED_QUERY_CACHE.with(|cache| {
+        cache.borrow_mut().remove(&key);
+    });
 }
 
 // ---------------------------------------------------------------------------

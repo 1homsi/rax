@@ -73,6 +73,50 @@ pub fn create_signal<T: 'static>(value: T) -> Signal<T> {
     }
 }
 
+/// Creates a signal that is **not** owned by the current reactive scope, so it
+/// lives for the lifetime of the runtime instead of being disposed when the
+/// surrounding scope is torn down.
+///
+/// Use this for **app-global** state stashed in a `thread_local!` — a session,
+/// router, or store signal that is created lazily on first access. That first
+/// access often happens *inside* a [`dynamic`](crate::view::dynamic) or
+/// [`create_effect`] scope, and a plain [`create_signal`] there would be adopted
+/// by that scope and freed when it re-runs; the next read would then panic with
+/// "reactive node missing value or wrong type". A global signal sidesteps that.
+///
+/// # Example
+/// ```rust
+/// use raxon::reactive::{create_global_signal, Signal};
+/// use raxon::reactive::create_root;
+///
+/// fn counter() -> Signal<i32> {
+///     thread_local! {
+///         static COUNT: Signal<i32> = create_global_signal(0);
+///     }
+///     COUNT.with(|s| *s)
+/// }
+/// let (_, scope) = create_root(|| counter().set(5));
+/// scope.dispose(); // the signal survives this disposal
+/// ```
+pub fn create_global_signal<T: 'static>(value: T) -> Signal<T> {
+    let rt = current_runtime();
+    let key = runtime::with_rt(rt, |r| {
+        // Detach from the active owner so the node is never auto-disposed.
+        let prev = r.owner;
+        r.owner = None;
+        let key = r.insert_node(Node::signal(Box::new(value)));
+        r.owner = prev;
+        key
+    })
+    .expect("runtime exists");
+    Signal {
+        rt,
+        key,
+        _ty: PhantomData,
+        _thread_local: PhantomData,
+    }
+}
+
 /// Creates a **lazy** memo computing `f`: it does not run until first read, and
 /// re-runs only when an input changes and it is read again. `T: PartialEq` lets
 /// it suppress downstream updates when the recomputed value is unchanged.
