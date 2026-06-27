@@ -379,6 +379,18 @@ impl<D: HostDriver> HostSessionRegistry<D> {
                     .map_err(|error| HostSessionError::ResponseJson(error.to_string()))?;
                 Ok(HostBridgeResponse::NavigationDebugSnapshot { snapshot })
             }
+            HostBridgeRequest::ApplyNavigationCommand { handle, command } => {
+                let _ = self.session(HostSessionHandle::from_raw(handle))?;
+                Ok(HostBridgeResponse::NavigationCommandOutcome {
+                    outcome: crate::nav::apply_navigation_command(command),
+                })
+            }
+            HostBridgeRequest::ApplyNavigationCommands { handle, commands } => {
+                let _ = self.session(HostSessionHandle::from_raw(handle))?;
+                Ok(HostBridgeResponse::NavigationCommandOutcomes {
+                    outcomes: crate::nav::apply_navigation_commands(commands),
+                })
+            }
             HostBridgeRequest::TickAndDrainCommandBatch { handle } => {
                 let json =
                     self.tick_and_drain_command_batch_json(HostSessionHandle::from_raw(handle))?;
@@ -628,6 +640,20 @@ pub enum HostBridgeRequest {
         /// Opaque session handle.
         handle: u64,
     },
+    /// Apply one host-originated navigation command to a live session router.
+    ApplyNavigationCommand {
+        /// Opaque session handle.
+        handle: u64,
+        /// Serializable navigation command.
+        command: crate::nav::NavigationCommand,
+    },
+    /// Apply host-originated navigation commands in order to a live session router.
+    ApplyNavigationCommands {
+        /// Opaque session handle.
+        handle: u64,
+        /// Serializable navigation commands.
+        commands: Vec<crate::nav::NavigationCommand>,
+    },
     /// Tick a session and drain platform commands.
     TickAndDrainCommandBatch {
         /// Opaque session handle.
@@ -847,6 +873,16 @@ pub enum HostBridgeResponse {
         /// Navigation debug snapshot JSON.
         snapshot: serde_json::Value,
     },
+    /// Result of applying one navigation command.
+    NavigationCommandOutcome {
+        /// Navigation outcome payload.
+        outcome: crate::nav::NavigationCommandOutcome,
+    },
+    /// Result of applying navigation commands in order.
+    NavigationCommandOutcomes {
+        /// Navigation outcome payloads.
+        outcomes: Vec<crate::nav::NavigationCommandOutcome>,
+    },
 }
 
 fn command_batch_value(json: &str) -> Result<serde_json::Value, HostSessionError> {
@@ -980,6 +1016,129 @@ mod tests {
             registry.handle_request(HostBridgeRequest::NavigationDebugSnapshot { handle: 999 }),
             Err(HostSessionError::UnknownSession { handle: 999 })
         );
+    }
+
+    #[test]
+    fn bridge_json_applies_navigation_commands_for_live_sessions() {
+        let mut registry = HostSessionRegistry::new();
+        let handle = registry.insert_driver(RecordingDriver::new(Vec::new()));
+        crate::nav::reset_route("/home");
+        while crate::nav::dismiss_modal() {}
+
+        let request = json!({
+            "protocolVersion": HOST_BRIDGE_PROTOCOL_VERSION,
+            "type": "apply_navigation_commands",
+            "handle": handle.to_raw(),
+            "commands": [
+                { "type": "navigate", "route": "/orders" },
+                {
+                    "type": "set_query_param_values",
+                    "key": "tab",
+                    "values": ["items", "notes"],
+                    "replace": true
+                },
+                { "type": "set_fragment", "fragment": "details", "replace": true },
+                { "type": "present_modal", "route": "/filters" }
+            ]
+        });
+        let response = registry
+            .handle_request_json(&serde_json::to_string(&request).expect("request encodes"))
+            .expect("bridge request succeeds");
+        let response_json: Value = serde_json::from_str(&response).expect("response is JSON");
+        let decoded =
+            serde_json::from_str::<HostBridgeJsonResponse>(&response).expect("response decodes");
+
+        assert_eq!(
+            response_json["type"].as_str(),
+            Some("navigation_command_outcomes")
+        );
+        assert_eq!(response_json["outcomes"].as_array().unwrap().len(), 4);
+        assert_eq!(
+            response_json["outcomes"][1]["kind"].as_str(),
+            Some("set_query_param_values")
+        );
+        assert_eq!(
+            response_json["outcomes"][3]["current"].as_str(),
+            Some("/orders?tab=items&tab=notes#details")
+        );
+        assert_eq!(response_json["outcomes"][3]["modals"][0], "/filters");
+        match decoded.response {
+            HostBridgeResponse::NavigationCommandOutcomes { outcomes } => {
+                assert_eq!(outcomes.len(), 4);
+                assert_eq!(
+                    outcomes[0].kind,
+                    crate::nav::NavigationCommandKind::Navigate
+                );
+                assert_eq!(
+                    outcomes[1].kind,
+                    crate::nav::NavigationCommandKind::SetQueryParamValues
+                );
+                assert_eq!(
+                    outcomes[2].kind,
+                    crate::nav::NavigationCommandKind::SetFragment
+                );
+                assert_eq!(
+                    outcomes[3].kind,
+                    crate::nav::NavigationCommandKind::PresentModal
+                );
+                assert_eq!(outcomes[3].current, "/orders?tab=items&tab=notes#details");
+                assert_eq!(outcomes[3].modals, vec!["/filters".to_string()]);
+            }
+            other => panic!("expected navigation outcomes response, got {other:?}"),
+        }
+
+        let response = registry
+            .handle_request(HostBridgeRequest::ApplyNavigationCommand {
+                handle: handle.to_raw(),
+                command: crate::nav::NavigationCommand::RemoveFragment { replace: true },
+            })
+            .expect("single command applies");
+        match response {
+            HostBridgeResponse::NavigationCommandOutcome { outcome } => {
+                assert_eq!(
+                    outcome.kind,
+                    crate::nav::NavigationCommandKind::RemoveFragment
+                );
+                assert_eq!(outcome.current, "/orders?tab=items&tab=notes");
+                assert_eq!(outcome.modals, vec!["/filters".to_string()]);
+            }
+            other => panic!("expected navigation outcome response, got {other:?}"),
+        }
+
+        let snapshot_request =
+            HostBridgeJsonRequest::new(HostBridgeRequest::NavigationDebugSnapshot {
+                handle: handle.to_raw(),
+            });
+        let snapshot_response = registry
+            .handle_request_json(
+                &serde_json::to_string(&snapshot_request).expect("request encodes"),
+            )
+            .expect("snapshot request succeeds");
+        let snapshot_json: Value =
+            serde_json::from_str(&snapshot_response).expect("snapshot response is JSON");
+        assert_eq!(
+            snapshot_json["snapshot"]["current"],
+            "/orders?tab=items&tab=notes"
+        );
+        assert_eq!(snapshot_json["snapshot"]["location"]["path"], "/orders");
+        assert_eq!(
+            snapshot_json["snapshot"]["location"]["queryAll"]["tab"],
+            json!(["items", "notes"])
+        );
+        assert_eq!(
+            snapshot_json["snapshot"]["location"]["fragment"],
+            Value::Null
+        );
+        assert_eq!(snapshot_json["snapshot"]["modals"][0], "/filters");
+
+        assert_eq!(
+            registry.handle_request(HostBridgeRequest::ApplyNavigationCommand {
+                handle: 999,
+                command: crate::nav::NavigationCommand::Back,
+            }),
+            Err(HostSessionError::UnknownSession { handle: 999 })
+        );
+        while crate::nav::dismiss_modal() {}
     }
 
     #[test]
