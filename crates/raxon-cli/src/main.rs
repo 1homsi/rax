@@ -3320,6 +3320,7 @@ export async function createRaxonWebHost(root, options = {}) {
     applyAttribute: options.applyAttribute,
     installGesture: options.installGesture,
     handlePlatformRequest: options.handlePlatformRequest,
+    syncBrowserNavigation: options.syncBrowserNavigation,
   });
   if (options.mount !== false) host.mount();
   return host;
@@ -3348,7 +3349,7 @@ export async function instantiateRaxonWasm(wasmUrl, imports = {}) {
 }
 
 export class RaxonWebHost {
-  constructor({ root, wasm, memory, onBridgeError, handleCommand, applyAttribute, installGesture, handlePlatformRequest }) {
+  constructor({ root, wasm, memory, onBridgeError, handleCommand, applyAttribute, installGesture, handlePlatformRequest, syncBrowserNavigation }) {
     this.root = root;
     this.wasm = wasm;
     // Only needed by app-supplied hooks; wasm-bindgen handles marshaling itself.
@@ -3369,6 +3370,8 @@ export class RaxonWebHost {
     this.lastAppearanceSignature = null;
     this.localeListenersInstalled = false;
     this.lastLocale = null;
+    this.syncBrowserNavigation = syncBrowserNavigation !== false;
+    this.browserNavigationListenersInstalled = false;
   }
 
   mount(width = this.root.clientWidth, height = this.root.clientHeight) {
@@ -3378,6 +3381,7 @@ export class RaxonWebHost {
       this.installLifecycleListeners();
       this.installAppearanceListeners();
       this.installLocaleListeners();
+      this.installBrowserNavigationListeners();
     }
     return this.handle;
   }
@@ -3436,6 +3440,33 @@ export class RaxonWebHost {
       commands,
     });
     return reply.outcomes ?? [];
+  }
+
+  browserRoute() {
+    if (typeof window === "undefined") return "/";
+    const { location } = window;
+    const path = location.pathname || "/";
+    return `${path}${location.search || ""}${location.hash || ""}`;
+  }
+
+  syncBrowserRoute() {
+    const route = this.browserRoute();
+    const snapshot = this.navigationDebugSnapshot();
+    if (snapshot?.current === route) return null;
+    return this.applyNavigationCommand({ type: "replace", route });
+  }
+
+  installBrowserNavigationListeners() {
+    if (!this.syncBrowserNavigation || this.browserNavigationListenersInstalled || typeof window === "undefined") return;
+    this.browserNavigationListenersInstalled = true;
+    const sync = () => this.syncBrowserRoute();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    this.listenerDisposers.set("__browser_navigation", () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    });
+    sync();
   }
 
   browserNetworkStatus() {
@@ -3599,6 +3630,8 @@ export class RaxonWebHost {
     this.listenerDisposers.delete("__appearance");
     this.listenerDisposers.get("__locale")?.();
     this.listenerDisposers.delete("__locale");
+    this.listenerDisposers.get("__browser_navigation")?.();
+    this.listenerDisposers.delete("__browser_navigation");
     this.nodes.clear();
     this.networkListenersInstalled = false;
     this.lifecycleListenersInstalled = false;
@@ -3607,6 +3640,7 @@ export class RaxonWebHost {
     this.lastAppearanceSignature = null;
     this.localeListenersInstalled = false;
     this.lastLocale = null;
+    this.browserNavigationListenersInstalled = false;
     this.root.replaceChildren();
     return reply;
   }
@@ -4195,6 +4229,7 @@ export interface RaxonWebHostOptions {
   imports?: WebAssembly.Imports;
   initialize?: boolean;
   mount?: boolean;
+  syncBrowserNavigation?: boolean;
   onBridgeError?: (error: RaxonBridgeError) => void;
   handleCommand?: (command: Record<string, any>, host: RaxonWebHost) => boolean;
   applyAttribute?: (node: HTMLElement, attr: Record<string, any>) => boolean;
@@ -4282,6 +4317,8 @@ export class RaxonWebHost {
   navigationDebugSnapshot(): RaxonNavigationDebugSnapshot | null;
   applyNavigationCommand(command: RaxonNavigationCommand): RaxonNavigationCommandOutcome | null;
   applyNavigationCommands(commands: RaxonNavigationCommand[]): RaxonNavigationCommandOutcome[];
+  browserRoute(): string;
+  syncBrowserRoute(): RaxonNavigationCommandOutcome | null;
   destroy(): RaxonBridgeReply;
   request(request: Record<string, any>): RaxonBridgeReply;
   applyCommandBatch(batch: { commands?: unknown[] }): void;
@@ -4683,8 +4720,10 @@ Run `npm run dev` from this directory and open the printed local URL. The
 generated host includes default handlers for clipboard writes, share text,
 external URLs, accessibility announcements, focus requests, network
 reachability, media/document picking, app lifecycle, system appearance, and
-locale changes, plus `applyNavigationCommand(s)` and `navigationDebugSnapshot()`
-for host-driven navigation and devtools inspection.
+locale changes, browser URL/back-forward sync, plus `applyNavigationCommand(s)`
+and `navigationDebugSnapshot()` for host-driven navigation and devtools
+inspection. Pass `syncBrowserNavigation: false` to `createRaxonWebHost` if your
+Rust app binds browser history itself.
 Customize `main.js` or pass `handlePlatformRequest` for
 app-specific platform requests such as notifications or media pickers. Set
 `HOST` or `PORT` to override the dev-server bind address.
@@ -5450,6 +5489,16 @@ name = "demo_native"
         assert!(web_js.contains("type: \"apply_navigation_command\""));
         assert!(web_js.contains("applyNavigationCommands(commands)"));
         assert!(web_js.contains("type: \"apply_navigation_commands\""));
+        assert!(web_js.contains("syncBrowserNavigation: options.syncBrowserNavigation"));
+        assert!(web_js.contains("this.syncBrowserNavigation = syncBrowserNavigation !== false"));
+        assert!(web_js.contains("installBrowserNavigationListeners()"));
+        assert!(web_js.contains("window.addEventListener(\"popstate\", sync)"));
+        assert!(web_js.contains("window.addEventListener(\"hashchange\", sync)"));
+        assert!(web_js.contains("browserRoute()"));
+        assert!(
+            web_js.contains("return `${path}${location.search || \"\"}${location.hash || \"\"}`")
+        );
+        assert!(web_js.contains("this.applyNavigationCommand({ type: \"replace\", route })"));
         assert!(web_js.contains("applyCommand(command)"));
         assert!(web_js.contains("command.tag_name"));
         assert!(web_js.contains("command.css_color"));
@@ -5494,6 +5543,7 @@ name = "demo_native"
         assert!(web_dts.contains("interface RaxonNavigationDebugSnapshot"));
         assert!(web_dts.contains("type RaxonNavigationCommand"));
         assert!(web_dts.contains("interface RaxonNavigationCommandOutcome"));
+        assert!(web_dts.contains("syncBrowserNavigation?: boolean"));
         assert!(web_dts.contains("queryAll: Record<string, string[]>"));
         assert!(web_dts.contains("navigationDebugSnapshot(): RaxonNavigationDebugSnapshot | null"));
         assert!(web_dts.contains(
@@ -5502,6 +5552,8 @@ name = "demo_native"
         assert!(web_dts.contains(
             "applyNavigationCommands(commands: RaxonNavigationCommand[]): RaxonNavigationCommandOutcome[]"
         ));
+        assert!(web_dts.contains("browserRoute(): string"));
+        assert!(web_dts.contains("syncBrowserRoute(): RaxonNavigationCommandOutcome | null"));
 
         let web_index = fs::read_to_string(out_dir.join("web/index.html")).unwrap();
         assert!(web_index.contains("<title>Demo App</title>"));
@@ -5533,6 +5585,8 @@ name = "demo_native"
         let web_readme = fs::read_to_string(out_dir.join("web/README.md")).unwrap();
         assert!(web_readme.contains("navigationDebugSnapshot()"));
         assert!(web_readme.contains("applyNavigationCommand(s)"));
+        assert!(web_readme.contains("browser URL/back-forward sync"));
+        assert!(web_readme.contains("syncBrowserNavigation: false"));
 
         let manifest = fs::read_to_string(out_dir.join("raxon-bindings.json")).unwrap();
         assert!(manifest.contains("\"target\": \"all\""));
