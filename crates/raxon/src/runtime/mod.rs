@@ -1241,7 +1241,17 @@ impl App {
         self.last_tick = Some(now);
         crate::anim::tick(dt);
 
-        self.tree.drain_events();
+        while let Some(event) = self.tree.pop_event() {
+            if let Event::AppearanceChanged {
+                color_scheme,
+                high_contrast,
+            } = &event
+            {
+                self.set_color_scheme(*color_scheme);
+                self.set_high_contrast(*high_contrast);
+            }
+            self.tree.dispatch(&event);
+        }
 
         // Drain any haptic pulses queued by event handlers.
         let haptics: Vec<HapticStyle> = PENDING_HAPTICS.with(|q| {

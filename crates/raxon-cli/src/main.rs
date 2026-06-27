@@ -2532,6 +2532,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -2541,6 +2542,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Base64
 import android.view.Choreographer
+import android.view.accessibility.AccessibilityManager
 import android.widget.FrameLayout
 import org.json.JSONArray
 import org.json.JSONObject
@@ -2562,6 +2564,7 @@ open class __ANDROID_ACTIVITY__ : Activity() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var lastNetworkStatus: String? = null
     private var lastLifecycleStatus: String? = null
+    private var lastAppearanceSignature: String? = null
     private var pendingMediaMaxSelection = 1
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -2598,6 +2601,7 @@ open class __ANDROID_ACTIVITY__ : Activity() {
         super.onResume()
         startFrameLoop()
         startNetworkMonitoring()
+        dispatchAppearance()
         dispatchLifecycle("resumed")
     }
 
@@ -2620,6 +2624,12 @@ open class __ANDROID_ACTIVITY__ : Activity() {
             host.destroy()
         }
         super.onDestroy()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        mountOrResize()
+        dispatchAppearance()
     }
 
     override fun onBackPressed() {
@@ -2698,6 +2708,7 @@ open class __ANDROID_ACTIVITY__ : Activity() {
         if (host.handle == 0L) {
             host.mount(width, height)
             reportNetworkStatus()
+            dispatchAppearance()
             dispatchLifecycle("resumed")
         } else {
             host.resize(width, height)
@@ -2782,6 +2793,25 @@ open class __ANDROID_ACTIVITY__ : Activity() {
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
             else -> "online"
         }
+    }
+
+    private fun dispatchAppearance() {
+        if (!::host.isInitialized || host.handle == 0L) return
+        val nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val colorScheme = if (nightMode == Configuration.UI_MODE_NIGHT_YES) "dark" else "light"
+        val accessibilityManager = getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        val highContrast = accessibilityManager?.isHighTextContrastEnabled == true
+        val signature = "$colorScheme:$highContrast"
+        if (signature == lastAppearanceSignature) return
+        lastAppearanceSignature = signature
+        host.dispatchEvents(
+            JSONArray().put(
+                JSONObject()
+                    .put("type", "appearance_changed")
+                    .put("color_scheme", colorScheme)
+                    .put("high_contrast", highContrast)
+            )
+        )
     }
 
     private fun dispatchLifecycle(lifecycle: String) {
@@ -3278,6 +3308,8 @@ export class RaxonWebHost {
     this.networkListenersInstalled = false;
     this.lifecycleListenersInstalled = false;
     this.lastLifecycleStatus = null;
+    this.appearanceListenersInstalled = false;
+    this.lastAppearanceSignature = null;
   }
 
   mount(width = this.root.clientWidth, height = this.root.clientHeight) {
@@ -3285,6 +3317,7 @@ export class RaxonWebHost {
       this.handle = BigInt(this.wasm.raxon_web_mount(width, height));
       this.installNetworkStatusListeners();
       this.installLifecycleListeners();
+      this.installAppearanceListeners();
     }
     return this.handle;
   }
@@ -3386,6 +3419,56 @@ export class RaxonWebHost {
     reportVisibility();
   }
 
+  browserAppearance() {
+    const match = (query) =>
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia(query)
+        : { matches: false };
+    const colorScheme = match("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const highContrast =
+      match("(prefers-contrast: more)").matches || match("(forced-colors: active)").matches;
+    return { color_scheme: colorScheme, high_contrast: highContrast };
+  }
+
+  reportAppearance() {
+    const appearance = this.browserAppearance();
+    const signature = `${appearance.color_scheme}:${appearance.high_contrast}`;
+    if (signature === this.lastAppearanceSignature) return;
+    this.lastAppearanceSignature = signature;
+    this.dispatchEvents([{ type: "appearance_changed", ...appearance }]);
+  }
+
+  installAppearanceListeners() {
+    if (this.appearanceListenersInstalled || typeof window === "undefined") return;
+    this.appearanceListenersInstalled = true;
+    const mediaQueries =
+      typeof window.matchMedia === "function"
+        ? [
+            window.matchMedia("(prefers-color-scheme: dark)"),
+            window.matchMedia("(prefers-contrast: more)"),
+            window.matchMedia("(forced-colors: active)"),
+          ]
+        : [];
+    const report = () => this.reportAppearance();
+    for (const query of mediaQueries) {
+      if (typeof query.addEventListener === "function") {
+        query.addEventListener("change", report);
+      } else if (typeof query.addListener === "function") {
+        query.addListener(report);
+      }
+    }
+    this.listenerDisposers.set("__appearance", () => {
+      for (const query of mediaQueries) {
+        if (typeof query.removeEventListener === "function") {
+          query.removeEventListener("change", report);
+        } else if (typeof query.removeListener === "function") {
+          query.removeListener(report);
+        }
+      }
+    });
+    report();
+  }
+
   destroy() {
     this.reportLifecycle("terminating");
     const reply = this.request({
@@ -3399,10 +3482,14 @@ export class RaxonWebHost {
     this.listenerDisposers.delete("__network_status");
     this.listenerDisposers.get("__app_lifecycle")?.();
     this.listenerDisposers.delete("__app_lifecycle");
+    this.listenerDisposers.get("__appearance")?.();
+    this.listenerDisposers.delete("__appearance");
     this.nodes.clear();
     this.networkListenersInstalled = false;
     this.lifecycleListenersInstalled = false;
     this.lastLifecycleStatus = null;
+    this.appearanceListenersInstalled = false;
+    this.lastAppearanceSignature = null;
     this.root.replaceChildren();
     return reply;
   }
@@ -5090,9 +5177,11 @@ name = "demo_native"
         assert!(activity.contains("DemoHost.loadLibrary(NATIVE_LIBRARY)"));
         assert!(activity.contains("const val NATIVE_LIBRARY: String = \"demo_lib\""));
         assert!(activity.contains("import android.content.ClipboardManager"));
+        assert!(activity.contains("import android.content.res.Configuration"));
         assert!(activity.contains("import android.net.ConnectivityManager"));
         assert!(activity.contains("import android.provider.OpenableColumns"));
         assert!(activity.contains("import android.util.Base64"));
+        assert!(activity.contains("import android.view.accessibility.AccessibilityManager"));
         assert!(activity.contains("NetworkRequest.Builder()"));
         assert!(activity.contains("startNetworkMonitoring()"));
         assert!(activity.contains("\"network_status_changed\""));
@@ -5103,6 +5192,11 @@ name = "demo_native"
         assert!(activity.contains("\"resumed\""));
         assert!(activity.contains("\"backgrounded\""));
         assert!(activity.contains("\"terminating\""));
+        assert!(activity.contains("override fun onConfigurationChanged"));
+        assert!(activity.contains("dispatchAppearance()"));
+        assert!(activity.contains("\"appearance_changed\""));
+        assert!(activity.contains("\"color_scheme\""));
+        assert!(activity.contains("\"high_contrast\""));
         assert!(activity.contains("\"present_media_picker\""));
         assert!(activity.contains("ACTION_OPEN_DOCUMENT"));
         assert!(activity.contains("\"media_picked\""));
@@ -5169,6 +5263,11 @@ name = "demo_native"
         assert!(web_js.contains("type: \"app_lifecycle\""));
         assert!(web_js.contains("visibilitychange"));
         assert!(web_js.contains("beforeunload"));
+        assert!(web_js.contains("installAppearanceListeners"));
+        assert!(web_js.contains("type: \"appearance_changed\""));
+        assert!(web_js.contains("prefers-color-scheme: dark"));
+        assert!(web_js.contains("prefers-contrast: more"));
+        assert!(web_js.contains("forced-colors: active"));
         assert!(web_js.contains("fileToBase64(file)"));
         assert!(web_js.contains("presentMediaPicker"));
         assert!(web_js.contains("type: \"media_picked\""));

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use base64::Engine as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::core::{Point, Rect};
+use crate::core::{ColorScheme, Point, Rect};
 use crate::dom::{
     Event, GesturePhase, Lifecycle, NetworkStatus, PermissionKind, PermissionStatus, PointerId,
     TextSelection, WidgetId,
@@ -188,6 +188,10 @@ pub enum WireEvent {
     AppLifecycle {
         lifecycle: WireLifecycle,
     },
+    AppearanceChanged {
+        color_scheme: WireColorScheme,
+        high_contrast: bool,
+    },
     QrDetected {
         target: u64,
         value: String,
@@ -360,6 +364,13 @@ impl WireEvent {
             },
             WireEvent::KeyboardWillHide => Event::KeyboardWillHide,
             WireEvent::AppLifecycle { lifecycle } => Event::AppLifecycle(lifecycle.into()),
+            WireEvent::AppearanceChanged {
+                color_scheme,
+                high_contrast,
+            } => Event::AppearanceChanged {
+                color_scheme: color_scheme.into(),
+                high_contrast,
+            },
             WireEvent::QrDetected { target, value } => Event::QrDetected {
                 target: widget(target),
                 value,
@@ -538,6 +549,13 @@ impl From<Event> for WireEvent {
             Event::AppLifecycle(lifecycle) => WireEvent::AppLifecycle {
                 lifecycle: lifecycle.into(),
             },
+            Event::AppearanceChanged {
+                color_scheme,
+                high_contrast,
+            } => WireEvent::AppearanceChanged {
+                color_scheme: color_scheme.into(),
+                high_contrast,
+            },
             Event::QrDetected { target, value } => WireEvent::QrDetected {
                 target: target.to_u64(),
                 value,
@@ -675,6 +693,31 @@ impl From<Lifecycle> for WireLifecycle {
             Lifecycle::Inactive => WireLifecycle::Inactive,
             Lifecycle::Backgrounded => WireLifecycle::Backgrounded,
             Lifecycle::Terminating => WireLifecycle::Terminating,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WireColorScheme {
+    Light,
+    Dark,
+}
+
+impl From<WireColorScheme> for ColorScheme {
+    fn from(scheme: WireColorScheme) -> Self {
+        match scheme {
+            WireColorScheme::Light => ColorScheme::Light,
+            WireColorScheme::Dark => ColorScheme::Dark,
+        }
+    }
+}
+
+impl From<ColorScheme> for WireColorScheme {
+    fn from(scheme: ColorScheme) -> Self {
+        match scheme {
+            ColorScheme::Light => WireColorScheme::Light,
+            ColorScheme::Dark => WireColorScheme::Dark,
         }
     }
 }
@@ -824,6 +867,25 @@ mod tests {
             decoded.into_event(),
             Event::NetworkStatusChanged {
                 status: NetworkStatus::Offline,
+            }
+        );
+    }
+
+    #[test]
+    fn appearance_event_json_round_trips_to_engine_event() {
+        let event = WireEvent::AppearanceChanged {
+            color_scheme: WireColorScheme::Dark,
+            high_contrast: true,
+        };
+
+        let encoded = event.encode_json().expect("event encodes");
+        let decoded = WireEvent::decode_json(&encoded).expect("event decodes");
+
+        assert_eq!(
+            decoded.into_event(),
+            Event::AppearanceChanged {
+                color_scheme: ColorScheme::Dark,
+                high_contrast: true,
             }
         );
     }

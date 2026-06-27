@@ -9,7 +9,7 @@
 
 use std::sync::mpsc::Sender;
 
-use crate::core::{Point, Rect};
+use crate::core::{ColorScheme, Point, Rect};
 
 use super::mutation::{PermissionKind, PermissionStatus, WidgetId};
 
@@ -183,6 +183,13 @@ pub enum Event {
     KeyboardWillHide,
     /// An application lifecycle transition. App-global.
     AppLifecycle(Lifecycle),
+    /// System appearance/accessibility contrast changed. App-global.
+    AppearanceChanged {
+        /// Current platform light/dark scheme.
+        color_scheme: ColorScheme,
+        /// Whether the platform is requesting higher contrast.
+        high_contrast: bool,
+    },
     /// A QR code was detected in the camera feed.
     QrDetected {
         /// The camera widget that detected the code.
@@ -333,6 +340,8 @@ pub enum EventKind {
     KeyboardWillHide,
     /// [`Event::AppLifecycle`].
     AppLifecycle,
+    /// [`Event::AppearanceChanged`].
+    AppearanceChanged,
     /// [`Event::QrDetected`].
     QrDetected,
     /// [`Event::PinchChanged`].
@@ -385,6 +394,7 @@ impl Event {
             Event::KeyboardWillShow { .. } => EventKind::KeyboardWillShow,
             Event::KeyboardWillHide => EventKind::KeyboardWillHide,
             Event::AppLifecycle(_) => EventKind::AppLifecycle,
+            Event::AppearanceChanged { .. } => EventKind::AppearanceChanged,
             Event::QrDetected { .. } => EventKind::QrDetected,
             Event::PinchChanged { .. } => EventKind::Pinch,
             Event::DeepLink { .. } => EventKind::DeepLink,
@@ -426,6 +436,7 @@ impl Event {
             | Event::KeyboardWillShow { .. }
             | Event::KeyboardWillHide
             | Event::AppLifecycle(_)
+            | Event::AppearanceChanged { .. }
             | Event::DeepLink { .. }
             | Event::BiometricResult { .. }
             | Event::PermissionChanged { .. }

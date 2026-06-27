@@ -624,9 +624,18 @@ impl Tree {
     /// Drains and dispatches all queued events. A driver calls this once per
     /// frame (the scheduler's `PreFrame` phase).
     pub fn drain_events(&mut self) {
-        while let Ok(event) = self.event_rx.try_recv() {
+        while let Some(event) = self.pop_event() {
             self.dispatch(&event);
         }
+    }
+
+    /// Pops one queued event without routing it yet.
+    ///
+    /// App-level drivers can use this when an event must update runtime state before
+    /// normal widget/global handlers run, while preserving the one-at-a-time drain
+    /// semantics for events enqueued during handlers.
+    pub fn pop_event(&mut self) -> Option<Event> {
+        self.event_rx.try_recv().ok()
     }
 
     /// Routes one event to its handlers immediately.
