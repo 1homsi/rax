@@ -230,6 +230,7 @@ pub fn use_focus_effect(route: &str, f: impl Fn() + 'static) {
 // String-based programmatic navigation
 // ---------------------------------------------------------------------------
 
+use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 
 thread_local! {
@@ -245,6 +246,8 @@ thread_local! {
     static NAV_LISTENERS: RefCell<Vec<Box<dyn Fn(&str, &str)>>> = RefCell::new(Vec::new());
     /// Back handlers: called in order; first one returning `true` consumes the event.
     static BACK_HANDLERS: RefCell<Vec<Box<dyn Fn() -> bool>>> = RefCell::new(Vec::new());
+    /// Pending route result callbacks, last-opened route first.
+    static ROUTE_RESULT_HANDLERS: RefCell<Vec<PendingRouteResult>> = RefCell::new(Vec::new());
 }
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
@@ -260,6 +263,13 @@ thread_local! {
 pub struct RouteGuard {
     condition: Box<dyn Fn() -> bool>,
     redirect: String,
+}
+
+struct PendingRouteResult {
+    route: String,
+    type_id: TypeId,
+    type_name: &'static str,
+    callback: Box<dyn FnOnce(Box<dyn Any>)>,
 }
 
 /// Register a route guard. Before each navigation `condition` is evaluated; if
@@ -499,6 +509,113 @@ pub fn navigate(route: &str) -> String {
     fire_navigate_event(&from, &destination);
 
     destination
+}
+
+/// Navigates to `route` and registers a typed one-shot result callback.
+///
+/// Use this for pick-and-return flows: a caller opens a route, the opened screen
+/// later calls [`return_route_result`] with a value of the same type, and Raxon
+/// pops back before invoking `on_result`.
+///
+/// If a guard redirects away from `route`, no result callback is registered.
+/// The returned string is the route actually reached, matching [`navigate`].
+pub fn navigate_for_result<T: 'static>(route: &str, on_result: impl FnOnce(T) + 'static) -> String {
+    let destination = navigate(route);
+    if destination == route {
+        push_route_result_handler(destination.clone(), on_result);
+    }
+    destination
+}
+
+/// Like [`navigate_for_result`], but returns `true` only if navigation reached
+/// the requested route and a result callback was registered.
+pub fn try_navigate_for_result<T: 'static>(
+    route: &str,
+    on_result: impl FnOnce(T) + 'static,
+) -> bool {
+    navigate_for_result(route, on_result) == route
+}
+
+/// Returns the latest typed route result and pops back to the previous route.
+///
+/// Returns `false` when there is no pending result callback, when the pending
+/// callback expects a different type, or when there is no previous route to pop
+/// back to. On a type mismatch the pending callback remains registered.
+pub fn return_route_result<T: 'static>(value: T) -> bool {
+    let pending = ROUTE_RESULT_HANDLERS.with(|handlers| {
+        let mut handlers = handlers.borrow_mut();
+        let pending = handlers.last()?;
+        if pending.type_id != TypeId::of::<T>() {
+            return None;
+        }
+        handlers.pop()
+    });
+
+    let Some(pending) = pending else {
+        return false;
+    };
+
+    if !go_back() {
+        ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().push(pending));
+        return false;
+    }
+
+    (pending.callback)(Box::new(value));
+    true
+}
+
+/// Cancels the latest pending route result and pops back to the previous route.
+///
+/// The registered callback is dropped without being invoked. Returns `false`
+/// when no result is pending or there is no previous route to pop back to.
+pub fn cancel_route_result() -> bool {
+    let pending = ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().pop());
+    let Some(pending) = pending else {
+        return false;
+    };
+
+    if !go_back() {
+        ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().push(pending));
+        return false;
+    }
+
+    true
+}
+
+/// Returns `true` if the current route was opened with [`navigate_for_result`].
+pub fn has_pending_route_result() -> bool {
+    ROUTE_RESULT_HANDLERS.with(|handlers| !handlers.borrow().is_empty())
+}
+
+/// Returns the Rust type name expected by the latest pending route result.
+pub fn pending_route_result_type() -> Option<&'static str> {
+    ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow().last().map(|pending| pending.type_name))
+}
+
+/// Returns the route associated with the latest pending route result.
+pub fn pending_route_result_route() -> Option<String> {
+    ROUTE_RESULT_HANDLERS.with(|handlers| {
+        handlers
+            .borrow()
+            .last()
+            .map(|pending| pending.route.clone())
+    })
+}
+
+fn push_route_result_handler<T: 'static>(route: String, on_result: impl FnOnce(T) + 'static) {
+    ROUTE_RESULT_HANDLERS.with(|handlers| {
+        handlers.borrow_mut().push(PendingRouteResult {
+            route,
+            type_id: TypeId::of::<T>(),
+            type_name: std::any::type_name::<T>(),
+            callback: Box::new(move |value| {
+                let value = value
+                    .downcast::<T>()
+                    .expect("route result type checked before dispatch");
+                on_result(*value);
+            }),
+        });
+    });
 }
 
 /// Replaces the current string-router route without pushing a new history entry.
@@ -1505,6 +1622,16 @@ fn replace_route_from_browser(route: &str) {
     fire_navigate_event(&from, &destination);
 }
 
+#[cfg(test)]
+fn reset_navigation_for_tests() {
+    CURRENT_ROUTE.with(|route| *route.borrow_mut() = None);
+    HISTORY_STACK.with(|stack| stack.borrow_mut().clear());
+    ROUTE_GUARDS.with(|guards| guards.borrow_mut().clear());
+    NAV_LISTENERS.with(|listeners| listeners.borrow_mut().clear());
+    BACK_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+    ROUTE_RESULT_HANDLERS.with(|handlers| handlers.borrow_mut().clear());
+}
+
 // ---------------------------------------------------------------------------
 // try_navigate — navigate with guard check, returns success bool
 // ---------------------------------------------------------------------------
@@ -1607,9 +1734,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        build_route, build_route_with_query, match_route, match_route_location, parse_deep_link,
-        parse_query, parse_query_all, parse_route_location, route,
+        build_route, build_route_with_query, cancel_route_result, current_route,
+        has_pending_route_result, match_route, match_route_location, navigate, navigate_for_result,
+        parse_deep_link, parse_query, parse_query_all, parse_route_location,
+        pending_route_result_route, pending_route_result_type, return_route_result, route,
+        try_navigate_for_result,
     };
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     #[test]
     fn parses_query_strings_with_decoding_and_repeated_keys() {
@@ -1848,6 +1980,80 @@ mod tests {
         )
         .expect("route should build");
         assert_eq!(overridden, "/orders/42?tab=history");
+    }
+
+    #[test]
+    fn navigate_for_result_returns_typed_value_and_pops_route() {
+        super::reset_navigation_for_tests();
+        navigate("/checkout");
+
+        let selected = Rc::new(RefCell::new(None));
+        let selected_for_callback = Rc::clone(&selected);
+        let reached = navigate_for_result("/products/pick", move |sku: String| {
+            *selected_for_callback.borrow_mut() = Some(sku);
+        });
+
+        assert_eq!(reached, "/products/pick");
+        assert!(has_pending_route_result());
+        assert_eq!(
+            pending_route_result_route().as_deref(),
+            Some("/products/pick")
+        );
+        assert!(pending_route_result_type()
+            .expect("result type should exist")
+            .contains("String"));
+        assert_eq!(current_route().get(), "/products/pick");
+
+        assert!(return_route_result("sku_123".to_string()));
+        assert_eq!(selected.borrow().as_deref(), Some("sku_123"));
+        assert_eq!(current_route().get(), "/checkout");
+        assert!(!has_pending_route_result());
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn route_result_rejects_wrong_type_without_consuming_handler() {
+        super::reset_navigation_for_tests();
+        navigate("/checkout");
+
+        let selected = Rc::new(RefCell::new(None));
+        let selected_for_callback = Rc::clone(&selected);
+        assert!(try_navigate_for_result(
+            "/products/pick",
+            move |sku: String| {
+                *selected_for_callback.borrow_mut() = Some(sku);
+            }
+        ));
+
+        assert!(!return_route_result(123_u32));
+        assert!(has_pending_route_result());
+        assert_eq!(current_route().get(), "/products/pick");
+
+        assert!(return_route_result("sku_456".to_string()));
+        assert_eq!(selected.borrow().as_deref(), Some("sku_456"));
+        assert_eq!(current_route().get(), "/checkout");
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn cancel_route_result_drops_callback_and_pops_route() {
+        super::reset_navigation_for_tests();
+        navigate("/checkout");
+
+        let called = Rc::new(RefCell::new(false));
+        let called_for_callback = Rc::clone(&called);
+        navigate_for_result("/products/pick", move |_: String| {
+            *called_for_callback.borrow_mut() = true;
+        });
+
+        assert!(cancel_route_result());
+        assert!(!*called.borrow());
+        assert_eq!(current_route().get(), "/checkout");
+        assert!(!has_pending_route_result());
+
+        super::reset_navigation_for_tests();
     }
 
     #[test]
