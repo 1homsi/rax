@@ -1156,6 +1156,9 @@ pub struct NavigationDebugSnapshot {
     pub current: String,
     /// Parsed current route, including query params and fragment.
     pub location: RouteLocation,
+    /// App-facing fragment for normal and hash-router URLs.
+    #[serde(default)]
+    pub route_fragment: Option<String>,
     /// String-router history from oldest to newest route.
     pub history: Vec<String>,
     /// Number of entries in [`history`](Self::history).
@@ -1625,6 +1628,9 @@ pub fn navigation_debug_snapshot() -> NavigationDebugSnapshot {
     let modal_depth = state.modals.len();
     let active_modal = state.modals.last().cloned();
     let location = parse_route_location(&state.current);
+    let route_fragment = location
+        .route_fragment()
+        .map(std::borrow::ToOwned::to_owned);
     let (pending_result_route, pending_result_type, pending_result_count) = ROUTE_RESULT_HANDLERS
         .with(|handlers| {
             let handlers = handlers.borrow();
@@ -1639,6 +1645,7 @@ pub fn navigation_debug_snapshot() -> NavigationDebugSnapshot {
     NavigationDebugSnapshot {
         current: state.current,
         location,
+        route_fragment,
         history: state.history,
         history_depth,
         can_go_back,
@@ -3790,6 +3797,7 @@ mod tests {
 
         assert_eq!(snapshot.current, "/products/pick");
         assert_eq!(snapshot.location.path, "/products/pick");
+        assert_eq!(snapshot.route_fragment, None);
         assert_eq!(
             snapshot.history,
             vec![
@@ -3814,6 +3822,28 @@ mod tests {
             .expect("pending type should be present")
             .contains("String"));
         assert_eq!(snapshot.pending_result_count, 1);
+
+        super::reset_navigation_for_tests();
+    }
+
+    #[test]
+    fn navigation_debug_snapshot_reports_hash_route_inner_fragment() {
+        super::reset_navigation_for_tests();
+        reset_route("/#/checkout?step=pay#notes");
+
+        let snapshot = navigation_debug_snapshot();
+        let json = serde_json::to_value(&snapshot).expect("snapshot should serialize");
+
+        assert_eq!(snapshot.current, "/#/checkout?step=pay#notes");
+        assert_eq!(snapshot.location.path, "/checkout");
+        assert_eq!(snapshot.location.query_value("step"), Some("pay"));
+        assert_eq!(
+            snapshot.location.fragment.as_deref(),
+            Some("/checkout?step=pay#notes")
+        );
+        assert_eq!(snapshot.route_fragment.as_deref(), Some("notes"));
+        assert_eq!(json["location"]["fragment"], "/checkout?step=pay#notes");
+        assert_eq!(json["routeFragment"], "notes");
 
         super::reset_navigation_for_tests();
     }
@@ -3844,6 +3874,7 @@ mod tests {
         assert_eq!(value["canGoBack"], true);
         assert_eq!(value["modalDepth"], 1);
         assert_eq!(value["activeModal"], "/filters");
+        assert_eq!(value["routeFragment"], serde_json::Value::Null);
         assert_eq!(value["hasPendingResult"], true);
         assert!(value["pendingResultType"]
             .as_str()

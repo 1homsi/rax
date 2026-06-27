@@ -1004,6 +1004,7 @@ mod tests {
             "items"
         );
         assert_eq!(response_json["snapshot"]["location"]["fragment"], "notes");
+        assert_eq!(response_json["snapshot"]["routeFragment"], "notes");
         match decoded.response {
             HostBridgeResponse::NavigationDebugSnapshot { snapshot } => {
                 assert_eq!(snapshot["historyDepth"], 1);

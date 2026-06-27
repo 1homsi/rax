@@ -4254,6 +4254,7 @@ export interface RaxonRouteLocation {
 export interface RaxonNavigationDebugSnapshot {
   current: string;
   location: RaxonRouteLocation;
+  routeFragment?: string | null;
   history: string[];
   historyDepth: number;
   canGoBack: boolean;
@@ -5545,6 +5546,7 @@ name = "demo_native"
         assert!(web_dts.contains("interface RaxonNavigationCommandOutcome"));
         assert!(web_dts.contains("syncBrowserNavigation?: boolean"));
         assert!(web_dts.contains("queryAll: Record<string, string[]>"));
+        assert!(web_dts.contains("routeFragment?: string | null"));
         assert!(web_dts.contains("navigationDebugSnapshot(): RaxonNavigationDebugSnapshot | null"));
         assert!(web_dts.contains(
             "applyNavigationCommand(command: RaxonNavigationCommand): RaxonNavigationCommandOutcome | null"
