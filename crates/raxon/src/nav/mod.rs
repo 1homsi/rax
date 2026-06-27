@@ -320,26 +320,35 @@ impl<R: Clone + 'static> TabStackNavigator<R> {
 
     /// Returns the current route for the selected tab.
     pub fn top(&self) -> R {
-        let selected = self.selected_index();
-        self.stacks.with(|stacks| {
-            stacks
-                .get(selected)
-                .and_then(|stack| stack.last())
-                .expect("tab stacks are never empty")
-                .clone()
-        })
+        self.top_for_tab(self.selected_index())
+            .expect("selected tab stack exists")
+    }
+
+    /// Returns the current route for one tab.
+    pub fn top_for_tab(&self, index: usize) -> Option<R> {
+        self.stacks
+            .with(|stacks| stacks.get(index).and_then(|stack| stack.last()).cloned())
     }
 
     /// Depth of the selected tab's stack.
     pub fn depth(&self) -> usize {
-        let selected = self.selected_index();
+        self.depth_for_tab(self.selected_index())
+    }
+
+    /// Depth of one tab's stack.
+    pub fn depth_for_tab(&self, index: usize) -> usize {
         self.stacks
-            .with(|stacks| stacks.get(selected).map(Vec::len).unwrap_or_default())
+            .with(|stacks| stacks.get(index).map(Vec::len).unwrap_or_default())
     }
 
     /// Whether the selected tab can pop back to its root route.
     pub fn can_pop(&self) -> bool {
         self.depth() > 1
+    }
+
+    /// Whether one tab can pop back to its root route.
+    pub fn can_pop_tab(&self, index: usize) -> bool {
+        self.depth_for_tab(index) > 1
     }
 
     /// Pushes a route onto the selected tab stack.
@@ -436,6 +445,65 @@ where
     dynamic(move || render(nav.top()))
 }
 
+/// Renders all tab-stack panes once and toggles their visibility by selection.
+///
+/// Unlike [`tab_stack_routes`], switching tabs does not rebuild the newly
+/// selected tab pane. Each pane still reacts to its own stack top, so pushes and
+/// pops inside a tab update that tab's pane.
+///
+/// # Example
+/// ```rust
+/// use raxon::nav::{create_tab_stack_navigator, keep_alive_tab_stack_routes};
+/// use raxon::view::{boxed, text, View};
+///
+/// #[derive(Clone)]
+/// enum Screen { Home, Orders }
+///
+/// fn app() -> impl View {
+///     let nav = create_tab_stack_navigator(vec![Screen::Home, Screen::Orders]);
+///     keep_alive_tab_stack_routes(nav, move |screen| match screen {
+///         Screen::Home => boxed(text("home")),
+///         Screen::Orders => boxed(text("orders")),
+///     })
+/// }
+/// ```
+pub fn keep_alive_tab_stack_routes<R, F>(nav: TabStackNavigator<R>, render: F) -> impl View
+where
+    R: Clone + 'static,
+    F: FnMut(R) -> BoxedView + 'static,
+{
+    use crate::view::{boxed, column, ViewExt};
+
+    let render = std::rc::Rc::new(std::cell::RefCell::new(render));
+    let panes = (0..nav.tab_count())
+        .map(|index| {
+            let pane_nav = nav;
+            let opacity_nav = nav;
+            let pane_render = std::rc::Rc::clone(&render);
+            let pane = dynamic(move || {
+                if let Some(route) = pane_nav.top_for_tab(index) {
+                    return pane_render.borrow_mut()(route);
+                }
+                boxed(column(()))
+            });
+
+            boxed(
+                boxed(pane)
+                    .opacity_fn(move || {
+                        if opacity_nav.selected_index() == index {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    })
+                    .grow(1.0),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    column(panes).grow()
+}
+
 /// A batteries-included tab-stack navigator.
 ///
 /// Creates a [`TabStackNavigator`] with one root route per tab, provides it via
@@ -447,6 +515,19 @@ where
 {
     let nav = create_tab_stack_navigator(roots);
     tab_stack_routes(nav, render)
+}
+
+/// A batteries-included keep-alive tab-stack navigator.
+///
+/// Creates a [`TabStackNavigator`] and renders all tab panes mounted, hiding
+/// inactive panes with opacity.
+pub fn keep_alive_tab_stack<R, F>(roots: impl Into<Vec<R>>, render: F) -> impl View
+where
+    R: Clone + 'static,
+    F: FnMut(R) -> BoxedView + 'static,
+{
+    let nav = create_tab_stack_navigator(roots);
+    keep_alive_tab_stack_routes(nav, render)
 }
 
 /// A push/pop stack navigator that creates and provides its own [`Navigator`]
@@ -2733,15 +2814,22 @@ mod tests {
         nav.push(TestScreen::Detail);
         assert_eq!(nav.top(), TestScreen::Detail);
         assert_eq!(nav.depth(), 2);
+        assert_eq!(nav.top_for_tab(0), Some(TestScreen::Detail));
+        assert_eq!(nav.depth_for_tab(0), 2);
         assert!(nav.can_pop());
+        assert!(nav.can_pop_tab(0));
 
         assert!(nav.select(1));
         assert_eq!(nav.selected_index(), 1);
         assert_eq!(nav.top(), TestScreen::Settings);
         assert_eq!(nav.depth(), 1);
+        assert_eq!(nav.top_for_tab(0), Some(TestScreen::Detail));
+        assert_eq!(nav.top_for_tab(1), Some(TestScreen::Settings));
+        assert!(!nav.can_pop_tab(1));
 
         nav.push(TestScreen::Search);
         assert_eq!(nav.top(), TestScreen::Search);
+        assert_eq!(nav.depth_for_tab(1), 2);
         assert_eq!(
             nav.stack(1),
             Some(vec![TestScreen::Settings, TestScreen::Search])
@@ -2765,6 +2853,8 @@ mod tests {
         assert!(nav.reset_tab(1, TestScreen::Search));
         assert_eq!(nav.stack(1), Some(vec![TestScreen::Search]));
         assert!(!nav.select(99));
+        assert_eq!(nav.top_for_tab(99), None);
+        assert_eq!(nav.depth_for_tab(99), 0);
         assert!(!nav.reset_tab(99, TestScreen::Home));
     }
 
